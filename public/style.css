@@ -822,6 +822,12 @@ body {
     color: var(--text-dim);
 }
 
+.row-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
 .clear-history-btn {
     background: none;
     border: none;

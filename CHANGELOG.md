@@ -2,6 +2,12 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.4] - 2026-09-30
+### Added
+- Interactive Left & Right carousel navigation buttons (`<` and `>`) for the **Continue Watching** section (`#history-section`) and **My List** section (`#favorites-section`) to easily browse through saved history and bookmarked dramas without scrollbars.
+- Smooth mouse wheel horizontal scrolling support on both Continue Watching and My List rails.
+- Smart boundary detection with dynamic opacity dimming when reached the start or end of the rails.
+
 ## [0.0.3] - 2026-09-30
 ### Added
 - Multi-language streaming selector dropdown in header navbar supporting 13 top international languages (English, Bahasa Indonesia, 日本語, 한국어, 繁體中文, Español, ภาษาไทย, Deutsch, português, Tiếng Việt, Français, العربية, Русский).

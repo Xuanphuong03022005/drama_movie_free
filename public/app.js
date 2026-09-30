@@ -35,9 +35,13 @@
     const top10NextBtn = document.getElementById('top10-next-btn');
     const historySection = document.getElementById('history-section');
     const historyRail = document.getElementById('history-rail');
+    const historyPrevBtn = document.getElementById('history-prev-btn');
+    const historyNextBtn = document.getElementById('history-next-btn');
     const clearHistoryBtn = document.getElementById('clear-history-btn');
     const favoritesSection = document.getElementById('favorites-section');
     const favoritesRail = document.getElementById('favorites-rail');
+    const favoritesPrevBtn = document.getElementById('favorites-prev-btn');
+    const favoritesNextBtn = document.getElementById('favorites-next-btn');
     const favoritesCount = document.getElementById('favorites-count');
 
     const dramaGrid = document.getElementById('drama-grid');
@@ -240,32 +244,48 @@
             }, { passive: false });
         }
 
-        // Top 10 Left & Right Carousel Navigation Buttons
-        if (top10PrevBtn && top10NextBtn && top10Rail) {
-            top10NextBtn.addEventListener('click', () => {
-                const scrollStep = Math.max(260, Math.floor(top10Rail.clientWidth * 0.7));
-                top10Rail.scrollBy({ left: scrollStep, behavior: 'smooth' });
-            });
+        // Reusable Rail Carousel Navigation & Wheel Scrolling
+        function setupRailNavigation(rail, prevBtn, nextBtn) {
+            if (!rail) return;
 
-            top10PrevBtn.addEventListener('click', () => {
-                const scrollStep = Math.max(260, Math.floor(top10Rail.clientWidth * 0.7));
-                top10Rail.scrollBy({ left: -scrollStep, behavior: 'smooth' });
-            });
-
-            const updateTop10NavState = () => {
-                const maxScroll = top10Rail.scrollWidth - top10Rail.clientWidth;
-                if (maxScroll <= 0) {
-                    top10PrevBtn.style.opacity = '0.3';
-                    top10NextBtn.style.opacity = '0.3';
-                    return;
+            rail.addEventListener('wheel', (e) => {
+                if (e.deltaY !== 0) {
+                    e.preventDefault();
+                    rail.scrollLeft += e.deltaY;
                 }
-                top10PrevBtn.style.opacity = top10Rail.scrollLeft <= 10 ? '0.3' : '1';
-                top10NextBtn.style.opacity = top10Rail.scrollLeft >= maxScroll - 10 ? '0.3' : '1';
-            };
+            }, { passive: false });
 
-            top10Rail.addEventListener('scroll', updateTop10NavState, { passive: true });
-            setTimeout(updateTop10NavState, 400);
+            if (prevBtn && nextBtn) {
+                const getStep = () => Math.max(260, Math.floor(rail.clientWidth * 0.75));
+
+                nextBtn.addEventListener('click', () => {
+                    rail.scrollBy({ left: getStep(), behavior: 'smooth' });
+                });
+
+                prevBtn.addEventListener('click', () => {
+                    rail.scrollBy({ left: -getStep(), behavior: 'smooth' });
+                });
+
+                const updateState = () => {
+                    const maxScroll = rail.scrollWidth - rail.clientWidth;
+                    if (maxScroll <= 5) {
+                        prevBtn.style.opacity = '0.3';
+                        nextBtn.style.opacity = '0.3';
+                        return;
+                    }
+                    prevBtn.style.opacity = rail.scrollLeft <= 10 ? '0.3' : '1';
+                    nextBtn.style.opacity = rail.scrollLeft >= maxScroll - 10 ? '0.3' : '1';
+                };
+
+                rail.addEventListener('scroll', updateState, { passive: true });
+                setTimeout(updateState, 400);
+            }
         }
+
+        // Initialize Carousel Navigation for all horizontal content rails
+        setupRailNavigation(top10Rail, top10PrevBtn, top10NextBtn);
+        setupRailNavigation(historyRail, historyPrevBtn, historyNextBtn);
+        setupRailNavigation(favoritesRail, favoritesPrevBtn, favoritesNextBtn);
 
         // Global Keyboard Shortcuts
         document.addEventListener('keydown', (e) => {
@@ -954,6 +974,7 @@
             card.addEventListener('click', () => openDrama(item));
             historyRail.appendChild(card);
         });
+        setTimeout(() => historyRail.dispatchEvent(new Event('scroll')), 50);
     }
 
     // ==========================================
@@ -1030,6 +1051,7 @@
             card.addEventListener('click', () => openDrama(item));
             favoritesRail.appendChild(card);
         });
+        setTimeout(() => favoritesRail.dispatchEvent(new Event('scroll')), 50);
     }
 
     // ==========================================

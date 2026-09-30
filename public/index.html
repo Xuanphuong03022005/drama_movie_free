@@ -137,8 +137,16 @@
                     <h2>Continue Watching</h2>
                     <span class="row-subtitle">Resume your recent episodes</span>
                 </div>
-                <button class="clear-history-btn" id="clear-history-btn"><i class="fa-solid fa-trash-can"></i> Clear
-                    History</button>
+                <div class="row-actions-group">
+                    <div class="rail-scroll-nav">
+                        <button class="rail-nav-btn" id="history-prev-btn" aria-label="Previous"><i
+                                class="fa-solid fa-chevron-left"></i></button>
+                        <button class="rail-nav-btn" id="history-next-btn" aria-label="Next"><i
+                                class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                    <button class="clear-history-btn" id="clear-history-btn"><i class="fa-solid fa-trash-can"></i> Clear
+                        History</button>
+                </div>
             </div>
             <div class="cards-rail-container">
                 <div class="cards-rail" id="history-rail">
@@ -176,6 +184,12 @@
                     <div class="section-icon-badge text-accent"><i class="fa-solid fa-heart"></i></div>
                     <h2>My List (<span id="favorites-count">0</span>)</h2>
                     <span class="row-subtitle">Your bookmarked and saved dramas</span>
+                </div>
+                <div class="rail-scroll-nav">
+                    <button class="rail-nav-btn" id="favorites-prev-btn" aria-label="Previous"><i
+                            class="fa-solid fa-chevron-left"></i></button>
+                    <button class="rail-nav-btn" id="favorites-next-btn" aria-label="Next"><i
+                            class="fa-solid fa-chevron-right"></i></button>
                 </div>
             </div>
             <div class="cards-rail-container">
