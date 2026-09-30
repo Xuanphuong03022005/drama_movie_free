@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DramaFlow PRO - Premier HD Short Drama Streaming Platform</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <!-- Font Awesome Pro/Free Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Hls.js for HLS streaming (.m3u8) -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="theme-dark">
+    <!-- Commercial Header Navbar -->
+    <header class="navbar" id="site-header">
+        <div class="nav-container">
+            <!-- Brand Logo -->
+            <a href="#" class="brand-logo" id="logo-btn">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-play"></i>
+                </div>
+                <div class="brand-name">
+                    Drama<span>Flow</span>
+                    <span class="pro-tag">PRO</span>
+                    <span class="version-badge">v0.0.1</span>
+                </div>
+            </a>
+
+            <!-- Navigation Links -->
+            <nav class="nav-links">
+                <a href="#featured" class="nav-link active" data-nav="home"><i class="fa-solid fa-compass"></i> Home</a>
+                <a href="#top10" class="nav-link" data-nav="top10"><i class="fa-solid fa-fire text-rose"></i> Top 10</a>
+                <a href="#providers-section" class="nav-link" data-nav="providers"><i
+                        class="fa-solid fa-layer-group"></i> Providers</a>
+                <a href="#history-section" class="nav-link" id="nav-history-link" data-nav="history"><i
+                        class="fa-solid fa-clock-rotate-left"></i> History</a>
+                <a href="#favorites-section" class="nav-link" id="nav-favorites-link" data-nav="favorites"><i
+                        class="fa-solid fa-heart text-accent"></i> My List</a>
+            </nav>
+
+            <!-- Search Bar with Live Preview -->
+            <div class="search-container">
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="search-input" placeholder="Search title, cast, genre..." autocomplete="off">
+                    <button type="button" id="search-clear" class="search-clear-btn" hidden><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+                <!-- Search Suggestions Dropdown -->
+                <div id="search-dropdown" class="search-dropdown" hidden>
+                    <div class="search-dropdown-header">
+                        <span>SEARCH RESULTS</span>
+                        <span id="search-count" class="search-count">0 found</span>
+                    </div>
+                    <div id="search-results-list" class="search-results-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Providers Horizontal Rail -->
+        <div class="providers-rail-wrap" id="providers-rail">
+            <div class="providers-rail-inner" id="providers-container">
+                <!-- Dynamically loaded provider pills -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Hero Showcase Banner -->
+        <section id="featured" class="hero-showcase">
+            <div class="hero-ambient-glow" id="hero-ambient"></div>
+            <div class="hero-backdrop" id="hero-backdrop"></div>
+            <div class="hero-gradient-overlay"></div>
+            <div class="hero-content-wrap">
+                <div class="hero-meta-badges">
+                    <span class="badge-trend"><i class="fa-solid fa-chart-line"></i> #1 TOP RANKED TODAY</span>
+                    <span class="badge-provider" id="hero-provider-badge">ANYREEL EXCLUSIVE</span>
+                    <span class="badge-quality">4K ULTRA HD</span>
+                </div>
+                <h1 class="hero-title" id="hero-title">Loading Featured Drama...</h1>
+                <div class="hero-rating-row">
+                    <div class="star-rating">
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star-half-stroke"></i>
+                        <span class="rating-num">4.9</span>
+                    </div>
+                    <span class="dot-divider">•</span>
+                    <span id="hero-episodes-badge" class="meta-item"><i class="fa-solid fa-film"></i> Full Series</span>
+                    <span class="dot-divider">•</span>
+                    <span class="meta-item"><i class="fa-solid fa-shield-check text-success"></i> 100% Ad-Free</span>
+                </div>
+                <p class="hero-synopsis" id="hero-desc">Discover the most captivating short drama stories with seamless
+                    HLS streaming, zero ad interruptions, and instant multi-episode navigation.</p>
+                <div class="hero-tags" id="hero-tags"></div>
+                <div class="hero-cta-group">
+                    <button class="btn btn-hero-play" id="hero-play-btn"><i class="fa-solid fa-play"></i> Watch Episode
+                        1</button>
+                    <button class="btn btn-hero-fav" id="hero-fav-btn"><i class="fa-regular fa-heart"></i> Add to My
+                        List</button>
+                    <button class="btn btn-hero-glass" id="hero-more-btn"><i class="fa-solid fa-circle-info"></i>
+                        Synopsis</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Continue Watching Rail (Local Storage Driven) -->
+        <section id="history-section" class="content-row-section" hidden>
+            <div class="row-header">
+                <div class="row-title-group">
+                    <div class="section-icon-badge text-emerald"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                    <h2>Continue Watching</h2>
+                    <span class="row-subtitle">Resume your recent episodes</span>
+                </div>
+                <button class="clear-history-btn" id="clear-history-btn"><i class="fa-solid fa-trash-can"></i> Clear
+                    History</button>
+            </div>
+            <div class="cards-rail-container">
+                <div class="cards-rail" id="history-rail">
+                    <!-- Dynamic resume cards -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Top 10 Ranked Hits (Netflix Style #1 - #10) -->
+        <section id="top10" class="content-row-section">
+            <div class="row-header">
+                <div class="row-title-group">
+                    <div class="section-icon-badge text-rose"><i class="fa-solid fa-fire"></i></div>
+                    <h2>Top 10 Short Dramas Today</h2>
+                    <span class="row-subtitle">Most viewed and trending releases</span>
+                </div>
+                <div class="rail-scroll-nav">
+                    <button class="rail-nav-btn" id="top10-prev-btn" aria-label="Previous"><i
+                            class="fa-solid fa-chevron-left"></i></button>
+                    <button class="rail-nav-btn" id="top10-next-btn" aria-label="Next"><i
+                            class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+            <div class="cards-rail-container">
+                <div class="cards-rail top10-rail" id="top10-rail">
+                    <!-- Dynamic Top 10 items with giant numbers -->
+                </div>
+            </div>
+        </section>
+
+        <!-- My List / Favorites Section -->
+        <section id="favorites-section" class="content-row-section" hidden>
+            <div class="row-header">
+                <div class="row-title-group">
+                    <div class="section-icon-badge text-accent"><i class="fa-solid fa-heart"></i></div>
+                    <h2>My List (<span id="favorites-count">0</span>)</h2>
+                    <span class="row-subtitle">Your bookmarked and saved dramas</span>
+                </div>
+            </div>
+            <div class="cards-rail-container">
+                <div class="cards-rail" id="favorites-rail">
+                    <!-- Dynamic favorite cards -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Provider Main Library Section -->
+        <section id="providers-section" class="content-row-section">
+            <div class="row-header">
+                <div class="row-title-group">
+                    <div class="section-icon-badge text-primary"><i class="fa-solid fa-clapperboard"></i></div>
+                    <div>
+                        <h2><span id="current-provider-title">AnyReel</span> Catalog</h2>
+                        <span class="row-subtitle">High definition streaming collection</span>
+                    </div>
+                </div>
+                <!-- Pagination Controls -->
+                <div class="pagination-bar">
+                    <button id="prev-page-btn" class="page-nav-btn" disabled><i class="fa-solid fa-chevron-left"></i>
+                        Previous</button>
+                    <span id="page-indicator" class="page-status">Page 1</span>
+                    <button id="next-page-btn" class="page-nav-btn">Next <i
+                            class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- Drama Grid -->
+            <div class="library-grid-wrap">
+                <div id="drama-grid" class="drama-grid">
+                    <!-- Dynamic cards loaded here -->
+                </div>
+
+                <!-- Skeleton / Loading Indicator -->
+                <div id="grid-loader" class="loader-container">
+                    <div class="stream-spinner"></div>
+                    <p class="loader-text">Loading catalog from streaming cloud...</p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state-card" hidden>
+                    <div class="empty-icon-wrap"><i class="fa-solid fa-folder-open"></i></div>
+                    <h3>No Titles Found</h3>
+                    <p>Try switching to another provider tab or adjusting your search keywords.</p>
+                </div>
+            </div>
+
+            <!-- Bottom Pagination -->
+            <div class="pagination-footer">
+                <button id="prev-page-btn-bot" class="page-nav-btn" disabled><i class="fa-solid fa-chevron-left"></i>
+                    Previous</button>
+                <span id="page-indicator-bot" class="page-status">Page 1</span>
+                <button id="next-page-btn-bot" class="page-nav-btn">Next <i
+                        class="fa-solid fa-chevron-right"></i></button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Commercial Video Player Modal Suite -->
+    <div id="player-modal" class="player-modal" hidden>
+        <div class="modal-backdrop" id="modal-backdrop"></div>
+        <div class="player-stage-container">
+            <!-- Modal Top Bar -->
+            <div class="player-top-bar">
+                <div class="player-title-info">
+                    <span class="live-pill"><i class="fa-solid fa-circle text-rose live-pulse"></i> NOW STREAMING</span>
+                    <h3 id="modal-drama-title">Drama Title</h3>
+                    <span id="modal-episode-title" class="current-ep-pill">Episode 1</span>
+                </div>
+                <div class="player-top-actions">
+                    <button class="top-action-btn" id="theater-toggle-btn" title="Toggle Theater Mode"><i
+                            class="fa-solid fa-film"></i></button>
+                    <button class="top-action-btn" id="modal-fav-btn" title="Save to My List"><i
+                            class="fa-regular fa-heart"></i></button>
+                    <button class="top-action-btn" id="modal-share-btn" title="Share Drama Link"><i
+                            class="fa-solid fa-share-nodes"></i></button>
+                    <button class="top-action-btn close-btn" id="modal-close-btn" aria-label="Close Viewer"><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+
+            <!-- Player Content Split Grid -->
+            <div class="player-main-split">
+                <!-- Left: Video Screen & Metadata -->
+                <div class="screen-column">
+                    <div class="video-ambient-glow" id="video-ambient"></div>
+                    <div class="video-viewport" id="video-viewport">
+                        <video id="main-video" controls playsinline></video>
+                        <div id="video-overlay-loader" class="video-loading-screen" hidden>
+                            <div class="stream-spinner"></div>
+                            <span class="loading-status-text">Connecting to CDN Stream...</span>
+                        </div>
+                    </div>
+
+                    <!-- Commercial Media Controller Strip -->
+                    <div class="media-control-strip">
+                        <div class="media-nav-group">
+                            <button id="prev-ep-btn" class="ctrl-action-btn" title="Previous Episode"><i
+                                    class="fa-solid fa-backward-step"></i> Prev</button>
+                            <button id="next-ep-btn" class="ctrl-action-btn" title="Next Episode">Next <i
+                                    class="fa-solid fa-forward-step"></i></button>
+                            <!-- Speed Selector -->
+                            <div class="speed-control-wrap">
+                                <label for="speed-select"><i class="fa-solid fa-gauge-high"></i></label>
+                                <select id="speed-select" class="speed-select">
+                                    <option value="0.75">0.75x</option>
+                                    <option value="1.0" selected>1.0x (Normal)</option>
+                                    <option value="1.25">1.25x</option>
+                                    <option value="1.5">1.5x</option>
+                                    <option value="2.0">2.0x</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="media-settings-group">
+                            <label class="toggle-control" title="Automatically advance to next episode when video ends">
+                                <input type="checkbox" id="autoplay-next-toggle" checked>
+                                <span class="toggle-track"></span>
+                                <span class="toggle-text">Autoplay Next</span>
+                            </label>
+                            <span id="stream-type-badge" class="quality-badge"><i class="fa-solid fa-signal"></i> HLS
+                                1080p</span>
+                        </div>
+                    </div>
+
+                    <!-- Drama Synopsis & Metadata Card -->
+                    <div class="drama-synopsis-panel">
+                        <div class="synopsis-header">
+                            <h4 id="detail-drama-title">Drama Overview</h4>
+                            <div class="synopsis-meta-chips">
+                                <span class="meta-chip"><i class="fa-solid fa-circle-check text-success"></i> Licensed
+                                    Source</span>
+                                <span class="meta-chip"><i class="fa-solid fa-bolt text-amber"></i> Fast CDN
+                                    Relay</span>
+                            </div>
+                        </div>
+                        <p id="detail-drama-desc" class="synopsis-body">Loading synopsis details...</p>
+                    </div>
+                </div>
+
+                <!-- Right: Episode Drawer with Multi-batch tabs -->
+                <aside class="episodes-drawer">
+                    <div class="drawer-header">
+                        <div class="drawer-title-row">
+                            <h4><i class="fa-solid fa-list-ol"></i> Episodes (<span id="episodes-count">0</span>)</h4>
+                            <div class="quick-jump-box">
+                                <input type="number" id="jump-ep-input" placeholder="Ep " min="1">
+                                <button id="jump-ep-btn" class="jump-btn">Go</button>
+                            </div>
+                        </div>
+                        <!-- Episode Batch Tabs (for 60+ episodes) -->
+                        <div class="ep-batch-tabs" id="ep-batch-tabs">
+                            <!-- e.g. 1-30, 31-60 -->
+                        </div>
+                    </div>
+
+                    <div id="episodes-grid" class="episodes-grid">
+                        <!-- Dynamic episode buttons -->
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Element -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Commercial Footer -->
+    <footer class="site-footer">
+        <div class="footer-container">
+            <div class="footer-brand-column">
+                <div class="brand-logo footer-logo">
+                    <div class="brand-icon"><i class="fa-solid fa-play"></i></div>
+                    <div class="brand-name">Drama<span>Flow</span> <span class="pro-tag">PRO</span></div>
+                </div>
+                <p class="footer-desc">The modern high-definition streaming gateway for trending short dramas worldwide.
+                    Direct HLS streams, zero popups, lightning-fast navigation.</p>
+                <div class="footer-security-badges">
+                    <span class="sec-badge"><i class="fa-solid fa-shield-halved text-success"></i> 256-Bit SSL
+                        Secured</span>
+                    <span class="sec-badge"><i class="fa-solid fa-bolt text-amber"></i> Ultra Low Latency</span>
+                </div>
+            </div>
+
+            <div class="footer-links-group">
+                <div class="footer-col">
+                    <h5>Top Providers</h5>
+                    <a href="#" class="f-link" data-provider="anyreel">AnyReel HD</a>
+                    <a href="#" class="f-link" data-provider="dramashorts">DramaShorts</a>
+                    <a href="#" class="f-link" data-provider="dramabox">DramaBox</a>
+                    <a href="#" class="f-link" data-provider="bibishort">BibiShort</a>
+                </div>
+                <div class="footer-col">
+                    <h5>Features</h5>
+                    <a href="#top10" class="f-link">Daily Top 10</a>
+                    <a href="#history-section" class="f-link">Resume Playback</a>
+                    <a href="#favorites-section" class="f-link">My Bookmarks</a>
+                    <a href="#featured" class="f-link">Trending Shows</a>
+                </div>
+                <!-- <div class="footer-col">
+                    <h5>Mobile Apps</h5>
+                    <div class="app-badge-row">
+                        <button class="app-store-btn" onclick="alert('iOS and Android PWA are available! Add to Home Screen in your browser.')">
+                            <i class="fa-brands fa-apple"></i>
+                            <div><span>Download on</span><strong>App Store</strong></div>
+                        </button>
+                        <button class="app-store-btn" onclick="alert('Google Play PWA available! Add to Home Screen.')">
+                            <i class="fa-brands fa-google-play"></i>
+                            <div><span>GET IT ON</span><strong>Google Play</strong></div>
+                        </button>
+                    </div>
+                </div> -->
+            </div>
+        </div>
+
+        <div class="footer-copyright-bar">
+            <p>© 2026 DramaFlow PRO Platform • <span class="version-badge footer-ver">v0.0.1</span>. All rights reserved. Powered by Direct HLS CDN Clustering.</p>
+            <div class="footer-legal-links">
+                <a href="#">Privacy Policy</a>
+                <span>•</span>
+                <a href="#">Terms of Service</a>
+                <span>•</span>
+                <a href="#">DMCA</a>
+                <span>•</span>
+                <a href="#">API Status</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

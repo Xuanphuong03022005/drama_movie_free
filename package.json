@@ -1,0 +1,14 @@
+{
+  "name": "nartodramacrawl",
+  "version": "0.0.1",
+  "description": "Custom streaming interface for short dramas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "puppeteer-core": "^25.12.0"
+  }
+}

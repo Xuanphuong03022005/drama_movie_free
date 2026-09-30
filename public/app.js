@@ -1,0 +1,956 @@
+// DramaFlow PRO - Commercial Streaming Application
+(function () {
+    // State
+    let currentProvider = 'anyreel';
+    let currentPage = 1;
+    let currentDramaData = null;
+    let currentEpisodeIndex = 0;
+    let hls = null;
+    let searchDebounceTimer = null;
+    let isTheaterMode = false;
+    let activeBatchIndex = 0;
+    const BATCH_SIZE = 30;
+
+    // Storage Keys
+    const STORAGE_HISTORY = 'df_watch_history_v1';
+    const STORAGE_FAVORITES = 'df_favorites_v1';
+
+    // DOM Elements - Navigation & Header
+    const providersContainer = document.getElementById('providers-container');
+    const currentProviderTitle = document.getElementById('current-provider-title');
+    const heroTitle = document.getElementById('hero-title');
+    const heroDesc = document.getElementById('hero-desc');
+    const heroBackdrop = document.getElementById('hero-backdrop');
+    const heroAmbient = document.getElementById('hero-ambient');
+    const heroTags = document.getElementById('hero-tags');
+    const heroProviderBadge = document.getElementById('hero-provider-badge');
+    const heroEpisodesBadge = document.getElementById('hero-episodes-badge');
+    const heroPlayBtn = document.getElementById('hero-play-btn');
+    const heroFavBtn = document.getElementById('hero-fav-btn');
+    const heroMoreBtn = document.getElementById('hero-more-btn');
+
+    // Rails & Grids
+    const top10Rail = document.getElementById('top10-rail');
+    const top10PrevBtn = document.getElementById('top10-prev-btn');
+    const top10NextBtn = document.getElementById('top10-next-btn');
+    const historySection = document.getElementById('history-section');
+    const historyRail = document.getElementById('history-rail');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const favoritesSection = document.getElementById('favorites-section');
+    const favoritesRail = document.getElementById('favorites-rail');
+    const favoritesCount = document.getElementById('favorites-count');
+
+    const dramaGrid = document.getElementById('drama-grid');
+    const gridLoader = document.getElementById('grid-loader');
+    const emptyState = document.getElementById('empty-state');
+
+    // Pagination
+    const prevPageBtn = document.getElementById('prev-page-btn');
+    const nextPageBtn = document.getElementById('next-page-btn');
+    const pageIndicator = document.getElementById('page-indicator');
+    const prevPageBtnBot = document.getElementById('prev-page-btn-bot');
+    const nextPageBtnBot = document.getElementById('next-page-btn-bot');
+    const pageIndicatorBot = document.getElementById('page-indicator-bot');
+
+    // Search
+    const searchInput = document.getElementById('search-input');
+    const searchClear = document.getElementById('search-clear');
+    const searchDropdown = document.getElementById('search-dropdown');
+    const searchResultsList = document.getElementById('search-results-list');
+    const searchCount = document.getElementById('search-count');
+
+    // Video Player Modal
+    const playerModal = document.getElementById('player-modal');
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+    const modalDramaTitle = document.getElementById('modal-drama-title');
+    const modalEpisodeTitle = document.getElementById('modal-episode-title');
+    const mainVideo = document.getElementById('main-video');
+    const videoViewport = document.getElementById('video-viewport');
+    const videoOverlayLoader = document.getElementById('video-overlay-loader');
+    const prevEpBtn = document.getElementById('prev-ep-btn');
+    const nextEpBtn = document.getElementById('next-ep-btn');
+    const speedSelect = document.getElementById('speed-select');
+    const autoplayToggle = document.getElementById('autoplay-next-toggle');
+    const streamTypeBadge = document.getElementById('stream-type-badge');
+    const detailDramaTitle = document.getElementById('detail-drama-title');
+    const detailDramaDesc = document.getElementById('detail-drama-desc');
+    const episodesCount = document.getElementById('episodes-count');
+    const episodesGrid = document.getElementById('episodes-grid');
+    const epBatchTabs = document.getElementById('ep-batch-tabs');
+    const jumpEpInput = document.getElementById('jump-ep-input');
+    const jumpEpBtn = document.getElementById('jump-ep-btn');
+    const theaterToggleBtn = document.getElementById('theater-toggle-btn');
+    const modalFavBtn = document.getElementById('modal-fav-btn');
+    const modalShareBtn = document.getElementById('modal-share-btn');
+    const toastContainer = document.getElementById('toast-container');
+
+    // ==========================================
+    // INITIALIZATION
+    // ==========================================
+    async function init() {
+        bindEvents();
+        renderHistoryRail();
+        renderFavoritesRail();
+        await loadProviders();
+        await loadSections();
+        checkUrlParams();
+    }
+
+    // ==========================================
+    // 1. EVENT LISTENERS
+    // ==========================================
+    function bindEvents() {
+        // Pagination
+        prevPageBtn.addEventListener('click', () => changePage(currentPage - 1));
+        nextPageBtn.addEventListener('click', () => changePage(currentPage + 1));
+        prevPageBtnBot.addEventListener('click', () => changePage(currentPage - 1));
+        nextPageBtnBot.addEventListener('click', () => changePage(currentPage + 1));
+
+        // Top 10 Rail Scroll Navigation
+        top10PrevBtn.addEventListener('click', () => {
+            top10Rail.scrollBy({ left: -340, behavior: 'smooth' });
+        });
+        top10NextBtn.addEventListener('click', () => {
+            top10Rail.scrollBy({ left: 340, behavior: 'smooth' });
+        });
+
+        // Search Input Debounce
+        searchInput.addEventListener('input', (e) => {
+            const q = e.target.value.trim();
+            searchClear.hidden = !q;
+            clearTimeout(searchDebounceTimer);
+            if (!q) {
+                searchDropdown.hidden = true;
+                return;
+            }
+            searchDebounceTimer = setTimeout(() => handleSearch(q), 280);
+        });
+
+        searchClear.addEventListener('click', () => {
+            searchInput.value = '';
+            searchClear.hidden = true;
+            searchDropdown.hidden = true;
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+                searchDropdown.hidden = true;
+            }
+        });
+
+        // Modal Controls
+        modalCloseBtn.addEventListener('click', closeModal);
+        modalBackdrop.addEventListener('click', closeModal);
+
+        // Theater mode toggle
+        theaterToggleBtn.addEventListener('click', toggleTheaterMode);
+
+        // Modal Fav toggle
+        modalFavBtn.addEventListener('click', () => {
+            if (!currentDramaData) return;
+            toggleFavorite(currentDramaData);
+            syncModalFavBtn();
+        });
+
+        // Modal Share
+        modalShareBtn.addEventListener('click', shareCurrentDrama);
+
+        // Episode Nav in Player
+        prevEpBtn.addEventListener('click', () => {
+            if (currentEpisodeIndex > 0) {
+                switchEpisode(currentEpisodeIndex - 1);
+            }
+        });
+
+        nextEpBtn.addEventListener('click', () => {
+            if (currentDramaData && currentEpisodeIndex < currentDramaData.episodes.length - 1) {
+                switchEpisode(currentEpisodeIndex + 1);
+            }
+        });
+
+        // Speed Select
+        speedSelect.addEventListener('change', (e) => {
+            mainVideo.playbackRate = parseFloat(e.target.value);
+            showToast(`Playback speed: ${e.target.value}x`, 'fa-gauge-high');
+        });
+
+        // Video ended -> Autoplay next
+        mainVideo.addEventListener('ended', () => {
+            if (autoplayToggle.checked && currentDramaData) {
+                if (currentEpisodeIndex < currentDramaData.episodes.length - 1) {
+                    showToast(`Starting next episode...`, 'fa-forward-step');
+                    setTimeout(() => switchEpisode(currentEpisodeIndex + 1), 600);
+                }
+            }
+        });
+
+        // Video timeupdate -> Update history progress
+        mainVideo.addEventListener('timeupdate', () => {
+            if (mainVideo.duration && mainVideo.currentTime > 2) {
+                updateCurrentHistoryProgress();
+            }
+        });
+
+        // Jump to episode
+        jumpEpBtn.addEventListener('click', () => {
+            const epNum = parseInt(jumpEpInput.value, 10);
+            if (!currentDramaData || isNaN(epNum)) return;
+            const targetIdx = currentDramaData.episodes.findIndex(e => e.number === epNum);
+            if (targetIdx !== -1) {
+                switchEpisode(targetIdx);
+            } else {
+                showToast(`Episode ${epNum} not found`, 'fa-circle-exclamation');
+            }
+        });
+
+        // Clear History
+        clearHistoryBtn.addEventListener('click', () => {
+            if (confirm('Clear all your watch history?')) {
+                localStorage.removeItem(STORAGE_HISTORY);
+                renderHistoryRail();
+                showToast('Watch history cleared', 'fa-trash-can');
+            }
+        });
+
+        // Global Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (!playerModal.hidden) closeModal();
+            }
+            if (!playerModal.hidden && document.activeElement.tagName !== 'INPUT') {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    if (mainVideo.paused) mainVideo.play();
+                    else mainVideo.pause();
+                } else if (e.code === 'ArrowRight') {
+                    mainVideo.currentTime = Math.min(mainVideo.duration || 0, mainVideo.currentTime + 5);
+                } else if (e.code === 'ArrowLeft') {
+                    mainVideo.currentTime = Math.max(0, mainVideo.currentTime - 5);
+                } else if (e.key.toLowerCase() === 'n') {
+                    nextEpBtn.click();
+                } else if (e.key.toLowerCase() === 'p') {
+                    prevEpBtn.click();
+                } else if (e.key.toLowerCase() === 'f') {
+                    if (!document.fullscreenElement) {
+                        videoViewport.requestFullscreen().catch(() => {});
+                    } else {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                }
+            }
+        });
+
+        // Footer links provider switch
+        document.querySelectorAll('.f-link[data-provider]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const pKey = link.getAttribute('data-provider');
+                selectProvider(pKey);
+                window.scrollTo({ top: 400, behavior: 'smooth' });
+            });
+        });
+    }
+
+    // ==========================================
+    // 2. PROVIDERS & SECTIONS
+    // ==========================================
+    async function loadProviders() {
+        try {
+            const res = await fetch('/api/providers');
+            const data = await res.json();
+            if (data.ok && data.providers) {
+                renderProviders(data.providers);
+            }
+        } catch (e) {
+            console.error('Failed to load providers:', e);
+        }
+    }
+
+    function renderProviders(providers) {
+        if (!Array.isArray(providers) || providers.length === 0) return;
+        providersContainer.innerHTML = '';
+        providers.forEach(p => {
+            const pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = `provider-pill ${p.key === currentProvider ? 'active' : ''}`;
+            pill.setAttribute('data-provider', p.key);
+            pill.setAttribute('title', `Explore ${p.label || p.key}`);
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = p.label || p.key;
+            pill.appendChild(textSpan);
+
+            pill.addEventListener('click', () => {
+                selectProvider(p.key, p.label);
+                pill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            });
+            providersContainer.appendChild(pill);
+        });
+    }
+
+    function selectProvider(key, label) {
+        if (currentProvider === key) return;
+        currentProvider = key;
+        currentPage = 1;
+        document.querySelectorAll('.provider-pill').forEach(el => {
+            el.classList.toggle('active', el.getAttribute('data-provider') === key);
+        });
+        currentProviderTitle.textContent = label || key.toUpperCase();
+        loadSections();
+    }
+
+    async function loadSections() {
+        gridLoader.hidden = false;
+        emptyState.hidden = true;
+        dramaGrid.innerHTML = '';
+
+        try {
+            const res = await fetch(`/api/sections?provider=${currentProvider}&page=${currentPage}&lang=en-US`);
+            const data = await res.json();
+
+            gridLoader.hidden = true;
+
+            if (Array.isArray(data.providers) && data.providers.length > 0) {
+                if (providersContainer.children.length !== data.providers.length) {
+                    renderProviders(data.providers);
+                }
+            }
+
+            if (!data.ok || !data.sections || data.sections.length === 0) {
+                emptyState.hidden = false;
+                return;
+            }
+
+            // Extract unique items
+            const allItems = [];
+            data.sections.forEach(sec => {
+                if (Array.isArray(sec.items)) {
+                    sec.items.forEach(item => {
+                        if (!allItems.some(x => x.title === item.title)) {
+                            item.provider_key = currentProvider;
+                            allItems.push(item);
+                        }
+                    });
+                }
+            });
+
+            if (allItems.length === 0) {
+                emptyState.hidden = false;
+                return;
+            }
+
+            // Update Hero with 1st item
+            updateHero(allItems[0]);
+
+            // Render Top 10 Rail
+            renderTop10Rail(allItems.slice(0, 10));
+
+            // Render Library Grid
+            renderGrid(allItems);
+
+            // Update Pagination
+            updatePaginationUI();
+        } catch (e) {
+            gridLoader.hidden = true;
+            emptyState.hidden = false;
+            console.error('Error loading sections:', e);
+        }
+    }
+
+    const DEFAULT_FALLBACK_POSTER = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&auto=format&fit=crop&q=80';
+
+    function formatPosterUrl(url) {
+        if (!url || typeof url !== 'string') return DEFAULT_FALLBACK_POSTER;
+        const trimmed = url.trim();
+        if (trimmed.startsWith('//')) return `https:${trimmed}`;
+        if (trimmed.startsWith('/')) return `https://narto-drama.com${trimmed}`;
+        return trimmed;
+    }
+
+    function updateHero(item) {
+        if (!item) return;
+        heroTitle.textContent = item.title || 'Featured Drama Series';
+        heroDesc.textContent = item.description || 'Watch all episodes of trending short dramas in full HD without ads.';
+        heroBackdrop.style.backgroundImage = `url('${formatPosterUrl(item.poster_url)}')`;
+        heroProviderBadge.textContent = `${(item.category_name || currentProvider).toUpperCase()} EXCLUSIVE`;
+
+        heroTags.innerHTML = '';
+        const tags = item.tag_names || (item.category_name ? [item.category_name] : ['Short Drama', 'Trending', 'Romance']);
+        tags.forEach(t => {
+            const span = document.createElement('span');
+            span.className = 'tag-chip';
+            span.textContent = t;
+            heroTags.appendChild(span);
+        });
+
+        heroPlayBtn.onclick = () => openDrama(item);
+        heroMoreBtn.onclick = () => openDrama(item);
+
+        heroFavBtn.onclick = () => {
+            toggleFavorite(item);
+            syncHeroFavBtn(item);
+        };
+        syncHeroFavBtn(item);
+    }
+
+    function syncHeroFavBtn(item) {
+        const isFav = isFavorite(item.title);
+        heroFavBtn.innerHTML = isFav 
+            ? '<i class="fa-solid fa-heart text-rose"></i> Saved to My List'
+            : '<i class="fa-regular fa-heart"></i> Add to My List';
+    }
+
+    // ==========================================
+    // 3. TOP 10 RANKED RAIL (NETFLIX STYLE)
+    // ==========================================
+    function renderTop10Rail(items) {
+        top10Rail.innerHTML = '';
+        items.forEach((item, index) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'top10-card-wrap';
+            const rank = index + 1;
+            const posterSrc = formatPosterUrl(item.poster_url);
+
+            wrap.innerHTML = `
+                <div class="top10-rank-num">${rank}</div>
+                <div class="top10-card-inner">
+                    <div class="poster-frame">
+                        <img class="poster-img" src="${posterSrc}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_FALLBACK_POSTER}';">
+                        <span class="card-badge-provider">TOP ${rank}</span>
+                        <div class="card-play-hover-overlay">
+                            <div class="card-play-btn-circle"><i class="fa-solid fa-play"></i></div>
+                        </div>
+                    </div>
+                    <div class="card-info-block">
+                        <h4 class="card-title-text" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h4>
+                        <div class="card-meta-text">${item.category_name || 'Exclusive Series'}</div>
+                    </div>
+                </div>
+            `;
+            wrap.addEventListener('click', () => openDrama(item));
+            top10Rail.appendChild(wrap);
+        });
+    }
+
+    // ==========================================
+    // 4. MAIN LIBRARY GRID
+    // ==========================================
+    function renderGrid(items) {
+        dramaGrid.innerHTML = '';
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'drama-card';
+            const tagsText = (item.tag_names && item.tag_names.length) 
+                ? item.tag_names.join(' • ') 
+                : (item.category_name || currentProvider.toUpperCase());
+            const posterSrc = formatPosterUrl(item.poster_url);
+
+            card.innerHTML = `
+                <div class="poster-frame">
+                    <img class="poster-img" src="${posterSrc}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_FALLBACK_POSTER}';">
+                    <span class="card-badge-provider">${item.category_name || currentProvider.toUpperCase()}</span>
+                    <div class="card-play-hover-overlay">
+                        <div class="card-play-btn-circle"><i class="fa-solid fa-play"></i></div>
+                    </div>
+                </div>
+                <div class="card-info-block">
+                    <h3 class="card-title-text" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+                    <div class="card-meta-text">${escapeHtml(tagsText)}</div>
+                </div>
+            `;
+            card.addEventListener('click', () => openDrama(item));
+            dramaGrid.appendChild(card);
+        });
+    }
+
+    function updatePaginationUI() {
+        pageIndicator.textContent = `Page ${currentPage}`;
+        pageIndicatorBot.textContent = `Page ${currentPage}`;
+        prevPageBtn.disabled = currentPage <= 1;
+        prevPageBtnBot.disabled = currentPage <= 1;
+    }
+
+    function changePage(newPage) {
+        if (newPage < 1) return;
+        currentPage = newPage;
+        loadSections();
+        document.getElementById('providers-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ==========================================
+    // 5. SEARCH SYSTEM
+    // ==========================================
+    async function handleSearch(query) {
+        searchResultsList.innerHTML = '<div style="padding:16px;text-align:center;color:#94a3b8;font-size:13px;"><i class="fa-solid fa-spinner fa-spin"></i> Searching database...</div>';
+        searchDropdown.hidden = false;
+
+        try {
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=en-US`);
+            const data = await res.json();
+
+            if (!data.ok || !data.items || data.items.length === 0) {
+                searchResultsList.innerHTML = '<div style="padding:16px;text-align:center;color:#64748b;font-size:13px;">No matching titles found</div>';
+                searchCount.textContent = '0 found';
+                return;
+            }
+
+            searchCount.textContent = `${data.items.length} found`;
+            searchResultsList.innerHTML = '';
+            data.items.slice(0, 12).forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'search-item';
+                const posterSrc = formatPosterUrl(item.poster_url);
+                row.innerHTML = `
+                    <img class="search-thumb" src="${posterSrc}" alt="${escapeHtml(item.title)}" onerror="this.onerror=null;this.src='${DEFAULT_FALLBACK_POSTER}';">
+                    <div class="search-item-info">
+                        <div class="search-item-title">${escapeHtml(item.title)}</div>
+                        <div class="search-item-meta">${item.category_name || 'Short Drama Series'}</div>
+                    </div>
+                `;
+                row.addEventListener('click', () => {
+                    searchDropdown.hidden = true;
+                    openDrama(item);
+                });
+                searchResultsList.appendChild(row);
+            });
+        } catch (e) {
+            searchResultsList.innerHTML = '<div style="padding:16px;text-align:center;color:#f43f5e;font-size:13px;">Search service unavailable</div>';
+        }
+    }
+
+    // ==========================================
+    // 6. VIDEO PLAYER & EPISODES SUITE
+    // ==========================================
+    async function openDrama(item) {
+        playerModal.hidden = false;
+        document.body.style.overflow = 'hidden';
+
+        modalDramaTitle.textContent = item.title;
+        detailDramaTitle.textContent = item.title;
+        detailDramaDesc.textContent = item.description || 'Loading drama overview...';
+        episodesCount.textContent = '...';
+        episodesGrid.innerHTML = '<div style="grid-column: 1/-1; padding:24px; text-align:center; color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin"></i> Initializing streaming pipeline...</div>';
+        epBatchTabs.innerHTML = '';
+        videoOverlayLoader.hidden = false;
+
+        syncModalFavBtn(item);
+
+        try {
+            const watchUrl = item.watch_url || item.url || '';
+            const res = await fetch(`/api/drama?watch_url=${encodeURIComponent(watchUrl)}`);
+            const data = await res.json();
+
+            if (!data.ok || !data.episodes || data.episodes.length === 0) {
+                showToast('Unable to load episode list for this title.', 'fa-triangle-exclamation');
+                videoOverlayLoader.hidden = true;
+                return;
+            }
+
+            currentDramaData = {
+                ...item,
+                ...data,
+                watch_url: watchUrl
+            };
+
+            modalDramaTitle.textContent = data.title || item.title;
+            detailDramaTitle.textContent = data.title || item.title;
+            if (data.description) detailDramaDesc.textContent = data.description;
+            episodesCount.textContent = data.total_episodes;
+
+            // Save to Watch History
+            saveToHistory(currentDramaData, 1);
+
+            // Setup Multi-batch tabs
+            setupEpisodeBatches(data.episodes);
+
+            // Render Episodes & Play Ep 1
+            renderEpisodesGrid(data.episodes);
+            switchEpisode(0);
+        } catch (e) {
+            console.error('Error opening drama:', e);
+            videoOverlayLoader.hidden = true;
+            showToast('Playback error: ' + e.message, 'fa-circle-xmark');
+        }
+    }
+
+    function setupEpisodeBatches(episodes) {
+        epBatchTabs.innerHTML = '';
+        activeBatchIndex = 0;
+        const total = episodes.length;
+        if (total <= BATCH_SIZE) {
+            epBatchTabs.hidden = true;
+            return;
+        }
+
+        epBatchTabs.hidden = false;
+        const batchCount = Math.ceil(total / BATCH_SIZE);
+        for (let b = 0; b < batchCount; b++) {
+            const start = b * BATCH_SIZE + 1;
+            const end = Math.min(total, (b + 1) * BATCH_SIZE);
+            const tab = document.createElement('button');
+            tab.className = `batch-tab ${b === 0 ? 'active' : ''}`;
+            tab.textContent = `${start}-${end}`;
+            tab.addEventListener('click', () => {
+                activeBatchIndex = b;
+                document.querySelectorAll('.batch-tab').forEach((el, idx) => {
+                    el.classList.toggle('active', idx === b);
+                });
+                renderEpisodesGrid(episodes);
+            });
+            epBatchTabs.appendChild(tab);
+        }
+    }
+
+    function renderEpisodesGrid(episodes) {
+        episodesGrid.innerHTML = '';
+        
+        let displayList = episodes;
+        let startIndex = 0;
+
+        if (episodes.length > BATCH_SIZE) {
+            startIndex = activeBatchIndex * BATCH_SIZE;
+            displayList = episodes.slice(startIndex, startIndex + BATCH_SIZE);
+        }
+
+        displayList.forEach((ep, relIdx) => {
+            const absIndex = startIndex + relIdx;
+            const btn = document.createElement('button');
+            btn.className = `ep-btn ${absIndex === currentEpisodeIndex ? 'active' : ''}`;
+            btn.textContent = `${ep.number || absIndex + 1}`;
+            btn.title = ep.title || `Episode ${ep.number || absIndex + 1}`;
+            btn.addEventListener('click', () => switchEpisode(absIndex));
+            episodesGrid.appendChild(btn);
+        });
+    }
+
+    function switchEpisode(index) {
+        if (!currentDramaData || !currentDramaData.episodes[index]) return;
+        currentEpisodeIndex = index;
+        const episode = currentDramaData.episodes[index];
+
+        modalEpisodeTitle.textContent = `Episode ${episode.number || index + 1}`;
+        prevEpBtn.disabled = index === 0;
+        nextEpBtn.disabled = index === currentDramaData.episodes.length - 1;
+
+        // Auto switch batch tab if episode belongs to another batch
+        const targetBatch = Math.floor(index / BATCH_SIZE);
+        if (targetBatch !== activeBatchIndex && currentDramaData.episodes.length > BATCH_SIZE) {
+            activeBatchIndex = targetBatch;
+            document.querySelectorAll('.batch-tab').forEach((el, idx) => {
+                el.classList.toggle('active', idx === targetBatch);
+            });
+            renderEpisodesGrid(currentDramaData.episodes);
+        } else {
+            // Update active state
+            const epBtns = episodesGrid.querySelectorAll('.ep-btn');
+            epBtns.forEach((b) => {
+                const epNum = parseInt(b.textContent, 10);
+                b.classList.toggle('active', epNum === (episode.number || index + 1));
+            });
+        }
+
+        // Update Watch History
+        saveToHistory(currentDramaData, episode.number || index + 1);
+
+        // Load & Play Stream
+        loadVideoStream(episode);
+    }
+
+    async function loadVideoStream(episode) {
+        videoOverlayLoader.hidden = false;
+        let streamUrl = episode.play_url || episode.direct_play_url;
+
+        // Fetch on-demand if missing
+        if (!streamUrl && episode.watch_url) {
+            try {
+                videoOverlayLoader.innerHTML = '<div class="stream-spinner"></div><span class="loading-status-text">Resolving episode direct stream...</span>';
+                const epRes = await fetch(`/api/drama?watch_url=${encodeURIComponent(episode.watch_url)}`);
+                const epData = await epRes.json();
+                if (epData.ok && epData.episodes && epData.episodes.length > 0) {
+                    const matchEp = epData.episodes.find(e => e.number === episode.number) || epData.episodes[0];
+                    episode.play_url = matchEp.play_url || matchEp.direct_play_url;
+                    streamUrl = episode.play_url;
+                }
+            } catch (e) {
+                console.error('Error fetching episode stream:', e);
+            }
+        }
+
+        if (!streamUrl) {
+            videoOverlayLoader.innerHTML = '<span style="color:#f43f5e;font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> No stream link available for this episode.</span>';
+            return;
+        }
+
+        const isHls = streamUrl.includes('.m3u8') || episode.is_hls;
+        streamTypeBadge.innerHTML = isHls 
+            ? '<i class="fa-solid fa-bolt"></i> HLS 1080p' 
+            : '<i class="fa-solid fa-play"></i> Direct MP4';
+
+        // Destroy previous Hls instance
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+
+        if (isHls && window.Hls && Hls.isSupported()) {
+            hls = new Hls({
+                enableWorker: true,
+                lowLatencyMode: false,
+                backBufferLength: 90
+            });
+            hls.loadSource(streamUrl);
+            hls.attachMedia(mainVideo);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                videoOverlayLoader.hidden = true;
+                mainVideo.play().catch(() => {});
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    console.warn('HLS Fatal, switching to proxy fallback...', data);
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            const proxyUrl = `/api/proxy-stream?url=${encodeURIComponent(streamUrl)}`;
+                            hls.loadSource(proxyUrl);
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            hls.destroy();
+                            break;
+                    }
+                }
+            });
+        } else {
+            // HTML5 Native (MP4)
+            mainVideo.src = streamUrl;
+            mainVideo.onloadeddata = () => {
+                videoOverlayLoader.hidden = true;
+                mainVideo.play().catch(() => {});
+            };
+            mainVideo.onerror = () => {
+                const proxyUrl = `/api/proxy-stream?url=${encodeURIComponent(streamUrl)}`;
+                mainVideo.src = proxyUrl;
+                mainVideo.play().catch(() => {});
+            };
+        }
+    }
+
+    function closeModal() {
+        playerModal.hidden = true;
+        document.body.style.overflow = '';
+        mainVideo.pause();
+        mainVideo.removeAttribute('src');
+        mainVideo.load();
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+        renderHistoryRail();
+    }
+
+    function toggleTheaterMode() {
+        isTheaterMode = !isTheaterMode;
+        theaterToggleBtn.classList.toggle('active', isTheaterMode);
+        videoViewport.style.height = isTheaterMode ? '72vh' : '520px';
+        videoViewport.style.maxHeight = isTheaterMode ? '80vh' : '60vh';
+        showToast(isTheaterMode ? 'Theater mode activated' : 'Standard view restored', 'fa-film');
+    }
+
+    function shareCurrentDrama() {
+        if (!currentDramaData) return;
+        const shareUrl = `${window.location.origin}/?watch=${encodeURIComponent(currentDramaData.watch_url || '')}`;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                showToast('Stream link copied to clipboard!', 'fa-link');
+            });
+        } else {
+            showToast('Sharing link: ' + shareUrl, 'fa-share-nodes');
+        }
+    }
+
+    // ==========================================
+    // 7. WATCH HISTORY (LOCAL STORAGE)
+    // ==========================================
+    function getHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_HISTORY) || '[]');
+        } catch {
+            return [];
+        }
+    }
+
+    function saveToHistory(drama, episodeNumber) {
+        if (!drama || !drama.title) return;
+        let list = getHistory();
+        list = list.filter(item => item.title !== drama.title);
+        list.unshift({
+            title: drama.title,
+            poster_url: drama.poster_url || drama.poster || '',
+            watch_url: drama.watch_url || '',
+            last_episode: episodeNumber,
+            timestamp: Date.now(),
+            progress: 35
+        });
+        if (list.length > 12) list.pop();
+        localStorage.setItem(STORAGE_HISTORY, JSON.stringify(list));
+    }
+
+    function updateCurrentHistoryProgress() {
+        if (!currentDramaData || !mainVideo.duration) return;
+        const percent = Math.min(100, Math.round((mainVideo.currentTime / mainVideo.duration) * 100));
+        let list = getHistory();
+        const found = list.find(item => item.title === currentDramaData.title);
+        if (found) {
+            found.progress = percent;
+            localStorage.setItem(STORAGE_HISTORY, JSON.stringify(list));
+        }
+    }
+
+    function renderHistoryRail() {
+        const list = getHistory();
+        if (list.length === 0) {
+            historySection.hidden = true;
+            return;
+        }
+
+        historySection.hidden = false;
+        historyRail.innerHTML = '';
+        list.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'history-card';
+            const posterSrc = formatPosterUrl(item.poster_url);
+            card.innerHTML = `
+                <div class="history-poster-wrap">
+                    <img src="${posterSrc}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_FALLBACK_POSTER}';">
+                    <div class="history-progress-track">
+                        <div class="history-progress-fill" style="width: ${item.progress || 20}%"></div>
+                    </div>
+                </div>
+                <div class="history-card-body">
+                    <div class="history-card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+                    <div class="history-card-ep"><i class="fa-solid fa-play"></i> Resume Ep ${item.last_episode || 1}</div>
+                </div>
+            `;
+            card.addEventListener('click', () => openDrama(item));
+            historyRail.appendChild(card);
+        });
+    }
+
+    // ==========================================
+    // 8. FAVORITES / MY LIST (LOCAL STORAGE)
+    // ==========================================
+    function getFavorites() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_FAVORITES) || '[]');
+        } catch {
+            return [];
+        }
+    }
+
+    function isFavorite(title) {
+        return getFavorites().some(f => f.title === title);
+    }
+
+    function toggleFavorite(drama) {
+        if (!drama || !drama.title) return;
+        let list = getFavorites();
+        const exists = list.some(f => f.title === drama.title);
+        if (exists) {
+            list = list.filter(f => f.title !== drama.title);
+            showToast(`Removed from My List`, 'fa-heart-crack');
+        } else {
+            list.unshift({
+                title: drama.title,
+                poster_url: drama.poster_url || drama.poster || '',
+                watch_url: drama.watch_url || '',
+                category_name: drama.category_name || 'Short Drama'
+            });
+            showToast(`Added to My List!`, 'fa-heart');
+        }
+        localStorage.setItem(STORAGE_FAVORITES, JSON.stringify(list));
+        renderFavoritesRail();
+    }
+
+    function syncModalFavBtn(item = currentDramaData) {
+        if (!item) return;
+        const fav = isFavorite(item.title);
+        modalFavBtn.classList.toggle('active', fav);
+        modalFavBtn.innerHTML = fav ? '<i class="fa-solid fa-heart text-rose"></i>' : '<i class="fa-regular fa-heart"></i>';
+    }
+
+    function renderFavoritesRail() {
+        const list = getFavorites();
+        favoritesCount.textContent = list.length;
+        if (list.length === 0) {
+            favoritesSection.hidden = true;
+            return;
+        }
+
+        favoritesSection.hidden = false;
+        favoritesRail.innerHTML = '';
+        list.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'drama-card';
+            card.style.minWidth = '190px';
+            card.style.maxWidth = '190px';
+            const posterSrc = formatPosterUrl(item.poster_url);
+            card.innerHTML = `
+                <div class="poster-frame">
+                    <img class="poster-img" src="${posterSrc}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_FALLBACK_POSTER}';">
+                    <span class="card-badge-provider">SAVED</span>
+                    <div class="card-play-hover-overlay">
+                        <div class="card-play-btn-circle"><i class="fa-solid fa-play"></i></div>
+                    </div>
+                </div>
+                <div class="card-info-block">
+                    <h3 class="card-title-text" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+                    <div class="card-meta-text">${escapeHtml(item.category_name || 'My List')}</div>
+                </div>
+            `;
+            card.addEventListener('click', () => openDrama(item));
+            favoritesRail.appendChild(card);
+        });
+    }
+
+    // ==========================================
+    // 9. TOAST NOTIFICATION UTILITY
+    // ==========================================
+    function showToast(message, icon = 'fa-check') {
+        const toast = document.createElement('div');
+        toast.className = 'toast-pill';
+        toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.style.transition = 'opacity 0.4s, transform 0.4s';
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px)';
+            setTimeout(() => toast.remove(), 400);
+        }, 3000);
+    }
+
+    // ==========================================
+    // 10. URL PARAMETER WATCH DIRECT ACCESS
+    // ==========================================
+    function checkUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const watchParam = params.get('watch');
+        if (watchParam) {
+            openDrama({ watch_url: watchParam, title: 'Direct Streaming Drama' });
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Launch on DOM Ready
+    window.addEventListener('DOMContentLoaded', init);
+})();
