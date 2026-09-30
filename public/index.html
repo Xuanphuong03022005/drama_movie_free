@@ -89,14 +89,23 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-        <!-- Hero Showcase Banner -->
+        <!-- Hero Showcase Banner (Interactive Slide Bar) -->
         <section id="featured" class="hero-showcase">
             <div class="hero-ambient-glow" id="hero-ambient"></div>
             <div class="hero-backdrop" id="hero-backdrop"></div>
             <div class="hero-gradient-overlay"></div>
-            <div class="hero-content-wrap">
+
+            <!-- Slide Navigation Buttons -->
+            <button class="hero-slide-nav hero-slide-prev" id="hero-slide-prev" aria-label="Previous Featured Drama" title="Previous Slide">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button class="hero-slide-nav hero-slide-next" id="hero-slide-next" aria-label="Next Featured Drama" title="Next Slide">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+
+            <div class="hero-content-wrap" id="hero-content-wrap">
                 <div class="hero-meta-badges">
-                    <span class="badge-trend"><i class="fa-solid fa-chart-line"></i> #1 TOP RANKED TODAY</span>
+                    <span class="badge-trend" id="hero-trend-badge"><i class="fa-solid fa-chart-line"></i> #1 TOP RANKED TODAY</span>
                     <span class="badge-provider" id="hero-provider-badge">ANYREEL EXCLUSIVE</span>
                     <span class="badge-quality">4K ULTRA HD</span>
                 </div>
@@ -108,7 +117,7 @@
                         <i class="fa-solid fa-star"></i>
                         <i class="fa-solid fa-star"></i>
                         <i class="fa-solid fa-star-half-stroke"></i>
-                        <span class="rating-num">4.9</span>
+                        <span class="rating-num" id="hero-rating-num">4.9</span>
                     </div>
                     <span class="dot-divider">•</span>
                     <span id="hero-episodes-badge" class="meta-item"><i class="fa-solid fa-film"></i> Full Series</span>
@@ -126,6 +135,12 @@
                     <button class="btn btn-hero-glass" id="hero-more-btn"><i class="fa-solid fa-circle-info"></i>
                         Synopsis</button>
                 </div>
+            </div>
+
+            <!-- Slide Indicator Bar (Pills with progress bar animation) -->
+            <div class="hero-indicators-bar" id="hero-indicators-bar">
+                <div class="hero-indicators" id="hero-indicators"></div>
+                <div class="hero-slide-counter" id="hero-slide-counter">1 / 5</div>
             </div>
         </section>
 

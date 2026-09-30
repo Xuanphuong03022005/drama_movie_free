@@ -2,6 +2,16 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.6] - 2026-09-30
+### Added
+- Interactive Hero Showcase Banner Slide Bar (Carousel):
+  - Top 6 featured releases rotation with smooth cross-fade animation.
+  - Left & Right glassmorphic circular navigation arrows (`<` and `>`).
+  - Animated slide indicator progress pills with live progress bar timer filling up over 5 seconds.
+  - Slide counter indicator (`1 / 6`, `2 / 6`...).
+  - Dynamic trending badges (`#1 TOP RANKED TODAY`, `#2 TRENDING NOW`, `#3 AUDIENCE CHOICE`...).
+  - Automatic slide advance with smart pause-on-hover.
+
 ## [0.0.5] - 2026-09-30
 ### Fixed
 - Fixed empty catalogue issue on providers such as Vyntage, PineDrama, etc., caused by passing extraneous `tab_pages[trending]` and `tab_pages[popular]` parameters to providers that only support `home`.

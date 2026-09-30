@@ -28,6 +28,21 @@
     const heroPlayBtn = document.getElementById('hero-play-btn');
     const heroFavBtn = document.getElementById('hero-fav-btn');
     const heroMoreBtn = document.getElementById('hero-more-btn');
+    const featuredSection = document.getElementById('featured');
+    const heroContentWrap = document.getElementById('hero-content-wrap');
+    const heroSlidePrev = document.getElementById('hero-slide-prev');
+    const heroSlideNext = document.getElementById('hero-slide-next');
+    const heroIndicators = document.getElementById('hero-indicators');
+    const heroSlideCounter = document.getElementById('hero-slide-counter');
+    const heroTrendBadge = document.getElementById('hero-trend-badge');
+    const heroRatingNum = document.getElementById('hero-rating-num');
+
+    // Hero Slider State
+    let heroSliderItems = [];
+    let currentHeroIndex = 0;
+    let heroProgressBarTimer = null;
+    let heroProgressPercent = 0;
+    let isHeroHovered = false;
 
     // Rails & Grids
     const top10Rail = document.getElementById('top10-rail');
@@ -287,6 +302,28 @@
         setupRailNavigation(historyRail, historyPrevBtn, historyNextBtn);
         setupRailNavigation(favoritesRail, favoritesPrevBtn, favoritesNextBtn);
 
+        // Hero Slider Navigation Controls
+        if (heroSlideNext) {
+            heroSlideNext.addEventListener('click', () => {
+                nextHeroSlide();
+                startHeroAutoPlay();
+            });
+        }
+        if (heroSlidePrev) {
+            heroSlidePrev.addEventListener('click', () => {
+                prevHeroSlide();
+                startHeroAutoPlay();
+            });
+        }
+        if (featuredSection) {
+            featuredSection.addEventListener('mouseenter', () => {
+                isHeroHovered = true;
+            });
+            featuredSection.addEventListener('mouseleave', () => {
+                isHeroHovered = false;
+            });
+        }
+
         // Global Keyboard Shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -476,8 +513,8 @@
                 return;
             }
 
-            // Update Hero with 1st item
-            updateHero(allItems[0]);
+            // Setup Hero Showcase Slider with top 6 items
+            setupHeroSlider(allItems.slice(0, 6));
 
             // Render Top 10 Rail
             renderTop10Rail(allItems.slice(0, 10));
@@ -504,34 +541,170 @@
         return trimmed;
     }
 
-    function updateHero(item) {
-        if (!item) return;
-        heroTitle.textContent = item.title || 'Featured Drama Series';
-        heroDesc.textContent = item.description || 'Watch all episodes of trending short dramas in full HD without ads.';
-        heroBackdrop.style.backgroundImage = `url('${formatPosterUrl(item.poster_url)}')`;
-        heroProviderBadge.textContent = `${(item.category_name || currentProvider).toUpperCase()} EXCLUSIVE`;
+    // ==========================================
+    // HERO SHOWCASE SLIDER SYSTEM
+    // ==========================================
+    function setupHeroSlider(items) {
+        if (!Array.isArray(items) || items.length === 0) return;
+        heroSliderItems = items;
+        currentHeroIndex = 0;
 
-        heroTags.innerHTML = '';
-        const tags = item.tag_names || (item.category_name ? [item.category_name] : ['Short Drama', 'Trending', 'Romance']);
-        tags.forEach(t => {
-            const span = document.createElement('span');
-            span.className = 'tag-chip';
-            span.textContent = t;
-            heroTags.appendChild(span);
+        renderHeroIndicators();
+        renderHeroSlide(0, false);
+        startHeroAutoPlay();
+    }
+
+    function renderHeroIndicators() {
+        if (!heroIndicators) return;
+        heroIndicators.innerHTML = '';
+        heroSliderItems.forEach((item, idx) => {
+            const dot = document.createElement('div');
+            dot.className = `hero-indicator-dot ${idx === currentHeroIndex ? 'active' : ''}`;
+            dot.setAttribute('title', `Slide ${idx + 1}: ${item.title || ''}`);
+            dot.innerHTML = '<div class="hero-indicator-progress"></div>';
+            dot.addEventListener('click', () => {
+                goToHeroSlide(idx);
+            });
+            heroIndicators.appendChild(dot);
         });
+        updateHeroCounter();
+    }
 
-        heroPlayBtn.onclick = () => openDrama(item);
-        heroMoreBtn.onclick = () => openDrama(item);
+    function updateHeroCounter() {
+        if (heroSlideCounter && heroSliderItems.length > 0) {
+            heroSlideCounter.textContent = `${currentHeroIndex + 1} / ${heroSliderItems.length}`;
+        }
+    }
 
-        heroFavBtn.onclick = () => {
-            toggleFavorite(item);
+    function renderHeroSlide(index, animate = true) {
+        if (index < 0 || index >= heroSliderItems.length) return;
+        currentHeroIndex = index;
+        const item = heroSliderItems[index];
+        if (!item) return;
+
+        updateHeroCounter();
+
+        // Update indicator dots active state
+        if (heroIndicators) {
+            Array.from(heroIndicators.children).forEach((dot, dotIdx) => {
+                dot.classList.toggle('active', dotIdx === index);
+                const prog = dot.querySelector('.hero-indicator-progress');
+                if (prog) {
+                    prog.style.width = dotIdx === index ? '0%' : (dotIdx < index ? '100%' : '0%');
+                }
+            });
+        }
+
+        const applyContent = () => {
+            heroTitle.textContent = item.title || 'Featured Drama Series';
+            heroDesc.textContent = item.description || 'Watch all episodes of trending short dramas in full HD without ads.';
+            heroBackdrop.style.backgroundImage = `url('${formatPosterUrl(item.poster_url)}')`;
+            heroProviderBadge.textContent = `${(item.category_name || currentProvider).toUpperCase()} EXCLUSIVE`;
+
+            if (heroTrendBadge) {
+                const rankLabels = [
+                    '#1 TOP RANKED TODAY',
+                    '#2 TRENDING NOW',
+                    '#3 AUDIENCE CHOICE',
+                    '#4 EDITORS\' PICK',
+                    '#5 VIRAL HIT',
+                    '#6 MUST WATCH'
+                ];
+                heroTrendBadge.innerHTML = `<i class="fa-solid fa-chart-line"></i> ${rankLabels[index] || `#${index + 1} FEATURED DRAMA`}`;
+            }
+
+            if (heroRatingNum) {
+                const rating = (4.7 + ((index * 7) % 3) * 0.1).toFixed(1);
+                heroRatingNum.textContent = rating;
+            }
+
+            heroTags.innerHTML = '';
+            const tags = item.tag_names || (item.category_name ? [item.category_name] : ['Short Drama', 'Trending', 'Romance']);
+            tags.forEach(t => {
+                const span = document.createElement('span');
+                span.className = 'tag-chip';
+                span.textContent = t;
+                heroTags.appendChild(span);
+            });
+
+            heroPlayBtn.onclick = () => openDrama(item);
+            heroMoreBtn.onclick = () => openDrama(item);
+
+            heroFavBtn.onclick = () => {
+                toggleFavorite(item);
+                syncHeroFavBtn(item);
+            };
             syncHeroFavBtn(item);
+
+            if (animate && heroContentWrap) {
+                heroContentWrap.classList.remove('slide-transitioning');
+            }
         };
-        syncHeroFavBtn(item);
+
+        if (animate && heroContentWrap) {
+            heroContentWrap.classList.add('slide-transitioning');
+            setTimeout(applyContent, 180);
+        } else {
+            applyContent();
+        }
+    }
+
+    function nextHeroSlide() {
+        if (heroSliderItems.length <= 1) return;
+        const nextIdx = (currentHeroIndex + 1) % heroSliderItems.length;
+        renderHeroSlide(nextIdx, true);
+    }
+
+    function prevHeroSlide() {
+        if (heroSliderItems.length <= 1) return;
+        const prevIdx = (currentHeroIndex - 1 + heroSliderItems.length) % heroSliderItems.length;
+        renderHeroSlide(prevIdx, true);
+    }
+
+    function goToHeroSlide(index) {
+        if (index === currentHeroIndex) return;
+        renderHeroSlide(index, true);
+        startHeroAutoPlay();
+    }
+
+    function startHeroAutoPlay() {
+        stopHeroAutoPlay();
+        if (heroSliderItems.length <= 1) return;
+
+        heroProgressPercent = 0;
+        const DURATION_MS = 5000;
+        const INTERVAL_MS = 50;
+        const step = (INTERVAL_MS / DURATION_MS) * 100;
+
+        heroProgressBarTimer = setInterval(() => {
+            if (isHeroHovered) return; // Pause on hover
+            heroProgressPercent += step;
+            if (heroIndicators && heroIndicators.children[currentHeroIndex]) {
+                const prog = heroIndicators.children[currentHeroIndex].querySelector('.hero-indicator-progress');
+                if (prog) prog.style.width = `${Math.min(100, heroProgressPercent)}%`;
+            }
+
+            if (heroProgressPercent >= 100) {
+                heroProgressPercent = 0;
+                nextHeroSlide();
+            }
+        }, INTERVAL_MS);
+    }
+
+    function stopHeroAutoPlay() {
+        if (heroProgressBarTimer) {
+            clearInterval(heroProgressBarTimer);
+            heroProgressBarTimer = null;
+        }
+        heroProgressPercent = 0;
+    }
+
+    function updateHero(item) {
+        setupHeroSlider(item ? [item] : []);
     }
 
     function syncHeroFavBtn(item) {
-        const isFav = isFavorite(item.title);
+        const isFav = item && isFavorite(item.title);
         heroFavBtn.innerHTML = isFav 
             ? '<i class="fa-solid fa-heart text-rose"></i> Saved to My List'
             : '<i class="fa-regular fa-heart"></i> Add to My List';
