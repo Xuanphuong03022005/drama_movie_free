@@ -79,28 +79,61 @@ app.get('/api/sections', async (req, res) => {
         const query = req.query.q || '';
         const lang = req.query.lang || 'en-US';
 
-        const params = new URLSearchParams();
-        params.set('provider', provider);
-        params.set('lang', lang);
-        params.set('target_lang', lang);
-        if (query) {
-            params.set('q', query);
-        } else {
-            params.set('tab_pages[home]', String(page));
-            params.set('tab_pages[trending]', String(page));
-            params.set('tab_pages[popular]', String(page));
+        async function fetchSectionsFromUpstream(targetLang, useTargetFilter = true) {
+            const params = new URLSearchParams();
+            params.set('provider', provider);
+            params.set('lang', targetLang);
+            if (useTargetFilter) {
+                params.set('target_lang', targetLang);
+            }
+            if (query) {
+                params.set('q', query);
+            } else {
+                params.set('tab_pages[home]', String(page));
+            }
+
+            const url = `${BASE_URL}/home/providers/sections?${params.toString()}`;
+            const response = await fetch(url, {
+                headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
+            });
+
+            if (!response.ok) return null;
+            return await response.json();
         }
 
-        const url = `${BASE_URL}/home/providers/sections?${params.toString()}`;
-        const response = await fetch(url, {
-            headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-        });
+        // Primary fetch with selected language
+        let data = await fetchSectionsFromUpstream(lang, true);
 
-        if (!response.ok) {
-            return res.status(response.status).json({ ok: false, error: `Upstream error: ${response.status}` });
+        // Calculate total items
+        const countItems = (d) => {
+            if (!d || !Array.isArray(d.sections)) return 0;
+            return d.sections.reduce((acc, s) => acc + (Array.isArray(s.items) ? s.items.length : 0), 0);
+        };
+
+        let totalItems = countItems(data);
+
+        // Fallback 1: If 0 items, retry without strict target_lang filter
+        if (totalItems === 0 && !query) {
+            const fb1 = await fetchSectionsFromUpstream(lang, false);
+            if (countItems(fb1) > 0) {
+                data = fb1;
+                totalItems = countItems(data);
+            }
         }
 
-        const data = await response.json();
+        // Fallback 2: If still 0 items, retry with upstream default store 'id-ID'
+        if (totalItems === 0 && !query && lang !== 'id-ID') {
+            const fb2 = await fetchSectionsFromUpstream('id-ID', false);
+            if (countItems(fb2) > 0) {
+                data = fb2;
+                totalItems = countItems(data);
+            }
+        }
+
+        if (!data) {
+            return res.status(502).json({ ok: false, error: 'Failed to fetch sections from upstream' });
+        }
+
         if (Array.isArray(data.providers) && data.providers.length > 0) {
             cachedProviders = data.providers;
             lastProvidersFetch = Date.now();

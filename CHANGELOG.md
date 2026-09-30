@@ -2,6 +2,11 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.5] - 2026-09-30
+### Fixed
+- Fixed empty catalogue issue on providers such as Vyntage, PineDrama, etc., caused by passing extraneous `tab_pages[trending]` and `tab_pages[popular]` parameters to providers that only support `home`.
+- Added resilient language and catalog fallback in `/api/sections`: automatically falls back without strict language locks or to native upstream catalog so all 54 providers return their full list of drama titles.
+
 ## [0.0.4] - 2026-09-30
 ### Added
 - Interactive Left & Right carousel navigation buttons (`<` and `>`) for the **Continue Watching** section (`#history-section`) and **My List** section (`#favorites-section`) to easily browse through saved history and bookmarked dramas without scrollbars.
