@@ -213,6 +213,33 @@
             }
         });
 
+        // Top 10 Left & Right Carousel Navigation Buttons
+        if (top10PrevBtn && top10NextBtn && top10Rail) {
+            top10NextBtn.addEventListener('click', () => {
+                const scrollStep = Math.max(260, Math.floor(top10Rail.clientWidth * 0.7));
+                top10Rail.scrollBy({ left: scrollStep, behavior: 'smooth' });
+            });
+
+            top10PrevBtn.addEventListener('click', () => {
+                const scrollStep = Math.max(260, Math.floor(top10Rail.clientWidth * 0.7));
+                top10Rail.scrollBy({ left: -scrollStep, behavior: 'smooth' });
+            });
+
+            const updateTop10NavState = () => {
+                const maxScroll = top10Rail.scrollWidth - top10Rail.clientWidth;
+                if (maxScroll <= 0) {
+                    top10PrevBtn.style.opacity = '0.3';
+                    top10NextBtn.style.opacity = '0.3';
+                    return;
+                }
+                top10PrevBtn.style.opacity = top10Rail.scrollLeft <= 10 ? '0.3' : '1';
+                top10NextBtn.style.opacity = top10Rail.scrollLeft >= maxScroll - 10 ? '0.3' : '1';
+            };
+
+            top10Rail.addEventListener('scroll', updateTop10NavState, { passive: true });
+            setTimeout(updateTop10NavState, 400);
+        }
+
         // Global Keyboard Shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -406,6 +433,7 @@
     // ==========================================
     function renderTop10Rail(items) {
         top10Rail.innerHTML = '';
+        top10Rail.scrollLeft = 0;
         items.forEach((item, index) => {
             const wrap = document.createElement('div');
             wrap.className = 'top10-card-wrap';
@@ -431,6 +459,7 @@
             wrap.addEventListener('click', () => openDrama(item));
             top10Rail.appendChild(wrap);
         });
+        setTimeout(() => top10Rail.dispatchEvent(new Event('scroll')), 50);
     }
 
     // ==========================================

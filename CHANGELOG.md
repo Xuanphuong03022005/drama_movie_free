@@ -2,6 +2,12 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.2] - 2026-09-30
+### Changed
+- Removed horizontal scrollbars on all content rails (Top 10, providers, history, favorites) for a clean modern design.
+- Activated interactive Left & Right carousel navigation buttons (`<` and `>`) on the Top 10 section to smoothly slide items left and right with smart boundary detection.
+- Updated version tracking to `tool_version` 0.0.2.
+
 ## [0.0.1] - 2026-09-30
 ### Added
 - Complete reverse-engineered streaming pipeline for short dramas from `narto-drama.com`.
