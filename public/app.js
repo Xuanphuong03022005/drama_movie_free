@@ -85,10 +85,34 @@
     const modalShareBtn = document.getElementById('modal-share-btn');
     const toastContainer = document.getElementById('toast-container');
 
+    // Language Selector Elements & State
+    const SUPPORTED_LANGUAGES = [
+        { code: 'en-US', label: 'English', native: 'English' },
+        { code: 'id-ID', label: 'Indonesian', native: 'Bahasa Indonesia' },
+        { code: 'ja-JP', label: 'Japanese', native: '日本語' },
+        { code: 'ko-KR', label: 'Korean', native: '한국어' },
+        { code: 'zh-TW', label: 'Traditional Chinese', native: '繁體中文' },
+        { code: 'es-ES', label: 'Spanish', native: 'Español' },
+        { code: 'th-TH', label: 'Thai', native: 'ภาษาไทย' },
+        { code: 'de-DE', label: 'German', native: 'Deutsch' },
+        { code: 'pt-PT', label: 'Portuguese', native: 'português' },
+        { code: 'vi-VN', label: 'Vietnamese', native: 'Tiếng Việt' },
+        { code: 'fr-FR', label: 'French', native: 'Français' },
+        { code: 'ar-SA', label: 'Arabic', native: 'العربية' },
+        { code: 'ru-RU', label: 'Russian', native: 'Русский' }
+    ];
+    let currentLang = localStorage.getItem('df_selected_lang') || 'en-US';
+
+    const langBtn = document.getElementById('lang-btn');
+    const langMenu = document.getElementById('lang-menu');
+    const currentLangLabel = document.getElementById('current-lang-label');
+    const langOptionsList = document.getElementById('lang-options-list');
+
     // ==========================================
     // INITIALIZATION
     // ==========================================
     async function init() {
+        initLanguageSelector();
         bindEvents();
         renderHistoryRail();
         renderFavoritesRail();
@@ -106,14 +130,6 @@
         nextPageBtn.addEventListener('click', () => changePage(currentPage + 1));
         prevPageBtnBot.addEventListener('click', () => changePage(currentPage - 1));
         nextPageBtnBot.addEventListener('click', () => changePage(currentPage + 1));
-
-        // Top 10 Rail Scroll Navigation
-        top10PrevBtn.addEventListener('click', () => {
-            top10Rail.scrollBy({ left: -340, behavior: 'smooth' });
-        });
-        top10NextBtn.addEventListener('click', () => {
-            top10Rail.scrollBy({ left: 340, behavior: 'smooth' });
-        });
 
         // Search Input Debounce
         searchInput.addEventListener('input', (e) => {
@@ -213,6 +229,17 @@
             }
         });
 
+        // Providers Rail Wheel Horizontal Scrolling
+        const providersRailWrap = document.getElementById('providers-rail');
+        if (providersRailWrap) {
+            providersRailWrap.addEventListener('wheel', (e) => {
+                if (e.deltaY !== 0) {
+                    e.preventDefault();
+                    providersRailWrap.scrollLeft += e.deltaY;
+                }
+            }, { passive: false });
+        }
+
         // Top 10 Left & Right Carousel Navigation Buttons
         if (top10PrevBtn && top10NextBtn && top10Rail) {
             top10NextBtn.addEventListener('click', () => {
@@ -280,6 +307,68 @@
     }
 
     // ==========================================
+    // LANGUAGE SELECTOR SYSTEM
+    // ==========================================
+    function initLanguageSelector() {
+        if (!langBtn || !langMenu || !langOptionsList) return;
+        const activeLang = SUPPORTED_LANGUAGES.find(l => l.code === currentLang) || SUPPORTED_LANGUAGES[0];
+        if (currentLangLabel) currentLangLabel.textContent = activeLang.native || activeLang.label;
+        renderLanguageOptions();
+
+        langBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = !langMenu.hidden;
+            langMenu.hidden = isOpen;
+            langBtn.setAttribute('aria-expanded', String(!isOpen));
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!langBtn.contains(e.target) && !langMenu.contains(e.target)) {
+                langMenu.hidden = true;
+                langBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    function renderLanguageOptions() {
+        if (!langOptionsList) return;
+        langOptionsList.innerHTML = '';
+        SUPPORTED_LANGUAGES.forEach(lang => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `lang-option-btn ${lang.code === currentLang ? 'active' : ''}`;
+            btn.innerHTML = `
+                <span>${escapeHtml(lang.native)}</span>
+                ${lang.code === currentLang ? '<span class="lang-option-dot"></span>' : ''}
+            `;
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectLanguage(lang.code);
+            });
+            langOptionsList.appendChild(btn);
+        });
+    }
+
+    function selectLanguage(code) {
+        if (currentLang === code) {
+            langMenu.hidden = true;
+            langBtn.setAttribute('aria-expanded', 'false');
+            return;
+        }
+        currentLang = code;
+        localStorage.setItem('df_selected_lang', code);
+        const activeLang = SUPPORTED_LANGUAGES.find(l => l.code === code) || SUPPORTED_LANGUAGES[0];
+        if (currentLangLabel) currentLangLabel.textContent = activeLang.native || activeLang.label;
+        renderLanguageOptions();
+        langMenu.hidden = true;
+        langBtn.setAttribute('aria-expanded', 'false');
+        showToast(`Streaming language: ${activeLang.native}`, 'fa-globe');
+
+        currentPage = 1;
+        loadSections();
+    }
+
+    // ==========================================
     // 2. PROVIDERS & SECTIONS
     // ==========================================
     async function loadProviders() {
@@ -333,7 +422,7 @@
         dramaGrid.innerHTML = '';
 
         try {
-            const res = await fetch(`/api/sections?provider=${currentProvider}&page=${currentPage}&lang=en-US`);
+            const res = await fetch(`/api/sections?provider=${currentProvider}&page=${currentPage}&lang=${currentLang}`);
             const data = await res.json();
 
             gridLoader.hidden = true;
@@ -515,7 +604,7 @@
         searchDropdown.hidden = false;
 
         try {
-            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=en-US`);
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=${currentLang}`);
             const data = await res.json();
 
             if (!data.ok || !data.items || data.items.length === 0) {

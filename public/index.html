@@ -62,6 +62,21 @@
                     <div id="search-results-list" class="search-results-list"></div>
                 </div>
             </div>
+
+            <!-- Language Selector Dropdown -->
+            <div class="lang-dropdown-wrap">
+                <button type="button" class="lang-btn" id="lang-btn" aria-haspopup="true" aria-expanded="false" title="Select Streaming Language">
+                    <i class="fa-solid fa-globe lang-globe-icon"></i>
+                    <span id="current-lang-label">English</span>
+                    <i class="fa-solid fa-chevron-down lang-caret" id="lang-caret"></i>
+                </button>
+                <div class="lang-menu" id="lang-menu" hidden>
+                    <div class="lang-menu-header">Streaming Language</div>
+                    <div class="lang-options-list" id="lang-options-list">
+                        <!-- Injected dynamically -->
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Providers Horizontal Rail -->

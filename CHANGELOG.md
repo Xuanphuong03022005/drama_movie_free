@@ -2,6 +2,16 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.3] - 2026-09-30
+### Added
+- Multi-language streaming selector dropdown in header navbar supporting 13 top international languages (English, Bahasa Indonesia, 日本語, 한국어, 繁體中文, Español, ภาษาไทย, Deutsch, português, Tiếng Việt, Français, العربية, Русский).
+- Dynamic localization query parameter `lang` synchronized across sections, provider lists, and live search.
+- Smooth mouse wheel horizontal scrolling support on the Providers rail.
+
+### Fixed
+- Restored visible, sleek custom horizontal scrollbar for the Providers rail (`.providers-rail-wrap`) so users can easily browse and drag through all 54 live providers.
+- Maintained clean scrollbar-free style on Top 10 Ranked Hits and other content rails with dedicated `<` and `>` arrow navigation.
+
 ## [0.0.2] - 2026-09-30
 ### Changed
 - Removed horizontal scrollbars on all content rails (Top 10, providers, history, favorites) for a clean modern design.
