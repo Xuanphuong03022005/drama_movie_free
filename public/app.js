@@ -255,7 +255,7 @@
             });
         }
 
-        // Show scroll hint on touch/interaction and auto-hide after 3 seconds
+        // Show scroll hint on touch interaction and auto-hide after 2.5s
         let hintTimer = null;
         function pingViewportInteraction() {
             if (!videoViewport) return;
@@ -263,13 +263,11 @@
             clearTimeout(hintTimer);
             hintTimer = setTimeout(() => {
                 videoViewport.classList.remove('is-active-touch');
-            }, 2800);
+            }, 2500);
         }
 
         if (videoViewport) {
             videoViewport.addEventListener('touchstart', pingViewportInteraction, { passive: true });
-            videoViewport.addEventListener('pointermove', pingViewportInteraction, { passive: true });
-            videoViewport.addEventListener('click', pingViewportInteraction);
         }
 
         // Video timeupdate -> Update history progress
@@ -1024,12 +1022,10 @@
         // Load & Play Stream
         loadVideoStream(episode);
 
-        // On mobile, smoothly scroll back to top of video so user can watch immediately
-        if (window.innerWidth <= 820) {
-            const playerMain = document.querySelector('.player-main-split');
-            if (playerMain && playerMain.scrollTop > 80) {
-                playerMain.scrollTo({ top: 0, behavior: 'smooth' });
-            }
+        // Smoothly scroll back to top of video so user can watch immediately
+        const playerMain = document.querySelector('.player-main-split');
+        if (playerMain && playerMain.scrollTop > 80) {
+            playerMain.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }
 
@@ -1127,12 +1123,29 @@
     }
 
     function toggleTheaterMode() {
-        isTheaterMode = !isTheaterMode;
-        theaterToggleBtn.classList.toggle('active', isTheaterMode);
-        videoViewport.style.height = isTheaterMode ? '72vh' : '520px';
-        videoViewport.style.maxHeight = isTheaterMode ? '80vh' : '60vh';
-        showToast(isTheaterMode ? 'Theater mode activated' : 'Standard view restored', 'fa-film');
+        if (!document.fullscreenElement) {
+            const el = document.documentElement;
+            if (el.requestFullscreen) {
+                el.requestFullscreen().catch(() => {});
+            } else if (el.webkitRequestFullscreen) {
+                el.webkitRequestFullscreen();
+            }
+            theaterToggleBtn.classList.add('active');
+            showToast('Full Screen Cinema Mode', 'fa-expand');
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+            theaterToggleBtn.classList.remove('active');
+            showToast('Exit Full Screen Mode', 'fa-compress');
+        }
     }
+
+    document.addEventListener('fullscreenchange', () => {
+        theaterToggleBtn.classList.toggle('active', !!document.fullscreenElement);
+    });
 
     function shareCurrentDrama() {
         if (!currentDramaData) return;

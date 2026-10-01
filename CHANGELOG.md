@@ -2,6 +2,21 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.12] - 2026-10-01
+### Changed & Enhanced
+- **Full Screen Cinema Playback Layout & Hover-Only Episodes Button**:
+  - The drama playback screen now launches in a 100% full-screen immersive cinema viewport across all screen sizes (Desktop, Laptop, Tablet, Mobile) with no outer modal borders, letterbox gaps, or restrictive box padding.
+  - The video fills the entire viewport (`calc(100vh - 52px)` / `calc(100dvh - 52px)`), displaying vertical 9:16 and horizontal 16:9 dramas in maximum scale.
+  - **On-Hover Episodes Navigation Button**:
+    - When watching the video, the purple pill `[Episodes ⌵]` button remains completely hidden (`opacity: 0; pointer-events: none;`) to keep video playback 100% unobstructed.
+    - On desktop/mouse devices, the button reveals smoothly with a subtle slide animation exclusively when hovering over the video area (`@media (hover: hover) and (pointer: fine) { .video-viewport:hover .episodes-scroll-btn }`), and disappears instantly when the mouse leaves.
+    - On touch devices, tapping the screen activates the button for 2.5 seconds before automatically fading away, eliminating sticky hover artifacts.
+    - Floating offset adjusted to float cleanly above the native HTML5 player timeline scrubber and control buttons.
+    - Clicking the button smoothly scrolls down to the episode drawer and drama overview.
+  - **Auto-Scroll on Episode Selection**:
+    - Selecting any episode from the episode grid below automatically smoothly scrolls back to the top of the video for immediate playback.
+  - Zero version tags or debug markers displayed in the user interface.
+
 ## [0.0.11] - 2026-10-01
 ### Fixed & Improved
 - **Automatic Dead-Stream & Duplicate-Slug Recovery**:
