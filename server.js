@@ -341,6 +341,70 @@ app.get('/api/drama', async (req, res) => {
             }
         }
 
+        // Check if any episode has a valid playable stream
+        const hasPlayableStream = episodes.some(e => (e.play_url || e.direct_play_url));
+        if (!hasPlayableStream && episodes.length > 0) {
+            console.log(`[Auto-Recovery] 0 playable episodes found for ${watchUrl}. Attempting resilient recovery...`);
+            let recoveredEps = null;
+
+            // Strategy 1: If slug ends with -2, -3, etc., strip it and fetch base drama /1
+            const rawUrl = watchUrl.split('?')[0];
+            const cleanRaw = rawUrl.replace(/-[2-9]$/, '');
+            if (cleanRaw !== rawUrl) {
+                try {
+                    const query = watchUrl.split('?')[1] ? '?' + watchUrl.split('?')[1] : '';
+                    const targetUrl = (cleanRaw.startsWith('http') ? cleanRaw : `${BASE_URL}${cleanRaw}`) + `/1${query}`;
+                    const recRes = await fetch(targetUrl, { headers });
+                    const recHtml = await recRes.text();
+                    const recMatch = recHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                    if (recMatch) {
+                        const parsed = JSON.parse(recMatch[1]);
+                        if (parsed.some(e => e.play_url || e.direct_play_url)) {
+                            recoveredEps = parsed;
+                            console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via clean slug!`);
+                        }
+                    }
+                } catch (e) {
+                    console.error('[Auto-Recovery] Strategy 1 failed:', e.message);
+                }
+            }
+
+            // Strategy 2: Search upstream by drama title and find an alternate working entry
+            if (!recoveredEps && title) {
+                try {
+                    const cleanSearchTitle = title.replace(/\s*-\s*Free Streaming.*$/i, '').trim();
+                    const searchRes = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(cleanSearchTitle)}&limit=10&lang=en-US`, {
+                        headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
+                    });
+                    if (searchRes.ok) {
+                        const sData = await searchRes.json();
+                        const sItems = sData.items || sData || [];
+                        const altItem = sItems.find(i => i.url && i.url !== watchUrl && !i.url.includes(watchUrl.split('?')[0]));
+                        if (altItem && altItem.url) {
+                            const altPath = altItem.url.split('?')[0];
+                            const altUrl = `${BASE_URL}${altPath}/1`;
+                            const altRes = await fetch(altUrl, { headers });
+                            const altHtml = await altRes.text();
+                            const altMatch = altHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                            if (altMatch) {
+                                const parsed = JSON.parse(altMatch[1]);
+                                if (parsed.some(e => e.play_url || e.direct_play_url)) {
+                                    recoveredEps = parsed;
+                                    console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via search title match!`);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('[Auto-Recovery] Strategy 2 failed:', e.message);
+                }
+            }
+
+            if (recoveredEps && recoveredEps.length > 0) {
+                episodes = recoveredEps;
+            }
+        }
+
         // Format clean episodes
         const cleanEpisodes = episodes.map((item, idx) => ({
             id: item.id || idx + 1,

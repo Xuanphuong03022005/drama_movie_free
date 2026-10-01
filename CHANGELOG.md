@@ -2,6 +2,16 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.11] - 2026-10-01
+### Fixed & Improved
+- **Automatic Dead-Stream & Duplicate-Slug Recovery**:
+  - Fixed an issue where duplicate drama entries crawled from upstream (e.g., titles with `-2` or trailing periods like `seducing-my-dad-s-best-friend-2`) had empty stream links (`play_url: ""`), causing the video player to display *"No stream link available for this episode"*.
+  - Implemented an intelligent **Auto-Recovery Engine** in `/api/drama`:
+    1. **Slug Clean-up Strategy**: If all episodes in a drama have empty streams and the slug ends in a duplicate suffix (e.g. `-[2-9]`), the backend automatically strips the suffix and queries the canonical drama route (`cleanPath + '/1'`).
+    2. **Title-Match Fallback Strategy**: If streams remain unplayable, the backend performs an internal upstream title search to find and link the active drama stream with playable episodes.
+  - Zero playback interruption: Even if a user clicks a dead duplicate entry from search or recommendations, the system seamlessly recovers and streams the active HLS/MP4 video without error.
+  - Strict UI cleanliness maintained: No version tags or debug markers displayed in the user interface.
+
 ## [0.0.10] - 2026-10-01
 ### Fixed & Enhanced
 - **Provider Catalog & Multi-Tab Pagination Fix**:
