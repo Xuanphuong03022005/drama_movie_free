@@ -220,6 +220,37 @@
             }
         });
 
+        // Mobile Scroll Hint to Episodes
+        const mobileScrollHint = document.getElementById('mobile-scroll-hint');
+        if (mobileScrollHint) {
+            mobileScrollHint.addEventListener('click', () => {
+                const drawer = document.querySelector('.episodes-drawer');
+                if (drawer) drawer.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+
+        // Tap episode badge in top bar to jump down to episodes
+        if (modalEpisodeTitle) {
+            modalEpisodeTitle.style.cursor = 'pointer';
+            modalEpisodeTitle.setAttribute('title', 'View all episodes');
+            modalEpisodeTitle.addEventListener('click', () => {
+                const drawer = document.querySelector('.episodes-drawer');
+                if (drawer) drawer.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+
+        // Fade out scroll hint when scrolled down
+        const playerMainSplitEl = document.querySelector('.player-main-split');
+        if (playerMainSplitEl) {
+            playerMainSplitEl.addEventListener('scroll', () => {
+                const hint = document.getElementById('mobile-scroll-hint');
+                if (hint) {
+                    hint.style.opacity = playerMainSplitEl.scrollTop > 40 ? '0' : '1';
+                    hint.style.pointerEvents = playerMainSplitEl.scrollTop > 40 ? 'none' : 'auto';
+                }
+            });
+        }
+
         // Video timeupdate -> Update history progress
         mainVideo.addEventListener('timeupdate', () => {
             if (mainVideo.duration && mainVideo.currentTime > 2) {
@@ -837,9 +868,13 @@
         playerModal.hidden = false;
         document.body.style.overflow = 'hidden';
 
-        modalDramaTitle.textContent = item.title;
-        detailDramaTitle.textContent = item.title;
-        detailDramaDesc.textContent = item.description || 'Loading drama overview...';
+        const pMain = document.querySelector('.player-main-split');
+        if (pMain) pMain.scrollTop = 0;
+
+        const cleanTitle = decodeHtml(item.title);
+        modalDramaTitle.textContent = cleanTitle;
+        detailDramaTitle.textContent = cleanTitle;
+        detailDramaDesc.textContent = decodeHtml(item.description || 'Loading drama overview...');
         episodesCount.textContent = '...';
         episodesGrid.innerHTML = '<div style="grid-column: 1/-1; padding:24px; text-align:center; color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin"></i> Initializing streaming pipeline...</div>';
         epBatchTabs.innerHTML = '';
@@ -864,9 +899,10 @@
                 watch_url: watchUrl
             };
 
-            modalDramaTitle.textContent = data.title || item.title;
-            detailDramaTitle.textContent = data.title || item.title;
-            if (data.description) detailDramaDesc.textContent = data.description;
+            const loadedTitle = decodeHtml(data.title || item.title);
+            modalDramaTitle.textContent = loadedTitle;
+            detailDramaTitle.textContent = loadedTitle;
+            if (data.description) detailDramaDesc.textContent = decodeHtml(data.description);
             episodesCount.textContent = data.total_episodes;
 
             // Save to Watch History
@@ -966,6 +1002,14 @@
 
         // Load & Play Stream
         loadVideoStream(episode);
+
+        // On mobile, smoothly scroll back to top of video so user can watch immediately
+        if (window.innerWidth <= 820) {
+            const playerMain = document.querySelector('.player-main-split');
+            if (playerMain && playerMain.scrollTop > 80) {
+                playerMain.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
     }
 
     async function loadVideoStream(episode) {
@@ -1262,6 +1306,13 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function decodeHtml(text) {
+        if (!text) return '';
+        const txt = document.createElement('textarea');
+        txt.innerHTML = text;
+        return txt.value;
     }
 
     // Launch on DOM Ready

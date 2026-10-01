@@ -2,6 +2,15 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.8] - 2026-10-01
+### Added & Improved
+- **Nearly Full-Screen Mobile Video Viewport**:
+  - Video player now expands to fill almost the entire mobile display height (`height: calc(100dvh - 56px)`), allowing vertical (9:16 portrait) short drama videos to display tall, vibrant, and immersive without letterboxing or squishing.
+  - Controls, Multi-batch Episode Drawer (`1-30`, `31-60`...), and synopsis are positioned directly below the fold, smoothly revealed upon scrolling down.
+  - Added an intuitive floating `[Episodes ⌵]` scroll shortcut button at the bottom of the video for one-tap navigation to the episode selector.
+  - Automatic smooth scroll back to the top of the video when an episode is selected from the grid.
+  - Clean HTML entity decoding (`&#039;` -> `'`, `&amp;` -> `&`, etc.) across all drama titles and synopses.
+
 ## [0.0.7] - 2026-10-01
 ### Fixed & Improved
 - **Full Responsive Experience Across All Screen Sizes (Mobile, Tablet, Desktop)**:

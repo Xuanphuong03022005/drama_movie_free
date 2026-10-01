@@ -1554,6 +1554,10 @@ body {
     font-weight: 500;
 }
 
+.mobile-scroll-hint {
+    display: none;
+}
+
 /* Media Control Strip */
 .media-control-strip {
     display: flex;
@@ -2504,6 +2508,7 @@ body {
         -webkit-overflow-scrolling: touch;
         flex: 1;
         background: #080a0f;
+        scroll-behavior: smooth;
     }
 
     .screen-column {
@@ -2514,27 +2519,71 @@ body {
         display: none;
     }
 
-    /* PINNED STICKY VIDEO PLAYER */
+    /* NEARLY FULLSCREEN MOBILE VIDEO VIEWPORT */
     .video-viewport {
         order: 1;
-        position: sticky;
-        top: 0;
-        z-index: 50;
+        position: relative;
         width: 100%;
-        height: auto;
-        aspect-ratio: 16 / 9;
-        max-height: 36vh;
+        height: calc(100vh - 56px);
+        height: calc(100dvh - 56px);
+        max-height: none;
+        aspect-ratio: auto;
         border-radius: 0;
         background: #000;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.95);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .video-viewport video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .mobile-scroll-hint {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(14, 16, 23, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        color: #f1f5f9;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 6px 16px;
+        border-radius: var(--radius-full);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        z-index: 15;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+        animation: floatHint 2.2s infinite ease-in-out;
+        transition: opacity 0.3s ease;
+    }
+
+    @keyframes floatHint {
+        0%, 100% { transform: translate(-50%, 0); }
+        50% { transform: translate(-50%, 5px); }
+    }
+
+    .mobile-scroll-hint i {
+        color: var(--primary-light);
+        font-size: 11px;
     }
 
     .media-control-strip {
         order: 2;
-        padding: 8px 12px;
+        padding: 10px 14px;
         background: var(--bg-surface);
         border-bottom: 1px solid var(--border-subtle);
         gap: 8px;
+        flex-shrink: 0;
     }
 
     .media-nav-group {
