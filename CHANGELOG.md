@@ -2,6 +2,22 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.13] - 2026-10-01
+### Changed & Refined
+- **Desktop v0.0.11 Layout Restored & Mobile-Exclusive Fullscreen**:
+  - **Desktop (Screens > 820px)**: 100% restored to the proven v0.0.11 interface.
+    - Two-column card modal layout: left column contains the 520px video player, media controls, and drama synopsis; right column houses the 360px sticky episode list drawer with batch navigation.
+    - Floating `[Episodes ⌵]` shortcut is completely hidden on desktop (`display: none !important;`).
+    - Standard theater mode toggle button (`#theater-toggle-btn`) operational.
+  - **Mobile (Screens <= 820px or narrow windows)**:
+    - Dedicated fullscreen cinema viewport: `100% width x 100dvh` without borders or outer gaps.
+    - Vertical video occupies nearly the full screen (`calc(100vh - 56px)` / `calc(100dvh - 56px)`), with controls, episode drawer, and synopsis revealed smoothly on scroll down.
+    - **Hover/Touch-Only Episodes Button**:
+      - Hidden during normal playback (`opacity: 0; pointer-events: none;`) to keep video playback 100% unobstructed.
+      - Reveals with smooth animation exclusively on hover (`@media (hover: hover) { :hover }`) or on mobile tap interaction (`is-active-touch`), fading automatically after 2.5s.
+      - Positioned cleanly above the native video player timeline scrubber (`bottom: 58px;`).
+  - Maintained strict policy of no version badges or debug tags in the frontend UI.
+
 ## [0.0.12] - 2026-10-01
 ### Changed & Enhanced
 - **Full Screen Cinema Playback Layout & Hover-Only Episodes Button**:
