@@ -2547,9 +2547,9 @@ body {
         position: absolute;
         bottom: 14px;
         left: 50%;
-        transform: translateX(-50%);
-        background: rgba(14, 16, 23, 0.88);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        transform: translate(-50%, 8px);
+        background: rgba(14, 16, 23, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.22);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         color: #f1f5f9;
@@ -2562,14 +2562,23 @@ body {
         gap: 6px;
         cursor: pointer;
         z-index: 15;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
-        animation: floatHint 2.2s infinite ease-in-out;
-        transition: opacity 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.75);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s ease;
     }
 
-    @keyframes floatHint {
-        0%, 100% { transform: translate(-50%, 0); }
-        50% { transform: translate(-50%, 5px); }
+    .video-viewport:hover .mobile-scroll-hint,
+    .video-viewport.is-active-touch .mobile-scroll-hint {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, 0);
+    }
+
+    .mobile-scroll-hint:hover {
+        background: var(--primary);
+        border-color: var(--primary-light);
+        color: #fff;
     }
 
     .mobile-scroll-hint i {

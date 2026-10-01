@@ -2,6 +2,14 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.9] - 2026-10-01
+### Changed & Polished
+- **Unobstructed Video Playback with On-Hover/Touch Controls**:
+  - The floating episode shortcut button `[Episodes ⌵]` is now hidden by default (`opacity: 0; pointer-events: none;`) to keep video playback 100% clean and unobstructed.
+  - Button appears smoothly with a slide animation only when the user hovers over the video (`:hover`) or touches/interacts with the screen on mobile devices.
+  - Automatically fades away after 2.8 seconds of inactivity on mobile devices.
+  - Adhered strictly to keeping version tags out of the public UI.
+
 ## [0.0.8] - 2026-10-01
 ### Added & Improved
 - **Nearly Full-Screen Mobile Video Viewport**:

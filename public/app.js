@@ -245,10 +245,30 @@
             playerMainSplitEl.addEventListener('scroll', () => {
                 const hint = document.getElementById('mobile-scroll-hint');
                 if (hint) {
-                    hint.style.opacity = playerMainSplitEl.scrollTop > 40 ? '0' : '1';
-                    hint.style.pointerEvents = playerMainSplitEl.scrollTop > 40 ? 'none' : 'auto';
+                    if (playerMainSplitEl.scrollTop > 40) {
+                        hint.style.display = 'none';
+                    } else {
+                        hint.style.display = '';
+                    }
                 }
             });
+        }
+
+        // Show scroll hint on touch/interaction and auto-hide after 3 seconds
+        let hintTimer = null;
+        function pingViewportInteraction() {
+            if (!videoViewport) return;
+            videoViewport.classList.add('is-active-touch');
+            clearTimeout(hintTimer);
+            hintTimer = setTimeout(() => {
+                videoViewport.classList.remove('is-active-touch');
+            }, 2800);
+        }
+
+        if (videoViewport) {
+            videoViewport.addEventListener('touchstart', pingViewportInteraction, { passive: true });
+            videoViewport.addEventListener('pointermove', pingViewportInteraction, { passive: true });
+            videoViewport.addEventListener('click', pingViewportInteraction);
         }
 
         // Video timeupdate -> Update history progress
