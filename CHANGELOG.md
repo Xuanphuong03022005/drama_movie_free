@@ -2,7 +2,30 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
-## [0.0.13] - 2026-10-01
+## [0.0.14] - 2026-10-01
+### Added & Enhanced
+- **Modern Streaming Top Navbar Architecture (Movie & Series, Anime, Tags, Genre, Featured, Login)**:
+  - **Left Primary Content Navigation**:
+    - `Home`: Quick return to top showcase and resets active filters.
+    - `Movie & Series`: Dedicated view for full series and main streaming catalog.
+    - `Anime`: Direct filtering for animation and donghua short drama titles.
+    - `Tags ⌵` Dropdown: Ultra-modern frosted glass mega-menu popover featuring trending drama theme chips (`#CEO`, `#Revenge`, `#Billionaire`, `#ContractMarriage`, `#TimeTravel`, `#SweetLove`, `#Urban`, `#MartialArts`, `#Werewolf`, `#SecretIdentity`).
+    - `Genre ⌵` Dropdown: Frosted glass popover showcasing high-definition drama genres with custom glass icon badges (`Romance`, `Action`, `Comedy`, `Fantasy`, `Thriller`, `Historical`).
+    - `Featured`: Smooth navigation to top picks and daily ranked trending dramas.
+  - **Right Utility & Personalization Cluster**:
+    - Expandable search input with real-time title preview dropdown.
+    - 🕒 `History`: Instant access and smooth scrolling to recent continue-watching episodes.
+    - ❤️ `My List`: Dynamic saved drama access with live count badge sync.
+    - 🌐 `Language ⌵`: Multi-lingual streaming locale selector.
+    - 👤 `Login`: VIP Access member modal with unlimited ad-free 4K playback credentials.
+  - **Interactive Filter Bar & Deduplication**:
+    - Clicking any tag or genre instantly queries the database, smoothly scrolls to the catalog grid, and shows a stylish active filter chip banner (`#CEO` / `Genre: Romance`) with a 1-click `[Clear Filter]` button.
+    - Dedicated **Providers Horizontal Rail** (`AnyReel`, `BibiShort`, etc.) remains clean and visible directly beneath the top bar without text redundancy.
+  - **Responsive Design**:
+    - Desktop screens (>1024px) enjoy an unobstructed, perfectly balanced single-row navbar.
+    - Tablet and mobile screens (<=1024px) seamlessly collapse into a slide-down mobile navigation drawer with touch-friendly controls.
+  - Strictly zero version badges or debug tags in the frontend UI.
+
 ### Changed & Refined
 - **Desktop v0.0.11 Layout Restored & Mobile-Exclusive Fullscreen**:
   - **Desktop (Screens > 820px)**: 100% restored to the proven v0.0.11 interface.

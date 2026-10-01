@@ -1,6 +1,6 @@
 {
   "name": "nartodramacrawl",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Custom streaming interface for short dramas",
   "main": "server.js",
   "scripts": {

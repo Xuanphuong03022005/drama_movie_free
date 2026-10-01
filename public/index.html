@@ -33,16 +33,102 @@
                 </div>
             </a>
 
-            <!-- Navigation Links -->
-            <nav class="nav-links">
-                <a href="#featured" class="nav-link active" data-nav="home"><i class="fa-solid fa-compass"></i> Home</a>
-                <a href="#top10" class="nav-link" data-nav="top10"><i class="fa-solid fa-fire text-rose"></i> Top 10</a>
-                <a href="#providers-section" class="nav-link" data-nav="providers"><i
-                        class="fa-solid fa-layer-group"></i> Providers</a>
-                <a href="#history-section" class="nav-link" id="nav-history-link" data-nav="history"><i
-                        class="fa-solid fa-clock-rotate-left"></i> History</a>
-                <a href="#favorites-section" class="nav-link" id="nav-favorites-link" data-nav="favorites"><i
-                        class="fa-solid fa-heart text-accent"></i> My List</a>
+            <!-- Mobile Menu Toggle Button -->
+            <button type="button" class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle navigation menu">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+
+            <!-- Primary Navigation Links -->
+            <nav class="nav-links" id="main-nav-links">
+                <a href="#featured" class="nav-link active" data-nav="home" id="nav-home">Home</a>
+                <a href="#providers-section" class="nav-link" data-nav="series" id="nav-series">Movie &amp; Series</a>
+                <a href="#providers-section" class="nav-link" data-nav="anime" id="nav-anime">Anime</a>
+
+                <!-- Tags Dropdown -->
+                <div class="nav-dropdown-wrap" id="nav-tags-wrap">
+                    <button type="button" class="nav-link nav-dropdown-btn" id="nav-tags-btn" aria-haspopup="true" aria-expanded="false">
+                        <span>Tags</span>
+                        <i class="fa-solid fa-chevron-down nav-caret"></i>
+                    </button>
+                    <div class="nav-dropdown-menu tags-dropdown-menu" id="nav-tags-menu" hidden>
+                        <div class="nav-dropdown-header">
+                            <span><i class="fa-solid fa-hashtag text-primary"></i> Popular Drama Tags</span>
+                            <span class="nav-dropdown-badge">Trending</span>
+                        </div>
+                        <div class="tags-grid">
+                            <button type="button" class="tag-chip-btn" data-tag="CEO"><i class="fa-solid fa-briefcase"></i> #CEO</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Revenge"><i class="fa-solid fa-bolt"></i> #Revenge</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Billionaire"><i class="fa-solid fa-crown"></i> #Billionaire</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Contract Marriage"><i class="fa-solid fa-file-contract"></i> #ContractMarriage</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Time Travel"><i class="fa-solid fa-hourglass-half"></i> #TimeTravel</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Sweet Love"><i class="fa-solid fa-heart"></i> #SweetLove</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Urban"><i class="fa-solid fa-city"></i> #Urban</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Martial Arts"><i class="fa-solid fa-hand-fist"></i> #MartialArts</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Werewolf"><i class="fa-solid fa-moon"></i> #Werewolf</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Secret Identity"><i class="fa-solid fa-mask"></i> #SecretIdentity</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Genre Dropdown -->
+                <div class="nav-dropdown-wrap" id="nav-genre-wrap">
+                    <button type="button" class="nav-link nav-dropdown-btn" id="nav-genre-btn" aria-haspopup="true" aria-expanded="false">
+                        <span>Genre</span>
+                        <i class="fa-solid fa-chevron-down nav-caret"></i>
+                    </button>
+                    <div class="nav-dropdown-menu genre-dropdown-menu" id="nav-genre-menu" hidden>
+                        <div class="nav-dropdown-header">
+                            <span><i class="fa-solid fa-film text-rose"></i> Drama Genres</span>
+                            <span class="nav-dropdown-badge">Select</span>
+                        </div>
+                        <div class="genre-grid">
+                            <button type="button" class="genre-item-btn" data-genre="Romance">
+                                <div class="genre-icon-box bg-rose-glass"><i class="fa-solid fa-heart text-rose"></i></div>
+                                <div class="genre-info">
+                                    <span class="genre-name">Romance</span>
+                                    <span class="genre-sub">Tình cảm • Ngọt ngào</span>
+                                </div>
+                            </button>
+                            <button type="button" class="genre-item-btn" data-genre="Action">
+                                <div class="genre-icon-box bg-amber-glass"><i class="fa-solid fa-bolt text-amber"></i></div>
+                                <div class="genre-info">
+                                    <span class="genre-name">Action</span>
+                                    <span class="genre-sub">Hành động • Đối kháng</span>
+                                </div>
+                            </button>
+                            <button type="button" class="genre-item-btn" data-genre="Comedy">
+                                <div class="genre-icon-box bg-emerald-glass"><i class="fa-solid fa-face-laugh-squint text-emerald"></i></div>
+                                <div class="genre-info">
+                                    <span class="genre-name">Comedy</span>
+                                    <span class="genre-sub">Hài hước • Giải trí</span>
+                                </div>
+                            </button>
+                            <button type="button" class="genre-item-btn" data-genre="Fantasy">
+                                <div class="genre-icon-box bg-purple-glass"><i class="fa-solid fa-wand-magic-sparkles text-purple"></i></div>
+                                <div class="genre-info">
+                                    <span class="genre-name">Fantasy</span>
+                                    <span class="genre-sub">Kỳ ảo • Huyền huyễn</span>
+                                </div>
+                            </button>
+                            <button type="button" class="genre-item-btn" data-genre="Thriller">
+                                <div class="genre-icon-box bg-cyan-glass"><i class="fa-solid fa-skull text-cyan"></i></div>
+                                <div class="genre-info">
+                                    <span class="genre-name">Thriller</span>
+                                    <span class="genre-sub">Giật gân • Hồi hộp</span>
+                                </div>
+                            </button>
+                            <button type="button" class="genre-item-btn" data-genre="Historical">
+                                <div class="genre-icon-box bg-indigo-glass"><i class="fa-solid fa-landmark text-indigo"></i></div>
+                                <div class="genre-info">
+                                    <span class="genre-name">Historical</span>
+                                    <span class="genre-sub">Cổ trang • Cung đấu</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <a href="#featured" class="nav-link" data-nav="featured" id="nav-featured">Featured</a>
             </nav>
 
             <!-- Search Bar with Live Preview -->
@@ -63,20 +149,37 @@
                 </div>
             </div>
 
-            <!-- Language Selector Dropdown -->
-            <div class="lang-dropdown-wrap">
-                <button type="button" class="lang-btn" id="lang-btn" aria-haspopup="true" aria-expanded="false"
-                    title="Select Streaming Language">
-                    <i class="fa-solid fa-globe lang-globe-icon"></i>
-                    <span id="current-lang-label">English</span>
-                    <i class="fa-solid fa-chevron-down lang-caret" id="lang-caret"></i>
+            <!-- Utility Action Cluster -->
+            <div class="nav-actions-cluster">
+                <button type="button" class="nav-icon-action-btn" id="nav-history-icon-btn" title="Watch History">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
                 </button>
-                <div class="lang-menu" id="lang-menu" hidden>
-                    <div class="lang-menu-header">Streaming Language</div>
-                    <div class="lang-options-list" id="lang-options-list">
-                        <!-- Injected dynamically -->
+                <button type="button" class="nav-icon-action-btn" id="nav-favorites-icon-btn" title="My Saved List">
+                    <i class="fa-solid fa-heart"></i>
+                    <span class="action-badge-count" id="header-favorites-badge" hidden>0</span>
+                </button>
+
+                <!-- Language Selector Dropdown -->
+                <div class="lang-dropdown-wrap">
+                    <button type="button" class="lang-btn" id="lang-btn" aria-haspopup="true" aria-expanded="false"
+                        title="Select Streaming Language">
+                        <i class="fa-solid fa-globe lang-globe-icon"></i>
+                        <span id="current-lang-label">English</span>
+                        <i class="fa-solid fa-chevron-down lang-caret" id="lang-caret"></i>
+                    </button>
+                    <div class="lang-menu" id="lang-menu" hidden>
+                        <div class="lang-menu-header">Streaming Language</div>
+                        <div class="lang-options-list" id="lang-options-list">
+                            <!-- Injected dynamically -->
+                        </div>
                     </div>
                 </div>
+
+                <!-- Login VIP Access Button -->
+                <button type="button" class="nav-login-btn" id="nav-login-btn" title="VIP Member Access">
+                    <i class="fa-solid fa-user"></i>
+                    <span>Login</span>
+                </button>
             </div>
         </div>
 
@@ -225,11 +328,20 @@
                     <div class="section-icon-badge text-primary"><i class="fa-solid fa-clapperboard"></i></div>
                     <div>
                         <h2><span id="current-provider-title">AnyReel</span> Catalog</h2>
-                        <span class="row-subtitle">High definition streaming collection</span>
+                        <span class="row-subtitle" id="catalog-subtitle">High definition streaming collection</span>
                     </div>
                 </div>
+
+                <!-- Active Filter Banner (for Tags, Genre, Anime) -->
+                <div id="active-filter-banner" class="active-filter-banner" hidden>
+                    <span class="active-filter-pill"><i class="fa-solid fa-filter"></i> <span id="active-filter-text">#CEO</span></span>
+                    <button type="button" id="clear-filter-btn" class="clear-filter-btn" title="Reset filter to full catalog">
+                        <i class="fa-solid fa-xmark"></i> Clear Filter
+                    </button>
+                </div>
+
                 <!-- Pagination Controls -->
-                <div class="pagination-bar">
+                <div class="pagination-bar" id="top-pagination-bar">
                     <button id="prev-page-btn" class="page-nav-btn" disabled><i class="fa-solid fa-chevron-left"></i>
                         Previous</button>
                     <span id="page-indicator" class="page-status">Page 1</span>
@@ -442,6 +554,33 @@
             </div>
         </div>
     </footer>
+
+    <!-- VIP Login / Member Access Modal -->
+    <div id="login-modal" class="login-modal" hidden>
+        <div class="login-modal-backdrop" id="login-modal-backdrop"></div>
+        <div class="login-modal-card">
+            <button type="button" class="login-close-btn" id="login-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            <div class="login-modal-header">
+                <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> VIP ACCESS</div>
+                <h3>DramaFlow PRO Member</h3>
+                <p>Enjoy ad-free streaming, 4K multi-episode playback, and cloud watchlist synchronization.</p>
+            </div>
+            <form class="login-form" id="login-form">
+                <div class="login-input-group">
+                    <label for="login-username"><i class="fa-solid fa-user"></i> Member Username / Nickname</label>
+                    <input type="text" id="login-username" placeholder="Enter username or Guest VIP" value="VIP Guest" autocomplete="username">
+                </div>
+                <div class="login-input-group">
+                    <label for="login-email"><i class="fa-solid fa-envelope"></i> Email (Optional)</label>
+                    <input type="email" id="login-email" placeholder="vip@dramaflow.pro" autocomplete="email">
+                </div>
+                <button type="submit" class="btn-submit-login"><i class="fa-solid fa-right-to-bracket"></i> Sign In to VIP Account</button>
+                <div class="login-guest-status">
+                    <i class="fa-solid fa-circle-check text-success"></i> Active VIP Status: <strong>Free Unlimited Ad-Free Access Enabled</strong>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

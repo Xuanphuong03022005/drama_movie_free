@@ -128,6 +128,36 @@
     const currentLangLabel = document.getElementById('current-lang-label');
     const langOptionsList = document.getElementById('lang-options-list');
 
+    // Top Bar Navigation & Utilities Elements
+    const mainNavLinks = document.getElementById('main-nav-links');
+    const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+    const navHome = document.getElementById('nav-home');
+    const navSeries = document.getElementById('nav-series');
+    const navAnime = document.getElementById('nav-anime');
+    const navFeatured = document.getElementById('nav-featured');
+    const navTagsWrap = document.getElementById('nav-tags-wrap');
+    const navTagsBtn = document.getElementById('nav-tags-btn');
+    const navTagsMenu = document.getElementById('nav-tags-menu');
+    const navGenreWrap = document.getElementById('nav-genre-wrap');
+    const navGenreBtn = document.getElementById('nav-genre-btn');
+    const navGenreMenu = document.getElementById('nav-genre-menu');
+    const navHistoryIconBtn = document.getElementById('nav-history-icon-btn');
+    const navFavoritesIconBtn = document.getElementById('nav-favorites-icon-btn');
+    const headerFavoritesBadge = document.getElementById('header-favorites-badge');
+    const navLoginBtn = document.getElementById('nav-login-btn');
+    const loginModal = document.getElementById('login-modal');
+    const loginModalBackdrop = document.getElementById('login-modal-backdrop');
+    const loginCloseBtn = document.getElementById('login-close-btn');
+    const loginForm = document.getElementById('login-form');
+    const activeFilterBanner = document.getElementById('active-filter-banner');
+    const activeFilterText = document.getElementById('active-filter-text');
+    const clearFilterBtn = document.getElementById('clear-filter-btn');
+    const catalogSubtitle = document.getElementById('catalog-subtitle');
+
+    // Active Category Filter State
+    let activeFilterType = null; // 'tag', 'genre', 'anime'
+    let activeFilterValue = null;
+
     // ==========================================
     // INITIALIZATION
     // ==========================================
@@ -145,6 +175,187 @@
     // 1. EVENT LISTENERS
     // ==========================================
     function bindEvents() {
+        // Mobile Navigation Drawer Toggle
+        if (mobileNavToggle && mainNavLinks) {
+            mobileNavToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                mainNavLinks.classList.toggle('mobile-open');
+            });
+        }
+
+        // Tags Dropdown Toggle
+        if (navTagsBtn && navTagsMenu) {
+            navTagsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpening = navTagsMenu.hidden;
+                navTagsMenu.hidden = !isOpening;
+                navTagsWrap.classList.toggle('open', isOpening);
+                navTagsBtn.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
+                if (navGenreMenu) {
+                    navGenreMenu.hidden = true;
+                    navGenreWrap.classList.remove('open');
+                    navGenreBtn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        // Genre Dropdown Toggle
+        if (navGenreBtn && navGenreMenu) {
+            navGenreBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpening = navGenreMenu.hidden;
+                navGenreMenu.hidden = !isOpening;
+                navGenreWrap.classList.toggle('open', isOpening);
+                navGenreBtn.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
+                if (navTagsMenu) {
+                    navTagsMenu.hidden = true;
+                    navTagsWrap.classList.remove('open');
+                    navTagsBtn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', (e) => {
+            if (navTagsWrap && !navTagsWrap.contains(e.target)) {
+                if (navTagsMenu) navTagsMenu.hidden = true;
+                navTagsWrap.classList.remove('open');
+                if (navTagsBtn) navTagsBtn.setAttribute('aria-expanded', 'false');
+            }
+            if (navGenreWrap && !navGenreWrap.contains(e.target)) {
+                if (navGenreMenu) navGenreMenu.hidden = true;
+                navGenreWrap.classList.remove('open');
+                if (navGenreBtn) navGenreBtn.setAttribute('aria-expanded', 'false');
+            }
+            if (mainNavLinks && !mainNavLinks.contains(e.target) && mobileNavToggle && !mobileNavToggle.contains(e.target)) {
+                mainNavLinks.classList.remove('mobile-open');
+            }
+        });
+
+        // Tag Chip Clicks
+        document.querySelectorAll('.tag-chip-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tag = btn.getAttribute('data-tag');
+                if (navTagsMenu) navTagsMenu.hidden = true;
+                if (navTagsWrap) navTagsWrap.classList.remove('open');
+                if (mainNavLinks) mainNavLinks.classList.remove('mobile-open');
+                applyFilter('tag', tag);
+            });
+        });
+
+        // Genre Item Clicks
+        document.querySelectorAll('.genre-item-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const genre = btn.getAttribute('data-genre');
+                if (navGenreMenu) navGenreMenu.hidden = true;
+                if (navGenreWrap) navGenreWrap.classList.remove('open');
+                if (mainNavLinks) mainNavLinks.classList.remove('mobile-open');
+                applyFilter('genre', genre);
+            });
+        });
+
+        // Nav Links Direct Actions
+        if (navHome) {
+            navHome.addEventListener('click', (e) => {
+                e.preventDefault();
+                setActiveNav(navHome);
+                clearActiveFilter();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
+        if (navSeries) {
+            navSeries.addEventListener('click', (e) => {
+                e.preventDefault();
+                setActiveNav(navSeries);
+                clearActiveFilter();
+                const pSec = document.getElementById('providers-section');
+                if (pSec) pSec.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+
+        if (navAnime) {
+            navAnime.addEventListener('click', (e) => {
+                e.preventDefault();
+                setActiveNav(navAnime);
+                applyFilter('anime', 'Anime');
+            });
+        }
+
+        if (navFeatured) {
+            navFeatured.addEventListener('click', (e) => {
+                e.preventDefault();
+                setActiveNav(navFeatured);
+                const featEl = document.getElementById('featured');
+                if (featEl) featEl.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+
+        // Active filter clear button
+        if (clearFilterBtn) {
+            clearFilterBtn.addEventListener('click', () => {
+                clearActiveFilter();
+            });
+        }
+
+        // User Utility Buttons: History & Favorites Quick Access
+        if (navHistoryIconBtn) {
+            navHistoryIconBtn.addEventListener('click', () => {
+                const histList = getHistory();
+                if (histList.length === 0) {
+                    showToast('Watch history is empty', 'fa-clock-rotate-left');
+                } else {
+                    historySection.hidden = false;
+                    historySection.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        }
+
+        if (navFavoritesIconBtn) {
+            navFavoritesIconBtn.addEventListener('click', () => {
+                const favList = getFavorites();
+                if (favList.length === 0) {
+                    showToast('My List is currently empty', 'fa-heart');
+                } else {
+                    favoritesSection.hidden = false;
+                    favoritesSection.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        }
+
+        // VIP Login Modal Controls
+        if (navLoginBtn) {
+            navLoginBtn.addEventListener('click', () => {
+                if (loginModal) loginModal.hidden = false;
+            });
+        }
+
+        if (loginCloseBtn) {
+            loginCloseBtn.addEventListener('click', () => {
+                if (loginModal) loginModal.hidden = true;
+            });
+        }
+
+        if (loginModalBackdrop) {
+            loginModalBackdrop.addEventListener('click', () => {
+                if (loginModal) loginModal.hidden = true;
+            });
+        }
+
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const username = document.getElementById('login-username').value.trim() || 'VIP Guest';
+                if (loginModal) loginModal.hidden = true;
+                showToast(`Welcome ${username}! VIP Unlimited HD Stream active.`, 'fa-crown');
+                if (navLoginBtn) {
+                    navLoginBtn.innerHTML = `<i class="fa-solid fa-crown text-amber"></i> <span>${escapeHtml(username)}</span>`;
+                }
+            });
+        }
+
         // Pagination
         prevPageBtn.addEventListener('click', () => changePage(currentPage - 1));
         nextPageBtn.addEventListener('click', () => changePage(currentPage + 1));
@@ -513,9 +724,17 @@
     }
 
     function selectProvider(key, label) {
-        if (currentProvider === key) return;
+        if (currentProvider === key && !activeFilterType) return;
         currentProvider = key;
         currentPage = 1;
+        if (activeFilterType) {
+            activeFilterType = null;
+            activeFilterValue = null;
+            if (activeFilterBanner) activeFilterBanner.hidden = true;
+            if (catalogSubtitle) catalogSubtitle.textContent = 'High definition streaming collection';
+            const topPag = document.getElementById('top-pagination-bar');
+            if (topPag) topPag.style.display = '';
+        }
         document.querySelectorAll('.provider-pill').forEach(el => {
             el.classList.toggle('active', el.getAttribute('data-provider') === key);
         });
@@ -837,6 +1056,79 @@
         currentPage = newPage;
         loadSections();
         document.getElementById('providers-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function setActiveNav(activeEl) {
+        document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+        if (activeEl) activeEl.classList.add('active');
+    }
+
+    async function applyFilter(type, query) {
+        activeFilterType = type;
+        activeFilterValue = query;
+
+        // Display active filter UI banner
+        if (activeFilterBanner && activeFilterText) {
+            let label = query;
+            if (type === 'tag') label = `#${query}`;
+            else if (type === 'genre') label = `Genre: ${query}`;
+            else if (type === 'anime') label = `Anime & Animation`;
+
+            activeFilterText.textContent = label;
+            activeFilterBanner.hidden = false;
+        }
+
+        if (catalogSubtitle) {
+            catalogSubtitle.textContent = `Filtered collection matching "${query}"`;
+        }
+
+        const topPag = document.getElementById('top-pagination-bar');
+        if (topPag) topPag.style.display = 'none';
+
+        gridLoader.hidden = false;
+        emptyState.hidden = true;
+        dramaGrid.innerHTML = '';
+
+        const pSection = document.getElementById('providers-section');
+        if (pSection) pSection.scrollIntoView({ behavior: 'smooth' });
+
+        try {
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=${currentLang}`);
+            const data = await res.json();
+            gridLoader.hidden = true;
+
+            if (data.ok && Array.isArray(data.items) && data.items.length > 0) {
+                renderGrid(data.items);
+                if (catalogSubtitle) {
+                    catalogSubtitle.textContent = `Found ${data.items.length} titles matching "${query}"`;
+                }
+            } else {
+                emptyState.hidden = false;
+                if (catalogSubtitle) {
+                    catalogSubtitle.textContent = `No titles found for "${query}"`;
+                }
+            }
+        } catch (err) {
+            gridLoader.hidden = true;
+            emptyState.hidden = false;
+            console.error('Filter request error:', err);
+        }
+    }
+
+    function clearActiveFilter() {
+        if (!activeFilterType && (!activeFilterBanner || activeFilterBanner.hidden)) return;
+        activeFilterType = null;
+        activeFilterValue = null;
+
+        if (activeFilterBanner) activeFilterBanner.hidden = true;
+        if (catalogSubtitle) {
+            catalogSubtitle.textContent = 'High definition streaming collection';
+        }
+
+        const topPag = document.getElementById('top-pagination-bar');
+        if (topPag) topPag.style.display = '';
+
+        loadSections();
     }
 
     // ==========================================
@@ -1257,7 +1549,11 @@
 
     function renderFavoritesRail() {
         const list = getFavorites();
-        favoritesCount.textContent = list.length;
+        if (favoritesCount) favoritesCount.textContent = list.length;
+        if (headerFavoritesBadge) {
+            headerFavoritesBadge.textContent = list.length;
+            headerFavoritesBadge.hidden = list.length === 0;
+        }
         if (list.length === 0) {
             favoritesSection.hidden = true;
             return;
