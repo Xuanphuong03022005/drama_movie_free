@@ -77,19 +77,22 @@ app.get('/api/sections', async (req, res) => {
         const provider = req.query.provider || 'anyreel';
         const page = parseInt(req.query.page || '1', 10);
         const query = req.query.q || '';
-        const lang = req.query.lang || 'en-US';
+        const lang = req.query.lang || 'vi-VN';
 
         async function fetchSectionsFromUpstream(targetLang, useTargetFilter = true) {
             const params = new URLSearchParams();
             params.set('provider', provider);
-            params.set('lang', targetLang);
-            if (useTargetFilter) {
-                params.set('target_lang', targetLang);
+            if (targetLang && targetLang !== 'all') {
+                params.set('lang', targetLang);
+                if (useTargetFilter) {
+                    params.set('target_lang', targetLang);
+                }
             }
             if (query) {
                 params.set('q', query);
-            } else {
-                params.set('tab_pages[home]', String(page));
+            } else if (page > 1) {
+                const commonTabs = ['home', 'list', 'all', 'all-series', 'for-you', 'feed-stream', 'popular', 'trending', 'latest', 'rank', 'new', 'foryou', 'free', 'new-releases'];
+                commonTabs.forEach(t => params.set(`tab_pages[${t}]`, String(page)));
             }
 
             const url = `${BASE_URL}/home/providers/sections?${params.toString()}`;
@@ -102,7 +105,7 @@ app.get('/api/sections', async (req, res) => {
         }
 
         // Primary fetch with selected language
-        let data = await fetchSectionsFromUpstream(lang, true);
+        let data = await fetchSectionsFromUpstream(lang, lang !== 'all');
 
         // Calculate total items
         const countItems = (d) => {
@@ -121,11 +124,20 @@ app.get('/api/sections', async (req, res) => {
             }
         }
 
-        // Fallback 2: If still 0 items, retry with upstream default store 'id-ID'
-        if (totalItems === 0 && !query && lang !== 'id-ID') {
-            const fb2 = await fetchSectionsFromUpstream('id-ID', false);
+        // Fallback 2: If still 0 items, fallback to Vietnamese (vi-VN)
+        if (totalItems === 0 && !query && lang !== 'vi-VN') {
+            const fb2 = await fetchSectionsFromUpstream('vi-VN', false);
             if (countItems(fb2) > 0) {
                 data = fb2;
+                totalItems = countItems(data);
+            }
+        }
+
+        // Fallback 3: If still 0 items, retry with upstream default store 'id-ID'
+        if (totalItems === 0 && !query && lang !== 'id-ID') {
+            const fb3 = await fetchSectionsFromUpstream('id-ID', false);
+            if (countItems(fb3) > 0) {
+                data = fb3;
                 totalItems = countItems(data);
             }
         }

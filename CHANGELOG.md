@@ -2,6 +2,15 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.10] - 2026-10-01
+### Fixed & Enhanced
+- **Provider Catalog & Multi-Tab Pagination Fix**:
+  - Resolved issue where providers using non-`home` tab keys (such as `dotdrama`, `dotdrama2` which use `tab_pages[list]`, `bibishort`, `candyjar`, etc.) failed to paginate or fetch all movies. Added dynamic multi-tab page parameters (`list`, `home`, `all`, `all-series`, etc.) so all providers return their complete library across multiple pages.
+  - Set default streaming language to Vietnamese (`vi-VN`) to instantly load the full Vietnamese catalogue (e.g. *Hóa thân thành cây cối cai quản muôn vật*, *Quãng đời còn lại trên biển*, *Người Sếp Là Vị Hôn Phu*...).
+  - Added **"Tất cả (All Languages)"** option in the header language selector to browse combined multi-lingual catalogs.
+  - Multi-tier language fallback ensures providers never show an empty or starved catalog regardless of the selected language.
+  - Maintained strict adherence to zero version badges on the website UI.
+
 ## [0.0.9] - 2026-10-01
 ### Changed & Polished
 - **Unobstructed Video Playback with On-Hover/Touch Controls**:

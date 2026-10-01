@@ -106,6 +106,8 @@
 
     // Language Selector Elements & State
     const SUPPORTED_LANGUAGES = [
+        { code: 'vi-VN', label: 'Vietnamese', native: 'Tiếng Việt' },
+        { code: 'all', label: 'All Languages', native: 'Tất cả (All)' },
         { code: 'en-US', label: 'English', native: 'English' },
         { code: 'id-ID', label: 'Indonesian', native: 'Bahasa Indonesia' },
         { code: 'ja-JP', label: 'Japanese', native: '日本語' },
@@ -115,12 +117,11 @@
         { code: 'th-TH', label: 'Thai', native: 'ภาษาไทย' },
         { code: 'de-DE', label: 'German', native: 'Deutsch' },
         { code: 'pt-PT', label: 'Portuguese', native: 'português' },
-        { code: 'vi-VN', label: 'Vietnamese', native: 'Tiếng Việt' },
         { code: 'fr-FR', label: 'French', native: 'Français' },
         { code: 'ar-SA', label: 'Arabic', native: 'العربية' },
         { code: 'ru-RU', label: 'Russian', native: 'Русский' }
     ];
-    let currentLang = localStorage.getItem('df_selected_lang') || 'en-US';
+    let currentLang = localStorage.getItem('df_selected_lang') || 'vi-VN';
 
     const langBtn = document.getElementById('lang-btn');
     const langMenu = document.getElementById('lang-menu');
