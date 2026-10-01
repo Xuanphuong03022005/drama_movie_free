@@ -2,6 +2,15 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.7] - 2026-10-01
+### Fixed & Improved
+- **Full Responsive Experience Across All Screen Sizes (Mobile, Tablet, Desktop)**:
+  - **Sticky Top Video Player on Mobile**: Fixed issue on smartphones where the video player would get obscured or pushed off-screen. On screens ≤ 820px, the video viewport is now pinned sticky at the top (`position: sticky; top: 0; z-index: 50`) with an optimized 16:9 aspect ratio and max height constraint.
+  - **Intelligent Episode Drawer Flow**: Re-ordered the mobile playback layout so that the Episode Selector drawer (`1-30`, `31-60`...) and interactive episode buttons sit directly below the video player controls, allowing users to browse and switch episodes seamlessly while the video remains in view.
+  - **Responsive Header & Search System**: Fixed navigation container wrapping on mobile devices to prevent horizontal body overflow (`scrollWidth` = 390px edge-to-edge). Search input spans cleanly across full width underneath the brand logo and language switcher.
+  - **Mobile Hero Banner & Grids**: Scaled Hero banner padding, typography, indicator pills, and navigation arrows for touchscreens; library drama cards automatically display in a clean 2-column mobile layout.
+  - **No Version Badges**: Adhered strictly to keeping version tags out of the public UI.
+
 ## [0.0.6] - 2026-09-30
 ### Added
 - Interactive Hero Showcase Banner Slide Bar (Carousel):
