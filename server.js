@@ -405,20 +405,32 @@ app.get('/api/drama', async (req, res) => {
             }
         }
 
+        // Extract drama slug for resilient on-demand episode stream fetching
+        const slugMatch = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/) || watchUrl.match(/\/detail\/watch\/([^\/?#]+)/);
+        const dramaSlug = slugMatch ? slugMatch[1] : (slug || '');
+
         // Format clean episodes
-        const cleanEpisodes = episodes.map((item, idx) => ({
-            id: item.id || idx + 1,
-            number: item.route_episode_number || item.number || idx + 1,
-            title: item.title || `Episode ${idx + 1}`,
-            play_url: item.play_url || item.direct_play_url || '',
-            direct_play_url: item.direct_play_url || '',
-            thumb_url: item.thumb_url || poster,
-            subtitle_url: item.subtitle_url || '',
-            is_hls: (item.play_url || '').includes('.m3u8') || item.browser_prefetch_mode === 'hls'
-        }));
+        const cleanEpisodes = episodes.map((item, idx) => {
+            const epNum = item.route_episode_number || item.number || idx + 1;
+            const playUrl = item.play_url || item.direct_play_url || '';
+            const epWatchUrl = item.watch_url || (dramaSlug ? `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=vi-VN&from=home` : '');
+            return {
+                id: item.id || idx + 1,
+                number: epNum,
+                title: item.title || `Episode ${epNum}`,
+                play_url: playUrl,
+                direct_play_url: item.direct_play_url || '',
+                watch_url: epWatchUrl,
+                thumb_url: item.thumb_url || poster,
+                subtitle_url: item.subtitle_url || '',
+                is_playable: true,
+                is_hls: playUrl.includes('.m3u8') || item.browser_prefetch_mode === 'hls'
+            };
+        });
 
         res.json({
             ok: true,
+            slug: dramaSlug,
             title,
             description,
             poster,
@@ -428,6 +440,109 @@ app.get('/api/drama', async (req, res) => {
         });
     } catch (err) {
         console.error('Error fetching drama:', err);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// 4.1 On-Demand Episode Stream Resolver (Seamless Edge / Upstream Refresh)
+app.get('/api/episode/refresh', async (req, res) => {
+    try {
+        const { watch_url, slug, ep, lang = 'vi-VN' } = req.query;
+        let epNum = parseInt(ep || '1', 10);
+        let dramaSlug = slug;
+
+        if (!dramaSlug && watch_url) {
+            const match = watch_url.match(/\/detail\/watch\/([^\/?#]+)(?:\/(\d+))?/);
+            if (match) {
+                dramaSlug = match[1];
+                if (!req.query.ep && match[2]) {
+                    epNum = parseInt(match[2], 10);
+                }
+            }
+        }
+
+        if (!dramaSlug) {
+            return res.status(400).json({ ok: false, error: 'slug or watch_url is required' });
+        }
+
+        const headers = getHeaders({
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${lang}&from=home`
+        });
+
+        // Tier 1: Query Edge refresh-source (fastest & lowest latency)
+        let streamData = null;
+        try {
+            const edgeRefreshUrl = `https://edge.narto-drama.com/e/rs/detail/watch/${dramaSlug}/${epNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
+            const rRes = await fetch(edgeRefreshUrl, { headers });
+            if (rRes.ok) {
+                const j = await rRes.json();
+                if (j && (j.play_url || j.direct_play_url)) {
+                    streamData = j;
+                }
+            }
+        } catch (e) {
+            console.warn('[RefreshSource] Edge resolution failed:', e.message);
+        }
+
+        // Tier 2: Query Origin refresh-source
+        if (!streamData) {
+            try {
+                const originRefreshUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
+                const rRes2 = await fetch(originRefreshUrl, { headers });
+                if (rRes2.ok) {
+                    const j2 = await rRes2.json();
+                    if (j2 && (j2.play_url || j2.direct_play_url)) {
+                        streamData = j2;
+                    }
+                }
+            } catch (e) {
+                console.warn('[RefreshSource] Origin resolution failed:', e.message);
+            }
+        }
+
+        if (streamData && (streamData.play_url || streamData.direct_play_url)) {
+            const playUrl = streamData.play_url || streamData.direct_play_url;
+            return res.json({
+                ok: true,
+                episode_number: epNum,
+                play_url: playUrl,
+                direct_play_url: streamData.direct_play_url || '',
+                is_hls: playUrl.includes('.m3u8') || streamData.direct_play_is_hls === true,
+                source_refreshed: streamData.source_refreshed === true
+            });
+        }
+
+        // Tier 3: Parse HTML page of that episode for episodeItemsRaw
+        try {
+            const epPageUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${lang}&from=home`;
+            const pageRes = await fetch(epPageUrl, { headers: getHeaders() });
+            if (pageRes.ok) {
+                const pageHtml = await pageRes.text();
+                const epMatch = pageHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                if (epMatch) {
+                    const rawList = JSON.parse(epMatch[1]);
+                    const matched = rawList.find(e => e.number === epNum || e.route_episode_number === epNum);
+                    if (matched && (matched.play_url || matched.direct_play_url)) {
+                        const pUrl = matched.play_url || matched.direct_play_url;
+                        return res.json({
+                            ok: true,
+                            episode_number: epNum,
+                            play_url: pUrl,
+                            direct_play_url: matched.direct_play_url || '',
+                            is_hls: pUrl.includes('.m3u8') || matched.browser_prefetch_mode === 'hls'
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[RefreshSource] Tier 3 HTML fallback failed:', e.message);
+        }
+
+        res.status(404).json({ ok: false, error: `Could not resolve stream for episode ${epNum}` });
+    } catch (err) {
+        console.error('[RefreshSource] Error:', err);
         res.status(500).json({ ok: false, error: err.message });
     }
 });

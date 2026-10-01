@@ -1327,16 +1327,22 @@
         videoOverlayLoader.hidden = false;
         let streamUrl = episode.play_url || episode.direct_play_url;
 
-        // Fetch on-demand if missing
-        if (!streamUrl && episode.watch_url) {
+        // Fetch on-demand via high-speed edge / upstream refresh resolver
+        if (!streamUrl) {
             try {
-                videoOverlayLoader.innerHTML = '<div class="stream-spinner"></div><span class="loading-status-text">Resolving episode direct stream...</span>';
-                const epRes = await fetch(`/api/drama?watch_url=${encodeURIComponent(episode.watch_url)}`);
+                videoOverlayLoader.innerHTML = '<div class="stream-spinner"></div><span class="loading-status-text">Đang kết nối luồng phát tập ' + (episode.number || '') + '...</span>';
+                const epNum = episode.number || (currentEpisodeIndex + 1);
+                const slug = currentDramaData?.slug || '';
+                const watchUrl = episode.watch_url || currentDramaData?.watch_url || '';
+                const refreshUrl = `/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`;
+                
+                const epRes = await fetch(refreshUrl);
                 const epData = await epRes.json();
-                if (epData.ok && epData.episodes && epData.episodes.length > 0) {
-                    const matchEp = epData.episodes.find(e => e.number === episode.number) || epData.episodes[0];
-                    episode.play_url = matchEp.play_url || matchEp.direct_play_url;
-                    streamUrl = episode.play_url;
+                if (epData.ok && epData.play_url) {
+                    episode.play_url = epData.play_url;
+                    episode.direct_play_url = epData.direct_play_url || '';
+                    episode.is_hls = epData.is_hls;
+                    streamUrl = epData.play_url;
                 }
             } catch (e) {
                 console.error('Error fetching episode stream:', e);
@@ -1344,9 +1350,27 @@
         }
 
         if (!streamUrl) {
-            videoOverlayLoader.innerHTML = '<span style="color:#f43f5e;font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> No stream link available for this episode.</span>';
+            videoOverlayLoader.innerHTML = `
+                <div style="padding: 24px; text-align: center; max-width: 420px; background: rgba(15, 23, 42, 0.92); border-radius: 16px; border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(16px); box-shadow: 0 16px 40px rgba(0,0,0,0.6);">
+                    <div style="font-size: 34px; color: #f43f5e; margin-bottom: 12px;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <h4 style="color: #fff; font-size: 16px; font-weight: 700; margin-bottom: 8px;">Không thể tải tập ${episode.number || ''}</h4>
+                    <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
+                        Không thể kết nối tới máy chủ luồng video cho tập này. Vui lòng bấm thử lại hoặc chọn tập khác.
+                    </p>
+                    <button type="button" id="btn-retry-stream" class="btn btn-sm btn-primary" style="padding: 9px 20px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--primary-gradient); border: none; color: #fff; box-shadow: 0 4px 14px var(--primary-glow);">
+                        <i class="fa-solid fa-rotate-right"></i> Thử lại ngay
+                    </button>
+                </div>
+            `;
+            const retryBtn = document.getElementById('btn-retry-stream');
+            if (retryBtn) {
+                retryBtn.addEventListener('click', () => switchEpisode(currentEpisodeIndex));
+            }
             return;
         }
+
+        // Trigger silent background prefetch for next episode
+        prefetchNextEpisodeStream(currentEpisodeIndex + 1);
 
         const isHls = streamUrl.includes('.m3u8') || episode.is_hls;
         streamTypeBadge.innerHTML = isHls 
@@ -1401,6 +1425,26 @@
                 mainVideo.play().catch(() => {});
             };
         }
+    }
+
+    function prefetchNextEpisodeStream(nextIndex) {
+        if (!currentDramaData || !currentDramaData.episodes || !currentDramaData.episodes[nextIndex]) return;
+        const nextEp = currentDramaData.episodes[nextIndex];
+        if (nextEp.play_url || nextEp.direct_play_url) return;
+
+        const epNum = nextEp.number || (nextIndex + 1);
+        const slug = currentDramaData?.slug || '';
+        const watchUrl = nextEp.watch_url || currentDramaData?.watch_url || '';
+        fetch(`/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok && data.play_url) {
+                    nextEp.play_url = data.play_url;
+                    nextEp.direct_play_url = data.direct_play_url || '';
+                    nextEp.is_hls = data.is_hls;
+                }
+            })
+            .catch(() => {});
     }
 
     function closeModal() {
