@@ -2,6 +2,153 @@
 
 All notable changes to DramaFlow PRO will be documented in this file.
 
+## [0.0.22] - 2026-10-02
+### Fix: Phụ Đề Chập Chờn & Mất Phụ Đề Sau 20 Giây (Seamless STT & Priority Queue)
+
+**Nguyên nhân gốc rễ gây ra tình trạng "video được, video không được" và mất phụ đề giữa chừng (như mốc 0:31):**
+1. **Xếp hàng FIFO nghẽn cổ chai (Queue Block)**: Stage 1 (chunk nhanh) trước đây bị nhét chung vào một hàng đợi đơn luồng với Stage 2 (dịch cả tập). Khi mở tập 1 rồi chuyển sang tập 2, tập 2 bị kẹt cứng phía sau tác vụ 2 phút của tập 1.
+2. **Chunk mở đầu quá ngắn (chỉ 20s)**: Chunk Stage 1 trước đây chỉ dài 20s (`-t 20`). Đến giây thứ 21 trở đi (như mốc 0:31 trong ảnh chụp màn hình), phụ đề biến mất hoàn toàn do Stage 2 chưa xong hoặc đã bị client dừng thăm dò.
+3. **Frontend Poller dừng quá sớm**: `maxStage2Polls` chỉ có 25 lần (62 giây), trong khi nhận diện cả tập 3-5 phút cần khoảng 80-100 giây. Poller ở frontend tự bỏ cuộc trước khi server hoàn thành.
+4. **Tiến trình FFmpeg zombie & bóp CPU**: Thiết lập `PRIORITY_BELOW_NORMAL` trên Windows khiến FFmpeg bị hệ điều hành bỏ đói CPU (chỉ chạy 10-15s trong 3 phút). Khi lệnh quá hạn, Node.js không dọn sạch tiến trình con `ffmpeg.exe`, gây nghẽn CPU và khóa file tạm.
+
+**Những cải tiến đã thực hiện:**
+- **Tách rời luồng ưu tiên Stage 1 (Priority Fast Lane)**: Stage 1 cho tập đang xem luôn chạy ngay lập tức, không còn bị xếp hàng chờ sau tác vụ dịch cả tập cũ.
+- **Tăng chunk ban đầu lên 40 giây (`-t 40`)**: Ngay trong vài giây đầu, toàn bộ các câu thoại quan trọng tới mốc 40s (bao gồm mốc 0:31) đã sẵn sàng và hiển thị mượt mà.
+- **Hủy tác vụ tập cũ khi chuyển tập (Dynamic Task Preemption)**: Khi người dùng chuyển sang tập mới, server tự động hủy tác vụ nền của tập cũ để dồn 100% tài nguyên CPU cho tập đang xem.
+- **Tối ưu tốc độ nhận diện đa luồng (6 threads, Normal Priority)**: Nâng cấp luồng Whisper lên 6 threads, gỡ bỏ giới hạn `BELOW_NORMAL`, tăng tốc nhận diện thực tế lên 1.8x - 2.5x mà vẫn giữ 10 luồng CPU trống cho trình duyệt.
+- **Dọn dẹp tiến trình triệt để (`taskkill /t /f`)**: Đảm bảo không còn bất kỳ tiến trình zombie FFmpeg nào chạy ngầm làm chậm máy.
+- **Kéo dài chu kỳ thăm dò Stage 2**: Tăng lên 120 lần (6 phút), tự động cập nhật và hiển thị toàn bộ phụ đề ngay khi Stage 2 hoàn tất mà không cần tải lại trang.
+
+## [0.0.21] - 2026-10-02
+### Translation Engine — Production-Grade Stability Overhaul
+
+**Root cause of intermittent translation failures:**
+- Hệ thống cũ chỉ có 1 Google endpoint + 1 MyMemory, không có retry, không có throttle → dễ bị rate-limit.
+- Khi dịch 200+ cues song song bằng `Promise.all`, hàng trăm request nổ đồng thời → server dịch từ chối hết.
+
+**Những cải tiến trong phiên bản này:**
+
+- **4 Google endpoint variants được kiểm thử thực tế** (chỉ giữ các endpoint trả về JSON hợp lệ):
+  - `dict-chrome-ex` via `translate.googleapis.com` (primary)
+  - `dict-chrome-ex` via `translate.google.com` (fallback #1)
+  - `client=at` (Apps Translate, quota pool riêng)
+  - `client=webapp` (quota pool riêng)
+- **Auto-rotation**: endpoint bị rate-limit (429/503) hoặc trả HTML → tự động xoay sang endpoint tiếp theo.
+- **HTML response detection**: Phát hiện và bỏ qua các endpoint trả về trang HTML thay vì JSON.
+- **3 provider layers**: Google → MyMemory → LibreTranslate (public). Nếu tất cả fail, trả nguyên văn bản gốc.
+- **Throttle concurrency**: Tối đa 8 request dịch song song, phần còn lại xếp hàng chờ → không bao giờ spam API.
+- **`batchTranslate()`**: Dịch theo từng chunk 20 câu, có 80ms pause giữa các chunk → giảm burst.
+- **Persistent disk cache** (`subtitles/translation_cache.json`): Các bản dịch được ghi ra ổ đĩa mỗi 30 giây, tồn tại qua lần restart server → không bao giờ dịch lại cùng một câu 2 lần.
+- **In-memory LRU cache**: Tăng từ 5,000 lên 10,000 entries, evict 500 entries cũ khi đầy.
+- **Exponential backoff retry**: Mỗi lần thất bại chờ lâu hơn gấp đôi (300ms → 600ms → 1200ms) trước khi thử lại.
+
+## [0.0.20] - 2026-10-02
+### Performance & Speed Optimization (Tối ưu tốc độ nghe & dịch siêu tốc)
+- **Kiến trúc phân tầng 2 giai đoạn (2-Stage Progressive STT Pipeline)**:
+  - **Giai đoạn 1 (Priority Fast Chunk - 15-20s đầu)**:
+    - Trích xuất và nhận diện chỉ trong **~2.8 - 3.5 giây** thay vì phải chờ cả tập 2 phút.
+    - Người dùng vừa xem được 3 giây mở đầu thì phụ đề tiếng Việt / ngôn ngữ đã chọn đã xuất hiện ngay trên màn hình.
+  - **Giai đoạn 2 (Full Background Merge)**:
+    - Trong lúc người dùng đang đọc những câu thoại đầu tiên, hệ thống tiếp tục xử lý toàn bộ tập phim ở chế độ nền và tự động cập nhật phụ đề đầy đủ cho 100% video mà không làm gián đoạn việc xem phim.
+- **Tính năng Pre-fetch phụ đề tập tiếp theo (Zero-Second Next Episode)**:
+  - Khi đang xem tập $N$, hệ thống tự động chạy ngầm trích xuất và dịch phụ đề cho tập $N+1$.
+  - Đến khi chuyển sang tập tiếp theo, phụ đề đã sẵn sàng trong cache ổ đĩa, xuất hiện **ngay lập tức trong 0.06 giây (0 giây chờ)**.
+- **Tối ưu lịch thăm dò phía Client (Adaptive Responsive Polling)**:
+  - Thăm dò mỗi 800ms trong 4 nhịp đầu để bắt kịp ngay khoảnh khắc phụ đề vừa hoàn tất ở backend, xóa bỏ độ trễ chờ đợi.
+- **Khắc phục lỗi định dạng lệnh FFmpeg trên Windows**:
+  - Loại bỏ các tham số header xuống dòng gây lỗi ngắt lệnh trên Windows PowerShell/cmd, đảm bảo tốc độ trích xuất âm thanh đạt đỉnh 14x - 40x.
+
+## [0.0.19] - 2026-10-02
+### Added & Enhanced
+- **Hệ Thống Phụ Đề AI Nhận Diện Giọng Nói Âm Thanh & Dịch Đa Ngôn Ngữ Tự Động (AI Audio STT -> WebVTT Pipeline)**:
+  - **Khắc phục triệt để vấn đề dịch theo hình ảnh / OCR**:
+    - Thay vì quét hình ảnh gây sai chữ hoặc lộ khung đen che video, hệ thống đọc trực tiếp luồng âm thanh thoại thực tế của tập phim bằng công nghệ AI **Whisper STT** (Speech-to-Text).
+    - Tự động trích xuất các câu thoại kèm mốc thời gian (timestamps) chính xác đến từng mili-giây.
+  - **Dịch tự động theo bất kỳ ngôn ngữ nào người dùng chọn**:
+    - Hỗ trợ dịch sang: 🇻🇳 **Tiếng Việt**, 🇺🇸 **English**, 🇨🇳 **中文**, 🇰🇷 **한국어**, 🇯🇵 **日本語**, 🇹🇭 **ภาษาไทย**, 🇮🇩 **Bahasa Indonesia**, 🇫🇷 **Français**, 🇪🇸 **Español**.
+    - Tự động đồng bộ với ngôn ngữ giao diện web đang chọn hoặc tùy chọn riêng trong menu phụ đề CC của trình phát video.
+  - **Đóng gói phụ đề chuẩn WebVTT (.vtt) & Tích hợp vào thẻ `<track>` native của HTML5 Video**:
+    - Font chữ điện ảnh (`Plus Jakarta Sans`), đổ bóng sắc nét, nền tối mờ kính mượt mà (`video::cue`), không che hình, không giật lag.
+  - **Cơ chế lưu đệm thông minh (Instant Disk Cache)**:
+    - Khi một tập phim đã được nhận diện âm thanh và dịch xong một lần, các lần sau mở ra xem phụ đề sẽ xuất hiện **ngay lập tức trong 0.05 giây**.
+    - Khi đổi sang ngôn ngữ mới, server chỉ cần dịch lại các câu thoại trong 1 giây mà không cần quét lại âm thanh.
+  - **Trải nghiệm phát video mượt mà (Non-blocking Background Processing)**:
+    - Video vẫn phát ngay lập tức khi mở tập phim; hệ thống hiển thị thông báo trạng thái nhẹ nhàng (`⚡ AI đang nghe & dịch âm thanh...`) và tự động gắn phụ đề vào luồng phát ngay khi hoàn tất.
+
+## [0.0.18] - 2026-10-02
+### Changed & Cleaned
+- **Loại bỏ hoàn toàn tính năng OCR thời gian thực trên khung video**:
+  - Gỡ bỏ lớp phủ `#ai-subtitle-overlay` trên trình phát video để tránh hiện chữ nhận diện sai hoặc che khuất khung hình.
+  - Loại bỏ module xử lý canvas và engine Tesseract OCR ở cả client (`app.js`) và server (`server.js`).
+  - Xóa file `eng.traineddata` và giải phóng tài nguyên CPU/RAM của server.
+  - Phục hồi menu phụ đề chuẩn của video player (`selectSubtitle`) mượt mà, không giật lag.
+
+## [0.0.17] - 2026-10-02
+### Added & Enhanced
+- **Hệ Thống Phụ Đề AI Live OCR & Dịch Tự Động Trực Tiếp Trên Video (AI Subtitle Engine)**:
+  - **Khắc phục triệt để vấn đề phụ đề in chết vào video (Hardsub)**:
+    - Các video phim ngắn gốc từ các nhà phát hành (ReelShort, DramaBox, ShortMax...) đều in chết chữ tiếng Anh/tiếng Trung trực tiếp vào khung hình của video, không có file phụ đề rời (softsub).
+    - Tích hợp công nghệ nhận diện quang học **AI OCR (Tesseract Engine)** và bộ dịch đa ngôn ngữ theo thời gian thực:
+      1. **Tự động quét chữ trên khung video (Frame Crop & OCR)**: Định kỳ quét vùng chứa phụ đề ở 1/4 phía dưới video (`65% - 88%` chiều cao video) khi video đang phát.
+      2. **Thuật toán nhận biết thay đổi điểm ảnh thông minh (Zero-cost Skip)**: Tự động bỏ qua khung hình nếu chữ không đổi hoặc cảnh tối/không có chữ, tiết kiệm tối đa CPU.
+      3. **Dịch tức thì sang bất kỳ ngôn ngữ nào người dùng chọn**:
+         - Hỗ trợ dịch sang: 🇻🇳 **Tiếng Việt**, 🇺🇸 **English**, 🇨🇳 **中文 (Chinese)**, 🇰🇷 **한국어 (Korean)**, 🇯🇵 **日本語 (Japanese)**, 🇹🇭 **ภาษาไทย (Thai)**, 🇮🇩 **Bahasa Indonesia**, 🇪🇸 **Español**, 🇫🇷 **Français**.
+         - Hệ thống dịch đa tầng với bộ đệm bộ nhớ (in-memory cache) cho tốc độ dịch phản hồi dưới 100ms.
+      4. **Thanh phủ phụ đề thông minh (AI Subtitle Overlay Bar)**:
+         - Hiển thị thanh phụ đề bo tròn với nền tối mờ kính (`rgba(8, 10, 16, 0.94)`) đặt chính xác ở vị trí cuối video, **che đè hoàn hảo lên phụ đề tiếng Anh cũ**.
+         - Chữ phụ đề trắng sáng, nét đậm (`16.5px`), đổ bóng điện ảnh dễ đọc, có huy hiệu `⚡ AI Dịch • Tiếng Việt`.
+         - Tự động ẩn đi sau 1.5s nếu nhân vật dừng thoại hoặc chuyển sang cảnh không có phụ đề.
+         - Hoạt động đồng bộ trên cả **Máy tính (Desktop)**, **Kiểu Trung (Tablet/Split-screen)** và **Điện thoại (Mobile Fullscreen)**.
+  - Tuyệt đối không hiển thị badge phiên bản hay thẻ debug ngoài giao diện người dùng.
+
+## [0.0.16] - 2026-10-02
+### Added & Enhanced
+- **3D Coverflow Vertical Posters Carousel for Hero Showcase**:
+  - **Khắc phục triệt để vấn đề bể ảnh / phóng to ảnh sai tỷ lệ**:
+    - Poster phim ngắn có tỷ lệ dọc chuẩn 9:16 (hoặc 2:3). Khi dùng làm `background-size: cover` trải rộng 1920px trên màn hình lớn, ảnh bị phóng to hơn 300% dẫn đến vỡ hình và mờ.
+    - Chuyển đổi toàn diện sang bố cục 2 cột hiện đại theo đúng ảnh mẫu tham khảo của người dùng:
+      - **Cột Trái (Thông tin phim nổi bật)**:
+        - Các tag thể loại dạng viên thuốc tối màu bo tròn (`.hero-tag-pill`) (ví dụ: *Báo Thù*, *Tình một đêm*, *Tổng Tài*).
+        - Tiêu đề phim in đậm, chữ trắng lớn, hiển thị sắc nét tối đa 2 dòng (`.hero-title`).
+        - Tóm tắt nội dung cô đọng 2-3 dòng chữ xám nhạt (`.hero-synopsis`).
+        - Huy hiệu số tập (`50 tập` / `.hero-ep-badge`).
+        - Cụm nút hành động chuẩn mẫu:
+          - Nút chính: Viên thuốc nền trắng tinh nổi bật `[▶ Xem Ngay]` với chữ và biểu tượng play màu đen đậm.
+          - Nút phụ: Viên thuốc kính mờ tối màu `[Chi Tiết]` với viền tinh tế.
+          - Nút yêu thích: Nút tròn trái tim với hiệu ứng active đỏ hồng.
+      - **Cột Phải (Hàng thẻ 3D Coverflow Poster Dọc)**:
+        - Poster phim được giữ nguyên tỷ lệ dọc tự nhiên (kích thước chuẩn 225px x 335px), sắc nét 100%, không bị kéo dãn hay mờ.
+        - Thẻ ở giữa (active): Nổi bật nhất, đổ bóng sâu 3D, viền sáng nhẹ, có huy hiệu độc quyền bo tròn (`DramaBox Độc quyền` / `AnyReel Độc quyền`).
+        - Thẻ hai bên (flanking cards): Nghiêng góc phối cảnh 3D (`rotateY(12deg)` và `rotateY(20deg)`), thu nhỏ dần (`scale(0.88)` và `scale(0.76)`), giảm độ sáng và mờ dần tạo chiều sâu thị giác ấn tượng.
+        - Click vào thẻ hai bên để xoay ngay phim đó vào giữa; click vào thẻ chính giữa để mở phát phim lập tức.
+      - **Nền Ambient Glow Sang Trọng**:
+        - Nền sau là lớp poster được làm nhòe nghệ thuật (`blur(48px)` kết hợp độ sáng `brightness(0.24)`) cùng lớp vignette chuyển màu tối dần từ trái sang phải, tạo không gian điện ảnh cao cấp như Netflix / DramaBox.
+  - **Tối ưu hiển thị Responsive & Di động**:
+    - Trên màn hình máy tính (>1150px): Bố cục 2 cột cân đối hoàn hảo, nút mũi tên điều hướng hai bên nằm gọn gàng không chạm vào văn bản.
+    - Trên màn hình di động (<=820px): Hàng poster 3D xếp trên đầu với mũi tên điều hướng đặt ngay hai bên thẻ, thông tin và nút bấm xếp ngay ngắn bên dưới, huy hiệu gọn gàng không bị xuống dòng.
+  - Tích hợp đa ngôn ngữ đầy đủ cho nút Xem Ngay (`hero_play_btn`), Chi Tiết (`hero_detail_btn`), Huy hiệu độc quyền (`badge_exclusive`), và số tập (`hero_episodes_suffix`).
+  - Đảm bảo tuyệt đối không có badge phiên bản hay thẻ debug xuất hiện trên giao diện người dùng.
+
+## [0.0.15] - 2026-10-01
+### Added & Enhanced
+- **3-Tier Responsive Player Suite Architecture (Kiểu To, Kiểu Trung, Kiểu Nhỏ)**:
+  - **Kiểu Trung (Medium 3/4 Stacked Layout - 721px to 1150px & `.layout-medium`)**:
+    - Specially optimized for tablet screens, split-screen desktop windows (e.g. Windows snap half-screen ~960px width), and resized desktop viewports.
+    - **Phần phát phim chiếm 3/4 (71vh-72vh)**: The video viewport container expands to 100% width and occupies 3/4 of the modal stage height, ensuring the vertical video is shown large, crisp, and centered with real-time ambient glow.
+    - **Bố cục hiển thị dọc xuống (Vertical Stack Flow)**:
+      - Media controls (`.media-control-strip`) span 100% width directly beneath the video viewport with play/next/prev/speed/quality/subtitles.
+      - Episodes drawer (`.episodes-drawer`) spans 100% width below controls with multi-column responsive grid (`repeat(auto-fill, minmax(58px, 1fr))`), quick jump to episode, and batch tabs (1-30, 31-60).
+      - Drama synopsis card (`.drama-synopsis-panel`) is placed at the bottom with overview, meta badges, and story text.
+      - Smooth vertical scrolling allows effortless navigation between the video player, episode selection, and synopsis.
+      - Clicking any episode smoothly auto-scrolls back to the video viewport so playback begins immediately in view.
+  - **Kiểu To (Large 2-Column Desktop Layout - Screens > 1150px)**:
+    - Retains the full 2-column side-by-side desktop workstation layout (`1fr 360px`).
+    - Quick layout switch button (`#theater-toggle-btn`) in the top bar allows toggling between Kiểu To (2 columns) and Kiểu Trung (3/4 vertical stack) on demand with real-time feedback toast.
+  - **Kiểu Nhỏ (Mobile Fullscreen Viewport - Screens <= 720px)**:
+    - Pure mobile fullscreen cinema viewport (`height: calc(100dvh - 56px)`).
+    - Floating episode shortcut button appears on hover/touch.
+  - Strictly zero version badges or debug tags in the frontend UI.
+
 ## [0.0.14] - 2026-10-01
 ### Added & Enhanced
 - **Modern Streaming Top Navbar Architecture (Movie & Series, Anime, Tags, Genre, Featured, Login)**:

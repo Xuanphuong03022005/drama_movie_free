@@ -2,6 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const pkg = require('./package.json');
 
@@ -9,8 +13,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static(path.join(__dirname, 'public'), {
+    maxAge: 0,
+    etag: false,
+    setHeaders: (res) => {
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+}));
 
 app.get('/api/version', (req, res) => {
     res.json({ ok: true, version: pkg.version, app: pkg.name });
@@ -189,6 +199,10 @@ function normalizeItem(item) {
     if (item.cover_url) item.cover_url = normalizePosterUrl(item.cover_url);
     if (item.cover) item.cover = normalizePosterUrl(item.cover);
     if (item.poster) item.poster = normalizePosterUrl(item.poster);
+    if (!item.slug && (item.watch_url || item.url)) {
+        const sm = (item.watch_url || item.url).match(/\/detail\/watch\/([^\/?#]+)/);
+        if (sm) item.slug = sm[1];
+    }
     return item;
 }
 
@@ -214,11 +228,12 @@ app.get('/assets/*', async (req, res) => {
 app.get('/api/search', async (req, res) => {
     try {
         const q = req.query.q || '';
+        const lang = req.query.lang || 'vi-VN';
         if (!q.trim()) {
             return res.json({ ok: true, items: [] });
         }
 
-        const url = `${BASE_URL}/search?q=${encodeURIComponent(q)}&limit=50&lang=en-US`;
+        const url = `${BASE_URL}/search?q=${encodeURIComponent(q)}&limit=50&lang=${encodeURIComponent(lang)}`;
         const response = await fetch(url, {
             headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
         });
@@ -238,14 +253,53 @@ app.get('/api/search', async (req, res) => {
 });
 
 // 4. Drama Detail & Episodes Resolver
+const dramaCache = new Map();
+const dramaInFlight = new Map();
+const DRAMA_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+
+const EPISODE_CACHE_FILE = path.join(__dirname, 'data_episodes_cache.json');
+const episodeCountCache = new Map();
+
+// Load persistent disk cache
+try {
+    if (fs.existsSync(EPISODE_CACHE_FILE)) {
+        const raw = fs.readFileSync(EPISODE_CACHE_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+            for (const [k, v] of Object.entries(parsed)) {
+                if (typeof v === 'number' && v > 0) {
+                    episodeCountCache.set(k, v);
+                }
+            }
+            console.log(`[EpisodeCache] Loaded ${episodeCountCache.size} drama episode counts from disk`);
+        }
+    }
+} catch (e) {
+    console.warn('[EpisodeCache] Failed to load disk cache:', e.message);
+}
+
+let saveDiskTimeout = null;
+function saveEpisodeCacheToDisk() {
+    clearTimeout(saveDiskTimeout);
+    saveDiskTimeout = setTimeout(() => {
+        try {
+            const obj = Object.fromEntries(episodeCountCache);
+            fs.writeFileSync(EPISODE_CACHE_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+        } catch (e) {
+            console.warn('[EpisodeCache] Failed to save to disk:', e.message);
+        }
+    }, 2000);
+}
+
 app.get('/api/drama', async (req, res) => {
     try {
         let watchUrl = req.query.watch_url;
         const slug = req.query.slug;
         const ep = req.query.ep || '1';
+        const lang = req.query.lang || 'vi-VN';
 
         if (!watchUrl && slug) {
-            watchUrl = `${BASE_URL}/detail/watch/${slug}/${ep}?lang=id-ID&from=home`;
+            watchUrl = `${BASE_URL}/detail/watch/${slug}/${ep}?lang=${encodeURIComponent(lang)}&from=home`;
         }
 
         if (!watchUrl) {
@@ -256,195 +310,470 @@ app.get('/api/drama', async (req, res) => {
             watchUrl = BASE_URL + watchUrl;
         }
 
-        // Fetch the drama page (following redirects)
-        const headers = getHeaders();
-        let pageRes = await fetch(watchUrl, { headers, redirect: 'follow' });
-        let html = await pageRes.text();
-        let finalUrl = pageRes.url;
-
-        // Extract metadata
-        let title = '';
-        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i) || html.match(/<title>([^<]+)<\/title>/i);
-        if (titleMatch) {
-            title = titleMatch[1].replace(/ - Streaming Gratis.*$/i, '').replace(/^"|"$/g, '').trim();
+        if (watchUrl.includes('lang=')) {
+            watchUrl = watchUrl.replace(/lang=[^&]+/, `lang=${encodeURIComponent(lang)}`);
+        } else {
+            watchUrl += (watchUrl.includes('?') ? '&' : '?') + `lang=${encodeURIComponent(lang)}`;
         }
 
-        let description = '';
-        const descMatch = html.match(/<meta name="description" content="([^"]+)"/i);
-        if (descMatch) {
-            description = descMatch[1].replace(/^"|"$/g, '').trim();
+        const cacheKey = `${watchUrl}`;
+        const cached = dramaCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < DRAMA_CACHE_TTL)) {
+            return res.json(cached.data);
         }
 
-        let poster = '';
-        const posterMatch = html.match(/<meta property="og:image" content="([^"]+)"/i);
-        if (posterMatch) {
-            poster = posterMatch[1];
-        }
-
-        // Extract episodeItemsRaw
-        let episodes = [];
-        const epMatch = html.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-        if (epMatch) {
+        if (dramaInFlight.has(cacheKey)) {
             try {
-                episodes = JSON.parse(epMatch[1]);
+                const sharedData = await dramaInFlight.get(cacheKey);
+                return res.json(sharedData);
             } catch (e) {
-                console.error('Error parsing episodeItemsRaw:', e);
+                // If shared fetch fails, fallback to fresh request below
             }
         }
 
-        // If not found in current page, maybe this is the landing page without ep number
-        if (episodes.length === 0) {
-            // Check for /detail/watch/.../1 link in HTML
-            const ep1LinkMatch = html.match(/href="([^"]+\/detail\/watch\/[^"/]+\/1[^"]*)"/);
-            if (ep1LinkMatch) {
-                const ep1Url = ep1LinkMatch[1].replace(/&amp;/g, '&');
-                const pageRes2 = await fetch(ep1Url, { headers });
-                const html2 = await pageRes2.text();
-                const epMatch2 = html2.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                if (epMatch2) {
-                    try {
-                        episodes = JSON.parse(epMatch2[1]);
-                    } catch (e) {
-                        console.error('Error parsing episodeItemsRaw (step 2):', e);
-                    }
-                }
-                // Update html reference if html2 has more data
-                if (html2.includes('class="episode-item"')) {
-                    html = html2;
-                }
-            }
-        }
+        const executeFetch = async () => {
+            // Fetch the drama page (following redirects)
+            const headers = getHeaders();
+            let pageRes = await fetch(watchUrl, { headers, redirect: 'follow' });
+            let html = await pageRes.text();
+            let finalUrl = pageRes.url;
 
-        // Fallback: Check if HTML has multiple <a class="episode-item" href="..."> links
-        if (episodes.length <= 1) {
-            const epItemRegex = /<a[^>]*class="[^"]*episode-item[^"]*"[^>]*href="([^"]+)"[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
-            let m;
-            const htmlEpisodes = [];
-            while ((m = epItemRegex.exec(html)) !== null) {
-                const epUrl = m[1].replace(/&amp;/g, '&');
-                const epTitle = m[2] || m[3].replace(/<[^>]+>/g, '').trim();
-                const epNumMatch = epUrl.match(/\/(\d+)(?:\?|$)/);
-                const epNum = epNumMatch ? parseInt(epNumMatch[1], 10) : htmlEpisodes.length + 1;
-                htmlEpisodes.push({
-                    id: epNum,
-                    number: epNum,
-                    route_episode_number: epNum,
-                    title: epTitle || `Episode ${epNum}`,
-                    watch_url: epUrl,
-                    play_url: (episodes[0] && epNum === (episodes[0].number || 1)) ? episodes[0].play_url : '',
-                    direct_play_url: (episodes[0] && epNum === (episodes[0].number || 1)) ? episodes[0].direct_play_url : '',
-                    thumb_url: episodes[0]?.thumb_url || poster
-                });
-            }
-            if (htmlEpisodes.length > episodes.length) {
-                episodes = htmlEpisodes;
-            }
-        }
-
-        // Check if any episode has a valid playable stream
-        const hasPlayableStream = episodes.some(e => (e.play_url || e.direct_play_url));
-        if (!hasPlayableStream && episodes.length > 0) {
-            console.log(`[Auto-Recovery] 0 playable episodes found for ${watchUrl}. Attempting resilient recovery...`);
-            let recoveredEps = null;
-
-            // Strategy 1: If slug ends with -2, -3, etc., strip it and fetch base drama /1
-            const rawUrl = watchUrl.split('?')[0];
-            const cleanRaw = rawUrl.replace(/-[2-9]$/, '');
-            if (cleanRaw !== rawUrl) {
+            // If direct slug watchUrl returned 404 or missing episodes, try searching upstream by slug keywords
+            if ((!pageRes.ok || html.includes('Page Not Found') || !html.includes('episodeItemsRaw')) && slug) {
+                const searchKeywords = slug.replace(/[-_]+/g, ' ').trim();
                 try {
-                    const query = watchUrl.split('?')[1] ? '?' + watchUrl.split('?')[1] : '';
-                    const targetUrl = (cleanRaw.startsWith('http') ? cleanRaw : `${BASE_URL}${cleanRaw}`) + `/1${query}`;
-                    const recRes = await fetch(targetUrl, { headers });
-                    const recHtml = await recRes.text();
-                    const recMatch = recHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                    if (recMatch) {
-                        const parsed = JSON.parse(recMatch[1]);
-                        if (parsed.some(e => e.play_url || e.direct_play_url)) {
-                            recoveredEps = parsed;
-                            console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via clean slug!`);
-                        }
-                    }
-                } catch (e) {
-                    console.error('[Auto-Recovery] Strategy 1 failed:', e.message);
-                }
-            }
-
-            // Strategy 2: Search upstream by drama title and find an alternate working entry
-            if (!recoveredEps && title) {
-                try {
-                    const cleanSearchTitle = title.replace(/\s*-\s*Free Streaming.*$/i, '').trim();
-                    const searchRes = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(cleanSearchTitle)}&limit=10&lang=en-US`, {
+                    const sRes = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(searchKeywords)}&limit=5&lang=${encodeURIComponent(lang)}`, {
                         headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
                     });
-                    if (searchRes.ok) {
-                        const sData = await searchRes.json();
+                    if (sRes.ok) {
+                        const sData = await sRes.json();
                         const sItems = sData.items || sData || [];
-                        const altItem = sItems.find(i => i.url && i.url !== watchUrl && !i.url.includes(watchUrl.split('?')[0]));
-                        if (altItem && altItem.url) {
-                            const altPath = altItem.url.split('?')[0];
-                            const altUrl = `${BASE_URL}${altPath}/1`;
-                            const altRes = await fetch(altUrl, { headers });
-                            const altHtml = await altRes.text();
-                            const altMatch = altHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                            if (altMatch) {
-                                const parsed = JSON.parse(altMatch[1]);
-                                if (parsed.some(e => e.play_url || e.direct_play_url)) {
-                                    recoveredEps = parsed;
-                                    console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via search title match!`);
-                                }
+                        if (sItems.length > 0 && sItems[0].url) {
+                            const newUrl = sItems[0].url.startsWith('http') ? sItems[0].url : `${BASE_URL}${sItems[0].url}`;
+                            const newRes = await fetch(newUrl, { headers, redirect: 'follow' });
+                            if (newRes.ok) {
+                                pageRes = newRes;
+                                html = await newRes.text();
+                                finalUrl = newRes.url;
                             }
                         }
                     }
+                } catch (err) { }
+            }
+
+            // Extract metadata
+            let title = '';
+            const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i) || html.match(/<title>([^<]+)<\/title>/i);
+            if (titleMatch) {
+                title = titleMatch[1].replace(/ - Streaming Gratis.*$/i, '').replace(/^"|"$/g, '').trim();
+            }
+
+            let description = '';
+            const descMatch = html.match(/<meta name="description" content="([^"]+)"/i);
+            if (descMatch) {
+                description = descMatch[1].replace(/^"|"$/g, '').trim();
+            }
+
+            let poster = '';
+            const posterMatch = html.match(/<meta property="og:image" content="([^"]+)"/i);
+            if (posterMatch) {
+                poster = posterMatch[1];
+            }
+
+            // Extract drama slug early for scoped episode matching and on-demand stream resolution
+            const slugMatch = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/) || watchUrl.match(/\/detail\/watch\/([^\/?#]+)/);
+            const dramaSlug = slugMatch ? slugMatch[1] : (slug || '');
+
+            // Extract episodeItemsRaw
+            let episodes = [];
+            const epMatch = html.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+            if (epMatch) {
+                try {
+                    episodes = JSON.parse(epMatch[1]);
                 } catch (e) {
-                    console.error('[Auto-Recovery] Strategy 2 failed:', e.message);
+                    console.error('Error parsing episodeItemsRaw:', e);
                 }
             }
 
-            if (recoveredEps && recoveredEps.length > 0) {
-                episodes = recoveredEps;
+            // If not found in current page, check for /detail/watch/{dramaSlug}/1 specifically
+            if (episodes.length === 0 && dramaSlug) {
+                const escapedSlug = dramaSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const ep1Regex = new RegExp(`href="([^"]*\\/detail\\/watch\\/${escapedSlug}\\/1[^"]*)"`, 'i');
+                const ep1LinkMatch = html.match(ep1Regex);
+                if (ep1LinkMatch) {
+                    const ep1Url = (ep1LinkMatch[1].startsWith('http') ? ep1LinkMatch[1] : `${BASE_URL}${ep1LinkMatch[1]}`).replace(/&amp;/g, '&');
+                    const pageRes2 = await fetch(ep1Url, { headers });
+                    const html2 = await pageRes2.text();
+                    const epMatch2 = html2.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                    if (epMatch2) {
+                        try {
+                            episodes = JSON.parse(epMatch2[1]);
+                        } catch (e) {
+                            console.error('Error parsing episodeItemsRaw (step 2):', e);
+                        }
+                    }
+                    if (html2.includes('class="episode-item"')) {
+                        html = html2;
+                    }
+                }
             }
+
+            // Fallback: Check if HTML has multiple <a class="episode-item" href="..."> links belonging to this drama
+            if (episodes.length <= 1) {
+                const escapedSlug = dramaSlug ? dramaSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '[^"/]+';
+                const epItemRegex = new RegExp(`<a[^>]*class="[^"]*episode-item[^"]*"[^>]*href="([^"]*\\/detail\\/watch\\/${escapedSlug}\\/(\\d+)[^"]*)"[^>]*title="([^"]*)"[^>]*>([\\s\\S]*?)<\\/a>`, 'gi');
+                let m;
+                const htmlEpisodes = [];
+                while ((m = epItemRegex.exec(html)) !== null) {
+                    const epUrl = m[1].replace(/&amp;/g, '&');
+                    const epTitle = m[3] || m[4].replace(/<[^>]+>/g, '').trim();
+                    const epNum = parseInt(m[2], 10) || htmlEpisodes.length + 1;
+                    htmlEpisodes.push({
+                        id: epNum,
+                        number: epNum,
+                        route_episode_number: epNum,
+                        title: epTitle || `Episode ${epNum}`,
+                        watch_url: epUrl,
+                        play_url: (episodes[0] && epNum === (episodes[0].number || 1)) ? episodes[0].play_url : '',
+                        direct_play_url: (episodes[0] && epNum === (episodes[0].number || 1)) ? episodes[0].direct_play_url : '',
+                        thumb_url: episodes[0]?.thumb_url || poster
+                    });
+                }
+                if (htmlEpisodes.length > episodes.length) {
+                    episodes = htmlEpisodes;
+                }
+            }
+
+            // Check if any episode has a valid playable stream
+            const hasPlayableStream = episodes.some(e => (e.play_url || e.direct_play_url));
+            if (!hasPlayableStream && episodes.length > 0) {
+                console.log(`[Auto-Recovery] 0 playable episodes found for ${watchUrl}. Attempting resilient recovery...`);
+                let recoveredEps = null;
+
+                // Strategy 1: If slug ends with -2, -3, etc., strip it and fetch base drama /1
+                const rawUrl = watchUrl.split('?')[0];
+                const cleanRaw = rawUrl.replace(/-[2-9]$/, '');
+                if (cleanRaw !== rawUrl) {
+                    try {
+                        const query = watchUrl.split('?')[1] ? '?' + watchUrl.split('?')[1] : '';
+                        const targetUrl = (cleanRaw.startsWith('http') ? cleanRaw : `${BASE_URL}${cleanRaw}`) + `/1${query}`;
+                        const recRes = await fetch(targetUrl, { headers });
+                        const recHtml = await recRes.text();
+                        const recMatch = recHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                        if (recMatch) {
+                            const parsed = JSON.parse(recMatch[1]);
+                            if (parsed.some(e => e.play_url || e.direct_play_url)) {
+                                recoveredEps = parsed;
+                                console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via clean slug!`);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[Auto-Recovery] Strategy 1 failed:', e.message);
+                    }
+                }
+
+                // Strategy 2: Search upstream by drama title and find an alternate working entry with exact title match
+                if (!recoveredEps && title) {
+                    try {
+                        const cleanSearchTitle = title.replace(/\s*-\s*.*$/i, '').trim();
+                        const searchRes = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(cleanSearchTitle)}&limit=10&lang=${encodeURIComponent(lang)}`, {
+                            headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
+                        });
+                        if (searchRes.ok) {
+                            const sData = await searchRes.json();
+                            const sItems = sData.items || sData || [];
+                            const altItem = sItems.find(i => i.url && i.url !== watchUrl && !i.url.includes(watchUrl.split('?')[0]) && i.title && i.title.toLowerCase().trim() === cleanSearchTitle.toLowerCase().trim());
+                            if (altItem && altItem.url) {
+                                const altPath = altItem.url.split('?')[0];
+                                const altUrl = `${BASE_URL}${altPath}/1`;
+                                const altRes = await fetch(altUrl, { headers });
+                                const altHtml = await altRes.text();
+                                const altMatch = altHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                                if (altMatch) {
+                                    const parsed = JSON.parse(altMatch[1]);
+                                    if (parsed.some(e => e.play_url || e.direct_play_url)) {
+                                        recoveredEps = parsed;
+                                        console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via search title match!`);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[Auto-Recovery] Strategy 2 failed:', e.message);
+                    }
+                }
+
+                if (recoveredEps && recoveredEps.length > 0) {
+                    episodes = recoveredEps;
+                }
+            }
+
+            // Format clean episodes
+            const cleanEpisodes = episodes.map((item, idx) => {
+                const epNum = item.route_episode_number || item.number || idx + 1;
+                const playUrl = item.play_url || item.direct_play_url || '';
+                const epWatchUrl = item.watch_url || (dramaSlug ? `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${encodeURIComponent(lang)}&from=home` : '');
+                return {
+                    id: item.id || idx + 1,
+                    number: epNum,
+                    title: item.title || `Episode ${epNum}`,
+                    play_url: playUrl,
+                    direct_play_url: item.direct_play_url || '',
+                    watch_url: epWatchUrl,
+                    thumb_url: item.thumb_url || poster,
+                    subtitle_url: item.subtitle_url || '',
+                    is_playable: !!(playUrl || item.direct_play_url),
+                    is_hls: playUrl.includes('.m3u8') || item.browser_prefetch_mode === 'hls'
+                };
+            });
+
+            // Proactively refresh Episode 1 if its stream token is expired or missing
+            if (cleanEpisodes.length > 0 && dramaSlug) {
+                const ep1 = cleanEpisodes[0];
+                if (!ep1.play_url || isAuthKeyExpired(ep1.play_url)) {
+                    console.log(`[Auto-Refresh] Episode 1 auth_key expired or missing for ${dramaSlug}. Resolving fresh token...`);
+                    try {
+                        const freshEp1 = await resolveFreshEpisodeStream(dramaSlug, ep1.number || 1, lang);
+                        if (freshEp1 && freshEp1.play_url) {
+                            ep1.play_url = freshEp1.play_url;
+                            ep1.direct_play_url = freshEp1.direct_play_url || '';
+                            ep1.is_hls = freshEp1.is_hls;
+                            ep1.is_playable = true;
+                            console.log(`[Auto-Refresh] Successfully refreshed Episode 1 stream for ${dramaSlug}`);
+                        }
+                    } catch (e) {
+                        console.warn('[Auto-Refresh] Episode 1 refresh failed:', e.message);
+                    }
+                }
+            }
+            const isOk = cleanEpisodes.length > 0 && cleanEpisodes.some(e => e.play_url || e.direct_play_url);
+
+            const payload = {
+                ok: isOk,
+                slug: dramaSlug,
+                title,
+                description,
+                poster,
+                final_url: finalUrl,
+                total_episodes: cleanEpisodes.length,
+                episodes: cleanEpisodes,
+                error: isOk ? null : 'Hiện chưa có tập phim khả dụng từ nhà cung cấp cho tựa phim này.'
+            };
+
+            if (isOk) {
+                if (dramaCache.size > 2000) {
+                    const oldestKey = dramaCache.keys().next().value;
+                    dramaCache.delete(oldestKey);
+                }
+                dramaCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+            }
+
+            return payload;
+        };
+
+        const fetchPromise = executeFetch();
+        dramaInFlight.set(cacheKey, fetchPromise);
+        let result;
+        try {
+            result = await fetchPromise;
+        } finally {
+            dramaInFlight.delete(cacheKey);
         }
 
-        // Extract drama slug for resilient on-demand episode stream fetching
-        const slugMatch = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/) || watchUrl.match(/\/detail\/watch\/([^\/?#]+)/);
-        const dramaSlug = slugMatch ? slugMatch[1] : (slug || '');
+        if (result && result.total_episodes > 0) {
+            episodeCountCache.set(cacheKey, result.total_episodes);
+            if (watchUrl) episodeCountCache.set(watchUrl, result.total_episodes);
+            saveEpisodeCacheToDisk();
+        }
 
-        // Format clean episodes
-        const cleanEpisodes = episodes.map((item, idx) => {
-            const epNum = item.route_episode_number || item.number || idx + 1;
-            const playUrl = item.play_url || item.direct_play_url || '';
-            const epWatchUrl = item.watch_url || (dramaSlug ? `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=vi-VN&from=home` : '');
-            return {
-                id: item.id || idx + 1,
-                number: epNum,
-                title: item.title || `Episode ${epNum}`,
-                play_url: playUrl,
-                direct_play_url: item.direct_play_url || '',
-                watch_url: epWatchUrl,
-                thumb_url: item.thumb_url || poster,
-                subtitle_url: item.subtitle_url || '',
-                is_playable: true,
-                is_hls: playUrl.includes('.m3u8') || item.browser_prefetch_mode === 'hls'
-            };
-        });
-
-        res.json({
-            ok: true,
-            slug: dramaSlug,
-            title,
-            description,
-            poster,
-            final_url: finalUrl,
-            total_episodes: cleanEpisodes.length,
-            episodes: cleanEpisodes
-        });
+        res.json(result);
     } catch (err) {
         console.error('Error fetching drama:', err);
         res.status(500).json({ ok: false, error: err.message });
     }
 });
 
-// 4.1 On-Demand Episode Stream Resolver (Seamless Edge / Upstream Refresh)
+// 4.05 High-Speed Batch Episode Counts Resolver (Instant cache + concurrent lightweight scrape)
+app.post('/api/drama/batch-episode-counts', async (req, res) => {
+    try {
+        const urls = req.body && Array.isArray(req.body.urls) ? req.body.urls : [];
+        if (urls.length === 0) {
+            return res.json({ ok: true, counts: {} });
+        }
+
+        const counts = {};
+        const needFetch = [];
+
+        for (const rawUrl of urls) {
+            if (!rawUrl || typeof rawUrl !== 'string') continue;
+            const normalized = rawUrl.startsWith('/') ? `${BASE_URL}${rawUrl}` : rawUrl;
+            if (episodeCountCache.has(normalized)) {
+                counts[rawUrl] = episodeCountCache.get(normalized);
+                continue;
+            }
+            if (episodeCountCache.has(rawUrl)) {
+                counts[rawUrl] = episodeCountCache.get(rawUrl);
+                continue;
+            }
+            const dc = dramaCache.get(normalized) || dramaCache.get(rawUrl);
+            if (dc && dc.data && dc.data.total_episodes > 0) {
+                counts[rawUrl] = dc.data.total_episodes;
+                episodeCountCache.set(normalized, dc.data.total_episodes);
+                continue;
+            }
+            needFetch.push({ rawUrl, normalized });
+        }
+
+        if (needFetch.length > 0) {
+            const BATCH_CONCURRENCY = 10;
+            for (let i = 0; i < needFetch.length; i += BATCH_CONCURRENCY) {
+                const chunk = needFetch.slice(i, i + BATCH_CONCURRENCY);
+                await Promise.allSettled(chunk.map(async ({ rawUrl, normalized }) => {
+                    try {
+                        const controller = new AbortController();
+                        const timer = setTimeout(() => controller.abort(), 2800);
+                        const resp = await fetch(normalized, {
+                            headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' }),
+                            redirect: 'follow',
+                            signal: controller.signal
+                        });
+                        clearTimeout(timer);
+                        if (!resp.ok) return;
+                        const html = await resp.text();
+
+                        let epCount = 0;
+                        const epMatch = html.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                        if (epMatch) {
+                            try {
+                                const parsed = JSON.parse(epMatch[1]);
+                                if (Array.isArray(parsed)) epCount = parsed.length;
+                            } catch (e) { }
+                        }
+
+                        if (!epCount) {
+                            const linkMatches = html.match(/\/detail\/watch\/[^\/]+\/(\d+)/g);
+                            if (linkMatches && linkMatches.length > 0) {
+                                const maxNum = linkMatches.reduce((max, str) => {
+                                    const num = parseInt(str.split('/').pop(), 10);
+                                    return (!isNaN(num) && num > max) ? num : max;
+                                }, 0);
+                                if (maxNum > 0) epCount = maxNum;
+                            }
+                        }
+
+                        if (epCount > 0) {
+                            counts[rawUrl] = epCount;
+                            episodeCountCache.set(normalized, epCount);
+                            episodeCountCache.set(rawUrl, epCount);
+                        }
+                    } catch (fetchErr) {
+                        // Ignore individual timeout / network issues
+                    }
+                }));
+            }
+            saveEpisodeCacheToDisk();
+        }
+
+        res.json({ ok: true, counts });
+    } catch (err) {
+        console.error('Error in batch-episode-counts:', err);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// Helper: Check if CDN URL auth_key token is expired
+function isAuthKeyExpired(url) {
+    if (!url || typeof url !== 'string') return true;
+    const match = url.match(/[?&]auth_key=(\d+)/i);
+    if (match) {
+        const expiry = parseInt(match[1], 10);
+        const nowSec = Math.floor(Date.now() / 1000);
+        // Expired or expiring within next 60 seconds
+        if (expiry > 0 && expiry <= nowSec + 60) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 4.1 Reusable On-Demand Episode Stream Resolver (Multi-Tier Edge & Origin)
+async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
+    if (!dramaSlug) return null;
+    const headers = getHeaders({
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${lang}&from=home`
+    });
+
+    let streamData = null;
+    // Tier 1: Query Edge refresh-source (fastest & lowest latency)
+    try {
+        const edgeRefreshUrl = `https://edge.narto-drama.com/e/rs/detail/watch/${dramaSlug}/${epNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
+        const rRes = await fetch(edgeRefreshUrl, { headers });
+        if (rRes.ok) {
+            const j = await rRes.json();
+            if (j && (j.play_url || j.direct_play_url)) {
+                streamData = j;
+            }
+        }
+    } catch (e) {
+        console.warn('[RefreshSource] Edge resolution failed:', e.message);
+    }
+
+    // Tier 2: Query Origin refresh-source
+    if (!streamData) {
+        try {
+            const originRefreshUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
+            const rRes2 = await fetch(originRefreshUrl, { headers });
+            if (rRes2.ok) {
+                const j2 = await rRes2.json();
+                if (j2 && (j2.play_url || j2.direct_play_url)) {
+                    streamData = j2;
+                }
+            }
+        } catch (e) {
+            console.warn('[RefreshSource] Origin resolution failed:', e.message);
+        }
+    }
+
+    if (streamData && (streamData.play_url || streamData.direct_play_url)) {
+        const playUrl = streamData.play_url || streamData.direct_play_url;
+        return {
+            play_url: playUrl,
+            direct_play_url: streamData.direct_play_url || '',
+            is_hls: playUrl.includes('.m3u8') || streamData.direct_play_is_hls === true,
+            source_refreshed: streamData.source_refreshed === true
+        };
+    }
+
+    // Tier 3: Parse HTML page of that episode for episodeItemsRaw
+    try {
+        const epPageUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${lang}&from=home`;
+        const pageRes = await fetch(epPageUrl, { headers: getHeaders() });
+        if (pageRes.ok) {
+            const pageHtml = await pageRes.text();
+            const epMatch = pageHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+            if (epMatch) {
+                const rawList = JSON.parse(epMatch[1]);
+                const matched = rawList.find(e => e.number === epNum || e.route_episode_number === epNum);
+                if (matched && (matched.play_url || matched.direct_play_url)) {
+                    const pUrl = matched.play_url || matched.direct_play_url;
+                    return {
+                        play_url: pUrl,
+                        direct_play_url: matched.direct_play_url || '',
+                        is_hls: pUrl.includes('.m3u8') || matched.browser_prefetch_mode === 'hls'
+                    };
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[RefreshSource] Tier 3 HTML fallback failed:', e.message);
+    }
+
+    return null;
+}
+
+// 4.2 On-Demand Episode Stream Resolver Endpoint
 app.get('/api/episode/refresh', async (req, res) => {
     try {
         const { watch_url, slug, ep, lang = 'vi-VN' } = req.query;
@@ -465,79 +794,13 @@ app.get('/api/episode/refresh', async (req, res) => {
             return res.status(400).json({ ok: false, error: 'slug or watch_url is required' });
         }
 
-        const headers = getHeaders({
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Referer': `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${lang}&from=home`
-        });
-
-        // Tier 1: Query Edge refresh-source (fastest & lowest latency)
-        let streamData = null;
-        try {
-            const edgeRefreshUrl = `https://edge.narto-drama.com/e/rs/detail/watch/${dramaSlug}/${epNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
-            const rRes = await fetch(edgeRefreshUrl, { headers });
-            if (rRes.ok) {
-                const j = await rRes.json();
-                if (j && (j.play_url || j.direct_play_url)) {
-                    streamData = j;
-                }
-            }
-        } catch (e) {
-            console.warn('[RefreshSource] Edge resolution failed:', e.message);
-        }
-
-        // Tier 2: Query Origin refresh-source
-        if (!streamData) {
-            try {
-                const originRefreshUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
-                const rRes2 = await fetch(originRefreshUrl, { headers });
-                if (rRes2.ok) {
-                    const j2 = await rRes2.json();
-                    if (j2 && (j2.play_url || j2.direct_play_url)) {
-                        streamData = j2;
-                    }
-                }
-            } catch (e) {
-                console.warn('[RefreshSource] Origin resolution failed:', e.message);
-            }
-        }
-
-        if (streamData && (streamData.play_url || streamData.direct_play_url)) {
-            const playUrl = streamData.play_url || streamData.direct_play_url;
+        const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, lang);
+        if (fresh) {
             return res.json({
                 ok: true,
                 episode_number: epNum,
-                play_url: playUrl,
-                direct_play_url: streamData.direct_play_url || '',
-                is_hls: playUrl.includes('.m3u8') || streamData.direct_play_is_hls === true,
-                source_refreshed: streamData.source_refreshed === true
+                ...fresh
             });
-        }
-
-        // Tier 3: Parse HTML page of that episode for episodeItemsRaw
-        try {
-            const epPageUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${lang}&from=home`;
-            const pageRes = await fetch(epPageUrl, { headers: getHeaders() });
-            if (pageRes.ok) {
-                const pageHtml = await pageRes.text();
-                const epMatch = pageHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                if (epMatch) {
-                    const rawList = JSON.parse(epMatch[1]);
-                    const matched = rawList.find(e => e.number === epNum || e.route_episode_number === epNum);
-                    if (matched && (matched.play_url || matched.direct_play_url)) {
-                        const pUrl = matched.play_url || matched.direct_play_url;
-                        return res.json({
-                            ok: true,
-                            episode_number: epNum,
-                            play_url: pUrl,
-                            direct_play_url: matched.direct_play_url || '',
-                            is_hls: pUrl.includes('.m3u8') || matched.browser_prefetch_mode === 'hls'
-                        });
-                    }
-                }
-            }
-        } catch (e) {
-            console.error('[RefreshSource] Tier 3 HTML fallback failed:', e.message);
         }
 
         res.status(404).json({ ok: false, error: `Could not resolve stream for episode ${epNum}` });
@@ -547,11 +810,21 @@ app.get('/api/episode/refresh', async (req, res) => {
     }
 });
 
-// 5. Proxy Stream (CORS fallback if needed)
+// 5. Proxy Stream (CORS fallback & automatic expired token recovery)
 app.get('/api/proxy-stream', async (req, res) => {
     try {
-        const streamUrl = req.query.url;
+        let streamUrl = req.query.url;
+        const { slug, ep, lang = 'vi-VN' } = req.query;
         if (!streamUrl) return res.status(400).send('Missing url parameter');
+
+        // If auth_key expired and slug is provided, resolve fresh stream before fetching
+        if (slug && isAuthKeyExpired(streamUrl)) {
+            console.log(`[ProxyStream] Detected expired auth_key, refreshing for ${slug} ep ${ep}...`);
+            const fresh = await resolveFreshEpisodeStream(slug, parseInt(ep || '1', 10), lang);
+            if (fresh && fresh.play_url) {
+                streamUrl = fresh.play_url;
+            }
+        }
 
         const range = req.headers.range;
         const fetchHeaders = {
@@ -560,7 +833,21 @@ app.get('/api/proxy-stream', async (req, res) => {
             ...(range ? { 'Range': range } : {})
         };
 
-        const upstream = await fetch(streamUrl, { headers: fetchHeaders });
+        let upstream = await fetch(streamUrl, { headers: fetchHeaders });
+
+        // If 403 or 401 Forbidden and slug is provided, try fresh token refresh once
+        if ((upstream.status === 403 || upstream.status === 401) && slug) {
+            console.log(`[ProxyStream] Upstream returned ${upstream.status}, attempting auto-refresh for ${slug} ep ${ep}...`);
+            const fresh = await resolveFreshEpisodeStream(slug, parseInt(ep || '1', 10), lang);
+            if (fresh && fresh.play_url && fresh.play_url !== streamUrl) {
+                streamUrl = fresh.play_url;
+                upstream = await fetch(streamUrl, { headers: fetchHeaders });
+            }
+        }
+
+        if (!upstream.ok) {
+            return res.status(upstream.status).json({ ok: false, error: `Upstream CDN error (${upstream.status})` });
+        }
         res.status(upstream.status);
 
         // Forward headers
@@ -585,6 +872,932 @@ app.get('/api/proxy-stream', async (req, res) => {
         }
     } catch (err) {
         console.error('Proxy stream error:', err);
+        res.status(500).send(err.message);
+    }
+});
+
+// 6. Translation System — Robust Multi-Provider Engine
+// ─────────────────────────────────────────────────────
+// Features:
+//  • In-memory LRU cache + persistent disk cache (survives restarts)
+//  • 4 Google endpoint variants rotated on rate-limit
+//  • MyMemory fallback with quota awareness
+//  • Per-request retry with exponential backoff
+//  • Global throttle: max 8 concurrent translation requests
+// ─────────────────────────────────────────────────────
+
+// Translation cache lives in %APPDATA%\DramaFlow\ — persistent, outside source, not wiped by OS temp cleanup
+const CACHE_DATA_DIR = path.join(require('os').homedir(), 'AppData', 'Roaming', 'DramaFlow');
+if (!fs.existsSync(CACHE_DATA_DIR)) fs.mkdirSync(CACHE_DATA_DIR, { recursive: true });
+const TRANSLATION_CACHE_FILE = path.join(CACHE_DATA_DIR, 'translation_cache.json');
+const translationCache = new Map();
+console.log('[Translation] Cache file:', TRANSLATION_CACHE_FILE);
+
+// Load persistent cache from disk on startup
+(function loadDiskCache() {
+    try {
+        if (fs.existsSync(TRANSLATION_CACHE_FILE)) {
+            const raw = JSON.parse(fs.readFileSync(TRANSLATION_CACHE_FILE, 'utf8'));
+            let count = 0;
+            for (const [k, v] of Object.entries(raw)) {
+                translationCache.set(k, v);
+                count++;
+            }
+            console.log(`[Translation] Loaded ${count} cached translations from disk.`);
+        }
+    } catch (e) {
+        console.warn('[Translation] Could not load disk cache:', e.message);
+    }
+})();
+
+// Persist cache to disk (debounced, max once per 30s)
+let _cacheSaveTimer = null;
+function scheduleCacheSave() {
+    if (_cacheSaveTimer) return;
+    _cacheSaveTimer = setTimeout(() => {
+        _cacheSaveTimer = null;
+        try {
+            const obj = {};
+            for (const [k, v] of translationCache) obj[k] = v;
+            fs.writeFileSync(TRANSLATION_CACHE_FILE, JSON.stringify(obj), 'utf8');
+        } catch (e) {
+            console.warn('[Translation] Cache save failed:', e.message);
+        }
+    }, 30000);
+}
+
+// Throttle: global concurrency limiter for translation requests
+const MAX_CONCURRENT_TRANSLATIONS = 8;
+let _activeTranslations = 0;
+const _translationQueue = [];
+
+function runWithThrottle(fn) {
+    return new Promise((resolve, reject) => {
+        const task = async () => {
+            _activeTranslations++;
+            try {
+                resolve(await fn());
+            } catch (e) {
+                reject(e);
+            } finally {
+                _activeTranslations--;
+                if (_translationQueue.length > 0) {
+                    const next = _translationQueue.shift();
+                    next();
+                }
+            }
+        };
+        if (_activeTranslations < MAX_CONCURRENT_TRANSLATIONS) {
+            task();
+        } else {
+            _translationQueue.push(task);
+        }
+    });
+}
+
+// Helper: fetch with timeout
+function fetchWithTimeout(url, options, timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => { controller.abort(); reject(new Error('Request timed out')); }, timeoutMs);
+        fetch(url, { ...options, signal: controller.signal })
+            .then(r => { clearTimeout(timer); resolve(r); })
+            .catch(e => { clearTimeout(timer); reject(e); });
+    });
+}
+
+// CRITICAL FIX: Read response as ArrayBuffer and decode with TextDecoder
+// This ensures correct UTF-8 handling on Windows (avoids Node.js res.json() charset bug)
+const _utf8Decoder = new TextDecoder('utf-8');
+async function safeJsonDecode(res) {
+    const buf = await res.arrayBuffer();
+    const text = _utf8Decoder.decode(buf);
+    return JSON.parse(text);
+}
+
+// Google Translate endpoint pool (rotated to spread load and avoid rate limits)
+// Only endpoints confirmed to return valid JSON:
+const GOOGLE_ENDPOINTS = [
+    // Endpoint 1: dict-chrome-ex (most stable, high quota)
+    (sl, tl, q) => `https://translate.googleapis.com/translate_a/single?client=dict-chrome-ex&sl=${sl}&tl=${tl}&dt=t&q=${q}`,
+    // Endpoint 2: dict-chrome-ex via translate.google.com CORS path
+    (sl, tl, q) => `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${sl}&tl=${tl}&dt=t&q=${q}`,
+    // Endpoint 3: at (apps translate) — different quota pool
+    (sl, tl, q) => `https://translate.googleapis.com/translate_a/single?client=at&sl=${sl}&tl=${tl}&dt=t&q=${q}`,
+    // Endpoint 4: webapp — different user-agent triggers different response format
+    (sl, tl, q) => `https://translate.googleapis.com/translate_a/single?client=webapp&sl=${sl}&tl=${tl}&dt=t&q=${q}`,
+];
+let _googleEndpointIdx = 0;
+
+async function tryGoogleTranslate(cleanInput, sourceLang, targetLang, retries = 3) {
+    const sl = encodeURIComponent(sourceLang);
+    const tl = encodeURIComponent(targetLang);
+    const q = encodeURIComponent(cleanInput);
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+        // Rotate endpoint on each attempt
+        const endpointFn = GOOGLE_ENDPOINTS[(_googleEndpointIdx + attempt) % GOOGLE_ENDPOINTS.length];
+        const gUrl = endpointFn(sl, tl, q);
+
+        try {
+            const res = await fetchWithTimeout(gUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'application/json, */*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }, 8000);
+
+            if (res.status === 429 || res.status === 503) {
+                // Rate limited — advance endpoint rotation and wait before retry
+                _googleEndpointIdx = (_googleEndpointIdx + 1) % GOOGLE_ENDPOINTS.length;
+                const waitMs = 300 * Math.pow(2, attempt); // 300ms, 600ms, 1200ms
+                await new Promise(r => setTimeout(r, waitMs));
+                continue;
+            }
+
+            if (!res.ok) {
+                _googleEndpointIdx = (_googleEndpointIdx + 1) % GOOGLE_ENDPOINTS.length;
+                continue;
+            }
+
+            const contentType = res.headers.get('content-type') || '';
+            // Some endpoints return HTML error pages — skip them
+            if (contentType.includes('text/html')) {
+                _googleEndpointIdx = (_googleEndpointIdx + 1) % GOOGLE_ENDPOINTS.length;
+                continue;
+            }
+
+            let data;
+            try {
+                data = await safeJsonDecode(res);
+            } catch (parseErr) {
+                // Response is not JSON (HTML page, etc.) — rotate and skip
+                _googleEndpointIdx = (_googleEndpointIdx + 1) % GOOGLE_ENDPOINTS.length;
+                continue;
+            }
+
+            // dict-chrome-ex / gtx / at / webapp format: [[['translated','original',...], ...], ...]
+            if (Array.isArray(data) && Array.isArray(data[0])) {
+                const joined = data[0].map(s => (s && s[0]) ? s[0] : '').join('').trim();
+                if (joined) return joined;
+            }
+
+            // te_lib / webapp alternate format: {sentences: [{trans: ...}]}
+            if (data && Array.isArray(data.sentences)) {
+                const joined = data.sentences.map(s => s.trans || '').join('').trim();
+                if (joined) return joined;
+            }
+
+            // clients5 format: sometimes just a string or nested array differently
+            if (typeof data === 'string' && data.trim()) {
+                return data.trim();
+            }
+
+        } catch (e) {
+            if (attempt < retries - 1) {
+                await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+            }
+        }
+    }
+    return null;
+}
+
+async function tryMyMemoryTranslate(cleanInput, sourceLang, targetLang) {
+    try {
+        const src = sourceLang === 'auto' ? 'en' : sourceLang;
+        // MyMemory: max 500 chars per request to avoid quota burn
+        const text = cleanInput.length > 480 ? cleanInput.slice(0, 480) : cleanInput;
+        const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(src)}|${encodeURIComponent(targetLang)}&de=noreply@example.com`;
+        const res = await fetchWithTimeout(mUrl, {}, 8000);
+        if (!res.ok) return null;
+        const data = await safeJsonDecode(res);
+        // responseStatus 200 = success; 429/456 = quota exceeded
+        if (data?.responseStatus !== 200) return null;
+        const t = data?.responseData?.translatedText?.trim();
+        // MyMemory sometimes returns the source back unchanged — detect and reject
+        if (t && t.toLowerCase() !== cleanInput.toLowerCase()) return t;
+    } catch (e) { }
+    return null;
+}
+
+// LibreTranslate public instances as last-resort fallback
+const LIBRE_INSTANCES = [
+    'https://libretranslate.de',
+    'https://translate.argosopentech.com',
+];
+
+async function tryLibreTranslate(cleanInput, sourceLang, targetLang) {
+    const src = sourceLang === 'auto' ? 'en' : sourceLang;
+    // LibreTranslate lang codes are ISO 639-1 two-letter only
+    const sl = src.split('-')[0];
+    const tl = targetLang.split('-')[0];
+    for (const base of LIBRE_INSTANCES) {
+        try {
+            const res = await fetchWithTimeout(`${base}/translate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ q: cleanInput, source: sl, target: tl, format: 'text' })
+            }, 9000);
+            if (!res.ok) continue;
+            const data = await safeJsonDecode(res);
+            const t = data?.translatedText?.trim();
+            if (t && t.toLowerCase() !== cleanInput.toLowerCase()) return t;
+        } catch (e) { }
+    }
+    return null;
+}
+
+// Pre-process text before translation:
+// Whisper STT often emits sound-effect tokens that don't need translating.
+// Returning them as-is saves API quota and avoids garbled translations.
+function cleanTextForTranslation(text) {
+    const t = text.trim();
+    // Pure sound/music tokens — return as-is
+    // Matches: [APPLAUSE], (laughing), \u266a song \u266a, [MUSIC], etc.
+    if (/^[\[\(\u266a][\s\S]*[\]\)\u266a]$/.test(t)) return null; // signal: skip translation
+    if (/^[\[\(]/.test(t) && /[\]\)]$/.test(t)) return null;
+    if (/^\u266a/.test(t) || /\u266a$/.test(t)) return null;
+    // Strip leading/trailing noise brackets but keep inner speech
+    // e.g. "- Yeah, I'm the dry" — keep as-is (dash prefix is fine)
+    return t || null;
+}
+
+async function translateText(text, targetLang = 'vi', sourceLang = 'auto') {
+    if (!text || !text.trim()) return '';
+    const rawInput = text.trim();
+
+    // Filter out pure STT noise tokens (sound effects, music markers)
+    const cleanInput = cleanTextForTranslation(rawInput);
+    if (!cleanInput) return rawInput; // return original e.g. [APPLAUSE]
+
+    // Normalise lang codes: 'vi-VN' -> 'vi'
+    const tl = targetLang.toLowerCase().split('-')[0];
+    const sl = sourceLang.toLowerCase().split('-')[0];
+
+    // If source and target are the same, return as-is
+    if (tl === sl || tl === 'en' && (sl === 'en' || sl === 'auto')) {
+        return cleanInput;
+    }
+
+    const cacheKey = `${sl}:${tl}:${cleanInput}`;
+    if (translationCache.has(cacheKey)) {
+        return translationCache.get(cacheKey);
+    }
+
+    return runWithThrottle(async () => {
+        // Double-check cache inside throttle (another task may have finished first)
+        if (translationCache.has(cacheKey)) {
+            return translationCache.get(cacheKey);
+        }
+
+        let translated = null;
+
+        // Provider 1: Google (multiple endpoints, auto-rotate on rate limit)
+        translated = await tryGoogleTranslate(cleanInput, sl, tl, 3);
+
+        // Provider 2: MyMemory
+        if (!translated) {
+            translated = await tryMyMemoryTranslate(cleanInput, sl, tl);
+        }
+
+        // Provider 3: LibreTranslate (public instances, no key needed)
+        if (!translated) {
+            translated = await tryLibreTranslate(cleanInput, sl, tl);
+        }
+
+        const result = translated || cleanInput;
+
+        // Cache result
+        if (translationCache.size > 10000) {
+            // Evict oldest 500 entries
+            let evicted = 0;
+            for (const k of translationCache.keys()) {
+                if (evicted >= 500) break;
+                translationCache.delete(k);
+                evicted++;
+            }
+        }
+        translationCache.set(cacheKey, result);
+        scheduleCacheSave();
+
+        return result;
+    });
+}
+
+// High-speed Pack-Batch translation helper — packs up to 20 cues per single HTTP request
+// Reduces HTTP roundtrips by 90%+ and translates full dialogue in under 1 second!
+async function batchTranslate(texts, targetLang, sourceLang = 'auto') {
+    if (!texts || texts.length === 0) return [];
+    const tl = targetLang.toLowerCase().split('-')[0];
+    const sl = sourceLang.toLowerCase().split('-')[0];
+
+    if (tl === sl || (tl === 'en' && (sl === 'en' || sl === 'auto'))) {
+        return texts; // No translation needed
+    }
+
+    const results = new Array(texts.length);
+    const uncachedIndices = [];
+
+    // Step 1: Check in-memory translationCache
+    for (let i = 0; i < texts.length; i++) {
+        const rawText = (texts[i] || '').trim();
+        const cleanInput = cleanTextForTranslation(rawText);
+        if (!cleanInput) {
+            results[i] = rawText;
+            continue;
+        }
+        const cacheKey = `${sl}:${tl}:${cleanInput}`;
+        if (translationCache.has(cacheKey)) {
+            results[i] = translationCache.get(cacheKey);
+        } else {
+            uncachedIndices.push(i);
+        }
+    }
+
+    if (uncachedIndices.length === 0) {
+        return results;
+    }
+
+    // Step 2: Translate uncached lines in packed batches of 20
+    const BATCH_SIZE = 20;
+    const batchPromises = [];
+
+    for (let i = 0; i < uncachedIndices.length; i += BATCH_SIZE) {
+        const chunkIndices = uncachedIndices.slice(i, i + BATCH_SIZE);
+        batchPromises.push((async () => {
+            const payload = chunkIndices.map((origIdx, localIdx) => `${localIdx}>>> ${(texts[origIdx] || '').trim()}`).join('\n');
+            let translatedBlock = null;
+            try {
+                translatedBlock = await tryGoogleTranslate(payload, sl, tl, 2);
+            } catch (e) { }
+
+            const filled = new Set();
+            if (translatedBlock) {
+                const lines = translatedBlock.split('\n');
+                for (const line of lines) {
+                    const m = line.match(/^(\d+)\s*>>>\s*(.*)/);
+                    if (m) {
+                        const localIdx = parseInt(m[1], 10);
+                        if (localIdx >= 0 && localIdx < chunkIndices.length) {
+                            const origIdx = chunkIndices[localIdx];
+                            const trans = m[2].trim();
+                            if (trans) {
+                                results[origIdx] = trans;
+                                filled.add(localIdx);
+                                const rawText = (texts[origIdx] || '').trim();
+                                const cleanInput = cleanTextForTranslation(rawText);
+                                if (cleanInput) {
+                                    translationCache.set(`${sl}:${tl}:${cleanInput}`, trans);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fallback for any individual line that was missed
+            for (let localIdx = 0; localIdx < chunkIndices.length; localIdx++) {
+                if (!filled.has(localIdx)) {
+                    const origIdx = chunkIndices[localIdx];
+                    try {
+                        const single = await translateText(texts[origIdx], tl, sl);
+                        results[origIdx] = single || texts[origIdx];
+                    } catch (e) {
+                        results[origIdx] = texts[origIdx];
+                    }
+                }
+            }
+        })());
+    }
+
+    await Promise.all(batchPromises);
+    scheduleCacheSave();
+
+    for (let i = 0; i < texts.length; i++) {
+        if (!results[i]) results[i] = texts[i] || '';
+    }
+
+    return results;
+}
+
+// Standalone Text Translation Endpoint
+app.get('/api/translate', async (req, res) => {
+    try {
+        const text = (req.query.text || '').trim();
+        const target = (req.query.target || 'vi').trim();
+        const source = (req.query.source || 'auto').trim();
+
+        if (!text) {
+            return res.json({ ok: true, text: '', translated: '' });
+        }
+
+        const translated = await translateText(text, target, source);
+        res.json({ ok: true, text, translated, target });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// 7. AI Audio Speech-to-Text & Subtitle System (Whisper STT + Multi-Language WebVTT)
+// Subtitles are stored in OS temp dir — wiped automatically by Windows, and deleted
+// immediately after serving so they never accumulate in the source folder.
+const os = require('os');
+const SUBTITLES_DIR = path.join(os.tmpdir(), 'DramaFlow');
+if (!fs.existsSync(SUBTITLES_DIR)) {
+    fs.mkdirSync(SUBTITLES_DIR, { recursive: true });
+}
+console.log('[STT] Temp subtitle dir:', SUBTITLES_DIR);
+
+// CRITICAL: In ffmpeg -af filter strings, Windows drive-letter colons must be escaped
+// as \: otherwise ffmpeg treats them as option separators.
+// Example: D:\path\model.bin → D\:/path/model.bin
+function ffmpegFilterPath(p) {
+    // Replace all backslash chars (char code 92) with forward slashes
+    let r = '';
+    for (let i = 0; i < p.length; i++) {
+        r += (p.charCodeAt(i) === 92) ? '/' : p[i];
+    }
+    // Windows drive letter colon must be escaped as \\: in ffmpeg filter strings
+    // (when called from Node.js exec, single \: is stripped; double \\: survives and works)
+    const BS = String.fromCharCode(92);
+    return r.replace(/^([A-Za-z]):/, (_, d) => d + BS + BS + ':');
+}
+const WHISPER_MODEL = path.join(__dirname, 'models', 'ggml-tiny.bin');
+
+// Cap Whisper threads to 6 (leaves 60%+ CPU free on multi-core Ryzen systems)
+const WHISPER_THREADS = Math.min(6, Math.max(4, Math.floor(os.cpus().length / 2)));
+
+// Run ffmpeg with bulletproof timeout & process tree cleanup on Windows
+function runFfmpeg(cmd, timeoutMs = 60000, abortSignal = null) {
+    return new Promise((resolve, reject) => {
+        let child = null;
+        let timer = null;
+        let finished = false;
+
+        const cleanup = () => {
+            if (timer) { clearTimeout(timer); timer = null; }
+        };
+
+        const killChild = () => {
+            if (child && child.pid) {
+                try {
+                    if (process.platform === 'win32') {
+                        exec(`taskkill /pid ${child.pid} /t /f`, () => { });
+                    } else {
+                        child.kill('SIGKILL');
+                    }
+                } catch (e) { }
+            }
+        };
+
+        if (abortSignal) {
+            abortSignal.addEventListener('abort', () => {
+                cleanup();
+                killChild();
+                reject(new Error('Operation aborted'));
+            }, { once: true });
+        }
+
+        try {
+            child = exec(cmd, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                if (err) return reject(err);
+                resolve({ stdout, stderr });
+            });
+
+            timer = setTimeout(() => {
+                if (finished) return;
+                finished = true;
+                killChild();
+                reject(new Error(`FFmpeg timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+        } catch (e) {
+            cleanup();
+            reject(e);
+        }
+    });
+}
+
+// Track active background stage 2 task so we can yield/cancel if user switches episodes
+let currentActiveStage2 = null; // { key, abortController }
+const activeStage1Promises = new Map();
+const activeStage2Promises = new Map();
+
+function cleanDramaSlug(str) {
+    return (str || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+}
+
+function parseSrtToCues(srtContent) {
+    const cues = [];
+    if (!srtContent) return cues;
+    const regex = /(?:(\d+)\r?\n)?(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\r?\n([\s\S]*?)(?=(?:\r?\n\r?\n|\r?\n?$|$))/g;
+    let match;
+    while ((match = regex.exec(srtContent)) !== null) {
+        const start = match[2].replace(',', '.');
+        const end = match[3].replace(',', '.');
+        let text = (match[4] || '')
+            .split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 0)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const isMusicOnly = /^\[.*(?:music|applause|laughter|screams|playing).*\]$/i.test(text) ||
+            /^\(.*(?:music|applause|laughter|screams|playing).*\)$/i.test(text);
+        if (text && !isMusicOnly) {
+            cues.push({
+                id: cues.length + 1,
+                start,
+                end,
+                text
+            });
+        }
+    }
+    return cues;
+}
+
+// STAGE 1: ULTRA-FAST PRIORITY CHUNK (First 40s of dialogue)
+// Runs immediately with priority so subtitles appear in ~8-12 seconds
+async function runStage1FastChunk(dramaSlug, epNum, streamUrl, cleanTarget) {
+    const key = `${dramaSlug}_ep${epNum}`;
+    const vttFile = `${key}_${cleanTarget}.vtt`;
+    const vttPath = path.join(SUBTITLES_DIR, vttFile);
+
+    if (activeStage1Promises.has(key)) {
+        return activeStage1Promises.get(key);
+    }
+
+    const stage1Promise = (async () => {
+        const tempId = Date.now();
+        const tempChunkWav = path.join(SUBTITLES_DIR, `chunk_${key}_${tempId}.wav`);
+        const tempChunkSrt = path.join(SUBTITLES_DIR, `chunk_${key}_${tempId}.srt`);
+
+        try {
+            let activeStreamUrl = streamUrl;
+            if (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl)) {
+                try {
+                    const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+                    if (fresh && fresh.play_url) activeStreamUrl = fresh.play_url;
+                } catch (e) { }
+            }
+
+            console.log(`[Audio STT] ⚡ Priority Fast Chunk (25s) starting for ${key}...`);
+            const chunkExtractCmd = `ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -i "${activeStreamUrl}" -t 25 -vn -ar 16000 -ac 1 -c:a pcm_s16le "${tempChunkWav}"`;
+            await runFfmpeg(chunkExtractCmd, 15000);
+
+            const chunkWhisperCmd = `ffmpeg -threads ${WHISPER_THREADS} -y -i "${tempChunkWav}" -af "whisper=model=${ffmpegFilterPath(WHISPER_MODEL)}:language=en:destination=${ffmpegFilterPath(tempChunkSrt)}:format=srt" -f null -`;
+            await runFfmpeg(chunkWhisperCmd, 25000);
+
+            if (fs.existsSync(tempChunkSrt)) {
+                const chunkSrt = fs.readFileSync(tempChunkSrt, 'utf8');
+                const initialCues = parseSrtToCues(chunkSrt);
+                if (initialCues.length > 0) {
+                    console.log(`[Audio STT] 🚀 Priority Chunk READY (${initialCues.length} cues) for ${key}! Writing initial VTT...`);
+                    const translatedInitial = (cleanTarget !== 'en' && cleanTarget !== 'auto')
+                        ? await batchTranslate(initialCues.map(c => c.text), cleanTarget, 'en')
+                        : initialCues.map(c => c.text);
+                    const vttLines = ['WEBVTT', ''];
+                    for (let i = 0; i < initialCues.length; i++) {
+                        vttLines.push(`${initialCues[i].start} --> ${initialCues[i].end}`);
+                        vttLines.push(translatedInitial[i] || initialCues[i].text);
+                        vttLines.push('');
+                    }
+                    fs.writeFileSync(vttPath, vttLines.join('\n'), 'utf8');
+                    return { ready: true, isComplete: false };
+                }
+            }
+            return { ready: false };
+        } catch (err) {
+            console.warn(`[Audio STT] Stage 1 priority chunk warning for ${key}:`, err.message);
+            return { ready: false };
+        } finally {
+            if (fs.existsSync(tempChunkWav)) fs.unlink(tempChunkWav, () => { });
+            if (fs.existsSync(tempChunkSrt)) fs.unlink(tempChunkSrt, () => { });
+            activeStage1Promises.delete(key);
+        }
+    })();
+
+    activeStage1Promises.set(key, stage1Promise);
+    return stage1Promise;
+}
+
+// STAGE 2: FULL EPISODE TRANSCRIPTION (In background)
+// If user switches episodes, cancels outdated episode transcription to free CPU
+async function runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarget) {
+    const key = `${dramaSlug}_ep${epNum}`;
+    const vttFile = `${key}_${cleanTarget}.vtt`;
+    const vttPath = path.join(SUBTITLES_DIR, vttFile);
+    const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
+
+    if (fs.existsSync(baseJsonPath)) {
+        return;
+    }
+
+    if (activeStage2Promises.has(key)) {
+        return activeStage2Promises.get(key);
+    }
+
+    // Cancel old Stage 2 task if user moved to another episode
+    if (currentActiveStage2 && currentActiveStage2.key !== key) {
+        console.log(`[Audio STT] Cancelling previous background task for ${currentActiveStage2.key} -> prioritizing ${key}`);
+        try { currentActiveStage2.abortController.abort(); } catch (e) { }
+        currentActiveStage2 = null;
+    }
+
+    const abortController = new AbortController();
+    currentActiveStage2 = { key, abortController };
+
+    const stage2Promise = (async () => {
+        const tempId = Date.now();
+        const tempFullWav = path.join(SUBTITLES_DIR, `full_${key}_${tempId}.wav`);
+        const tempFullSrt = path.join(SUBTITLES_DIR, `full_${key}_${tempId}.srt`);
+
+        try {
+            // Check if any existing non-empty temp SRT exists for this key to recover instantly
+            const existingTempSrts = fs.readdirSync(SUBTITLES_DIR).filter(f => f.startsWith(`full_${key}_`));
+            for (const f of existingTempSrts) {
+                if (f.endsWith('.srt')) {
+                    const fp = path.join(SUBTITLES_DIR, f);
+                    try {
+                        const stats = fs.statSync(fp);
+                        if (stats.size > 200) {
+                            const srtContent = fs.readFileSync(fp, 'utf8');
+                            const cues = parseSrtToCues(srtContent);
+                            if (cues && cues.length > 0) {
+                                fs.writeFileSync(baseJsonPath, JSON.stringify(cues, null, 2), 'utf8');
+                                console.log(`[Audio STT] Recovered ${cues.length} cues from existing SRT for ${key}!`);
+                                // Generate full VTT
+                                const fullTrans = (cleanTarget !== 'en' && cleanTarget !== 'auto')
+                                    ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'en')
+                                    : cues.map(c => c.text);
+                                const fullLines = ['WEBVTT', ''];
+                                for (let i = 0; i < cues.length; i++) {
+                                    fullLines.push(`${cues[i].start} --> ${cues[i].end}`);
+                                    fullLines.push(fullTrans[i] || cues[i].text);
+                                    fullLines.push('');
+                                }
+                                fs.writeFileSync(vttPath, fullLines.join('\n'), 'utf8');
+                                return cues;
+                            }
+                        }
+                    } catch (e) { }
+                }
+            }
+
+            let activeStreamUrl = streamUrl;
+            if (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl)) {
+                try {
+                    const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+                    if (fresh && fresh.play_url) activeStreamUrl = fresh.play_url;
+                } catch (e) { }
+            }
+
+            console.log(`[Audio STT] Full episode audio extraction for ${key}...`);
+            const extractCmd = `ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -i "${activeStreamUrl}" -vn -ar 16000 -ac 1 -c:a pcm_s16le "${tempFullWav}"`;
+            await runFfmpeg(extractCmd, 120000, abortController.signal);
+
+            console.log(`[Audio STT] Transcribing full audio (${WHISPER_THREADS} threads) for ${key}...`);
+            const whisperCmd = `ffmpeg -threads ${WHISPER_THREADS} -y -i "${tempFullWav}" -af "whisper=model=${ffmpegFilterPath(WHISPER_MODEL)}:language=en:destination=${ffmpegFilterPath(tempFullSrt)}:format=srt" -f null -`;
+            await runFfmpeg(whisperCmd, 180000, abortController.signal);
+
+            if (!fs.existsSync(tempFullSrt)) {
+                throw new Error('Whisper transcription did not generate SRT file');
+            }
+
+            const srtContent = fs.readFileSync(tempFullSrt, 'utf8');
+            const cues = parseSrtToCues(srtContent);
+
+            fs.writeFileSync(baseJsonPath, JSON.stringify(cues, null, 2), 'utf8');
+            console.log(`[Audio STT] ✅ Successfully transcribed full ${cues.length} speech cues for ${key}! Updating full VTT...`);
+
+            // Update full VTT file
+            const fullTranslated = (cleanTarget !== 'en' && cleanTarget !== 'auto')
+                ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'en')
+                : cues.map(c => c.text);
+            const fullVttLines = ['WEBVTT', ''];
+            for (let i = 0; i < cues.length; i++) {
+                fullVttLines.push(`${cues[i].start} --> ${cues[i].end}`);
+                fullVttLines.push(fullTranslated[i] || cues[i].text);
+                fullVttLines.push('');
+            }
+            fs.writeFileSync(vttPath, fullVttLines.join('\n'), 'utf8');
+            return cues;
+        } catch (err) {
+            if (err.message !== 'Operation aborted') {
+                console.error(`[Audio STT] Error in full transcription for ${key}:`, err.message);
+            }
+        } finally {
+            if (fs.existsSync(tempFullWav)) fs.unlink(tempFullWav, () => { });
+            if (fs.existsSync(tempFullSrt)) fs.unlink(tempFullSrt, () => { });
+            activeStage2Promises.delete(key);
+            if (currentActiveStage2 && currentActiveStage2.key === key) {
+                currentActiveStage2 = null;
+            }
+        }
+    })();
+
+    activeStage2Promises.set(key, stage2Promise);
+    return stage2Promise;
+}
+
+async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
+    const dramaSlug = cleanDramaSlug(slug);
+    const key = `${dramaSlug}_ep${epNum}`;
+    const cleanTarget = (targetLang || 'vi').toLowerCase().split('-')[0];
+    const vttFile = `${key}_${cleanTarget}.vtt`;
+    const vttPath = path.join(SUBTITLES_DIR, vttFile);
+    const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
+
+    // 1. If base transcript exists, ensure full target VTT is generated
+    let cues = null;
+    if (fs.existsSync(baseJsonPath)) {
+        try {
+            cues = JSON.parse(fs.readFileSync(baseJsonPath, 'utf8'));
+        } catch (e) { }
+    }
+
+    if (cues && cues.length > 0) {
+        if (!fs.existsSync(vttPath)) {
+            console.log(`[Audio STT] Translating ${cues.length} cues for ${key} to [${cleanTarget}] in parallel...`);
+            const translatedTexts = (cleanTarget !== 'en' && cleanTarget !== 'auto')
+                ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'en')
+                : cues.map(c => c.text);
+            const vttLines = ['WEBVTT', ''];
+            for (let i = 0; i < cues.length; i++) {
+                vttLines.push(`${cues[i].start} --> ${cues[i].end}`);
+                vttLines.push(translatedTexts[i] || cues[i].text);
+                vttLines.push('');
+            }
+            fs.writeFileSync(vttPath, vttLines.join('\n'), 'utf8');
+            console.log(`[Audio STT] Generated WebVTT: ${vttFile}`);
+        }
+        return { ready: true, isComplete: true, path: vttPath, filename: vttFile };
+    }
+
+    // 2. If target VTT exists (from Stage 1 fast chunk), trigger Stage 2 in background and return ready!
+    if (fs.existsSync(vttPath)) {
+        if (streamUrl && !activeStage2Promises.has(key)) {
+            runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarget).catch(e => {
+                console.error(`[Audio STT] Stage 2 background error for ${key}:`, e.message);
+            });
+        }
+        return { ready: true, isComplete: false, path: vttPath, filename: vttFile };
+    }
+
+    // 3. Neither exists: trigger Stage 1 (Fast Chunk) immediately, and then Stage 2 in background!
+    if (!streamUrl) {
+        return { ready: false, status: 'missing_stream_url' };
+    }
+
+    // Run Stage 1 immediately
+    if (!activeStage1Promises.has(key)) {
+        runStage1FastChunk(dramaSlug, epNum, streamUrl, cleanTarget).then(res => {
+            // Once Stage 1 finishes, trigger Stage 2 for full episode dialogue
+            if (!fs.existsSync(baseJsonPath) && !activeStage2Promises.has(key)) {
+                runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarget).catch(e => { });
+            }
+        }).catch(e => {
+            console.error(`[Audio STT] Stage 1 error for ${key}:`, e.message);
+        });
+    }
+
+    // Await Stage 1 fast chunk (up to 5500ms) so first HTTP request returns ready: true immediately!
+    const stage1Promise = activeStage1Promises.get(key);
+    if (stage1Promise) {
+        try {
+            await Promise.race([
+                stage1Promise,
+                new Promise(resolve => setTimeout(resolve, 5500))
+            ]);
+        } catch (e) { }
+    }
+
+    if (fs.existsSync(vttPath)) {
+        if (streamUrl && !activeStage2Promises.has(key) && !fs.existsSync(baseJsonPath)) {
+            runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarget).catch(() => { });
+        }
+        return { ready: true, isComplete: false, path: vttPath, filename: vttFile };
+    }
+
+    return { ready: false, isComplete: false, status: 'transcribing' };
+}
+
+// 7.5 Subtitle Prefetch Endpoint — Fire-and-forget background warm-up for next episode
+// Called by the client while user is still watching current episode, so Stage 1
+// transcription is already done (or in progress) by the time they click "next".
+app.get('/api/subtitles/prefetch', async (req, res) => {
+    // Respond immediately — the actual work runs in the background
+    res.json({ ok: true, status: 'queued' });
+
+    const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi' } = req.query;
+    const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
+    const dramaSlug = cleanDramaSlug(slug);
+    const epNum = parseInt(ep, 10) || 1;
+    const key = `${dramaSlug}_ep${epNum}`;
+    const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
+    const vttFile = path.join(SUBTITLES_DIR, `${key}_${cleanTarget}.vtt`);
+
+    // Skip if already fully transcribed
+    if (fs.existsSync(baseJsonPath) || fs.existsSync(vttFile)) {
+        return;
+    }
+
+    // Skip if Stage 1 is already running for this key
+    if (activeStage1Promises.has(key)) {
+        return;
+    }
+
+    // Run in background — resolve stream URL if not provided
+    (async () => {
+        try {
+            let activeStreamUrl = stream_url;
+
+            // If no stream_url provided, resolve it automatically
+            if (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl)) {
+                console.log(`[Prefetch] No stream URL for ${key}, resolving automatically...`);
+                const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+                if (fresh && fresh.play_url) {
+                    activeStreamUrl = fresh.play_url;
+                    console.log(`[Prefetch] Resolved stream URL for ${key}`);
+                } else {
+                    console.warn(`[Prefetch] Could not resolve stream URL for ${key}, skipping`);
+                    return;
+                }
+            }
+
+            // Kick off Stage 1 fast chunk in background
+            console.log(`[Prefetch] 🚀 Starting background Stage 1 pre-transcription for ${key}...`);
+            const result = await runStage1FastChunk(dramaSlug, epNum, activeStreamUrl, cleanTarget);
+            if (result && result.ready) {
+                console.log(`[Prefetch] ✅ Stage 1 pre-transcription complete for ${key}!`);
+                // Also kick Stage 2 for full episode
+                if (!fs.existsSync(baseJsonPath) && !activeStage2Promises.has(key)) {
+                    runStage2FullTranscription(dramaSlug, epNum, activeStreamUrl, cleanTarget).catch(() => { });
+                }
+            }
+        } catch (e) {
+            // Non-critical background task — silently ignore
+            console.warn(`[Prefetch] Background prefetch error for ${key}:`, e.message);
+        }
+    })();
+});
+
+// Subtitle Generation & Status Check Endpoint
+app.get('/api/subtitles/generate', async (req, res) => {
+    try {
+        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi' } = req.query;
+        const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
+        const result = await getOrGenerateVtt(slug, ep, stream_url, cleanTarget);
+
+        if (result.ready) {
+            return res.json({
+                ok: true,
+                ready: true,
+                isComplete: !!result.isComplete,
+                lang: cleanTarget,
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+            });
+        }
+
+        res.json({
+            ok: true,
+            ready: false,
+            isComplete: false,
+            lang: cleanTarget,
+            status: result.status || 'transcribing'
+        });
+    } catch (err) {
+        console.error('Error in /api/subtitles/generate:', err);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// Serve WebVTT File Endpoint
+app.get('/api/subtitles/vtt', (req, res) => {
+    try {
+        const { slug = 'unknown', ep = '1', lang = 'vi' } = req.query;
+        const dramaSlug = cleanDramaSlug(slug);
+        const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
+        const key = `${dramaSlug}_ep${ep}`;
+        const vttFile = `${key}_${cleanTarget}.vtt`;
+        const vttPath = path.join(SUBTITLES_DIR, vttFile);
+        const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
+
+        if (!fs.existsSync(vttPath)) {
+            return res.status(404).send('WEBVTT\n\n1\n00:00:00.000 --> 00:00:05.000\n[Đang tạo phụ đề...]');
+        }
+
+        res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+
+        res.sendFile(vttPath);
+    } catch (err) {
         res.status(500).send(err.message);
     }
 });

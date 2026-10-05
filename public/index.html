@@ -13,9 +13,10 @@
         rel="stylesheet">
     <!-- Font Awesome Pro/Free Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/style.css?v=2.1.2">
 </head>
 
 <body class="theme-dark">
@@ -41,12 +42,15 @@
             <!-- Primary Navigation Links -->
             <nav class="nav-links" id="main-nav-links">
                 <a href="#featured" class="nav-link active" data-nav="home" id="nav-home">Home</a>
+                <button type="button" class="nav-link nav-btn-link" data-nav="discovery" id="nav-discovery"><span
+                        id="nav-discovery-text">Khám phá</span></button>
                 <a href="#providers-section" class="nav-link" data-nav="series" id="nav-series">Movie &amp; Series</a>
                 <a href="#providers-section" class="nav-link" data-nav="anime" id="nav-anime">Anime</a>
 
                 <!-- Tags Dropdown -->
                 <div class="nav-dropdown-wrap" id="nav-tags-wrap">
-                    <button type="button" class="nav-link nav-dropdown-btn" id="nav-tags-btn" aria-haspopup="true" aria-expanded="false">
+                    <button type="button" class="nav-link nav-dropdown-btn" id="nav-tags-btn" aria-haspopup="true"
+                        aria-expanded="false">
                         <span>Tags</span>
                         <i class="fa-solid fa-chevron-down nav-caret"></i>
                     </button>
@@ -56,23 +60,34 @@
                             <span class="nav-dropdown-badge">Trending</span>
                         </div>
                         <div class="tags-grid">
-                            <button type="button" class="tag-chip-btn" data-tag="CEO"><i class="fa-solid fa-briefcase"></i> #CEO</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Revenge"><i class="fa-solid fa-bolt"></i> #Revenge</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Billionaire"><i class="fa-solid fa-crown"></i> #Billionaire</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Contract Marriage"><i class="fa-solid fa-file-contract"></i> #ContractMarriage</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Time Travel"><i class="fa-solid fa-hourglass-half"></i> #TimeTravel</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Sweet Love"><i class="fa-solid fa-heart"></i> #SweetLove</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Urban"><i class="fa-solid fa-city"></i> #Urban</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Martial Arts"><i class="fa-solid fa-hand-fist"></i> #MartialArts</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Werewolf"><i class="fa-solid fa-moon"></i> #Werewolf</button>
-                            <button type="button" class="tag-chip-btn" data-tag="Secret Identity"><i class="fa-solid fa-mask"></i> #SecretIdentity</button>
+                            <button type="button" class="tag-chip-btn" data-tag="CEO"><i
+                                    class="fa-solid fa-briefcase"></i> #CEO</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Revenge"><i
+                                    class="fa-solid fa-bolt"></i> #Revenge</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Billionaire"><i
+                                    class="fa-solid fa-crown"></i> #Billionaire</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Contract Marriage"><i
+                                    class="fa-solid fa-file-contract"></i> #ContractMarriage</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Time Travel"><i
+                                    class="fa-solid fa-hourglass-half"></i> #TimeTravel</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Sweet Love"><i
+                                    class="fa-solid fa-heart"></i> #SweetLove</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Urban"><i class="fa-solid fa-city"></i>
+                                #Urban</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Martial Arts"><i
+                                    class="fa-solid fa-hand-fist"></i> #MartialArts</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Werewolf"><i
+                                    class="fa-solid fa-moon"></i> #Werewolf</button>
+                            <button type="button" class="tag-chip-btn" data-tag="Secret Identity"><i
+                                    class="fa-solid fa-mask"></i> #SecretIdentity</button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Genre Dropdown -->
                 <div class="nav-dropdown-wrap" id="nav-genre-wrap">
-                    <button type="button" class="nav-link nav-dropdown-btn" id="nav-genre-btn" aria-haspopup="true" aria-expanded="false">
+                    <button type="button" class="nav-link nav-dropdown-btn" id="nav-genre-btn" aria-haspopup="true"
+                        aria-expanded="false">
                         <span>Genre</span>
                         <i class="fa-solid fa-chevron-down nav-caret"></i>
                     </button>
@@ -83,42 +98,48 @@
                         </div>
                         <div class="genre-grid">
                             <button type="button" class="genre-item-btn" data-genre="Romance">
-                                <div class="genre-icon-box bg-rose-glass"><i class="fa-solid fa-heart text-rose"></i></div>
+                                <div class="genre-icon-box bg-rose-glass"><i class="fa-solid fa-heart text-rose"></i>
+                                </div>
                                 <div class="genre-info">
                                     <span class="genre-name">Romance</span>
                                     <span class="genre-sub">Tình cảm • Ngọt ngào</span>
                                 </div>
                             </button>
                             <button type="button" class="genre-item-btn" data-genre="Action">
-                                <div class="genre-icon-box bg-amber-glass"><i class="fa-solid fa-bolt text-amber"></i></div>
+                                <div class="genre-icon-box bg-amber-glass"><i class="fa-solid fa-bolt text-amber"></i>
+                                </div>
                                 <div class="genre-info">
                                     <span class="genre-name">Action</span>
                                     <span class="genre-sub">Hành động • Đối kháng</span>
                                 </div>
                             </button>
                             <button type="button" class="genre-item-btn" data-genre="Comedy">
-                                <div class="genre-icon-box bg-emerald-glass"><i class="fa-solid fa-face-laugh-squint text-emerald"></i></div>
+                                <div class="genre-icon-box bg-emerald-glass"><i
+                                        class="fa-solid fa-face-laugh-squint text-emerald"></i></div>
                                 <div class="genre-info">
                                     <span class="genre-name">Comedy</span>
                                     <span class="genre-sub">Hài hước • Giải trí</span>
                                 </div>
                             </button>
                             <button type="button" class="genre-item-btn" data-genre="Fantasy">
-                                <div class="genre-icon-box bg-purple-glass"><i class="fa-solid fa-wand-magic-sparkles text-purple"></i></div>
+                                <div class="genre-icon-box bg-purple-glass"><i
+                                        class="fa-solid fa-wand-magic-sparkles text-purple"></i></div>
                                 <div class="genre-info">
                                     <span class="genre-name">Fantasy</span>
                                     <span class="genre-sub">Kỳ ảo • Huyền huyễn</span>
                                 </div>
                             </button>
                             <button type="button" class="genre-item-btn" data-genre="Thriller">
-                                <div class="genre-icon-box bg-cyan-glass"><i class="fa-solid fa-skull text-cyan"></i></div>
+                                <div class="genre-icon-box bg-cyan-glass"><i class="fa-solid fa-skull text-cyan"></i>
+                                </div>
                                 <div class="genre-info">
                                     <span class="genre-name">Thriller</span>
                                     <span class="genre-sub">Giật gân • Hồi hộp</span>
                                 </div>
                             </button>
                             <button type="button" class="genre-item-btn" data-genre="Historical">
-                                <div class="genre-icon-box bg-indigo-glass"><i class="fa-solid fa-landmark text-indigo"></i></div>
+                                <div class="genre-icon-box bg-indigo-glass"><i
+                                        class="fa-solid fa-landmark text-indigo"></i></div>
                                 <div class="genre-info">
                                     <span class="genre-name">Historical</span>
                                     <span class="genre-sub">Cổ trang • Cung đấu</span>
@@ -176,7 +197,7 @@
                 </div>
 
                 <!-- Login VIP Access Button -->
-                <button type="button" class="nav-login-btn" id="nav-login-btn" title="VIP Member Access">
+                <button type="button" class="nav-login-btn" id="nav-login-btn-block" title="VIP Member Access">
                     <i class="fa-solid fa-user"></i>
                     <span>Login</span>
                 </button>
@@ -193,7 +214,7 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-        <!-- Hero Showcase Banner (Interactive Slide Bar) -->
+        <!-- Hero Showcase Banner (Interactive 3D Coverflow Carousel) -->
         <section id="featured" class="hero-showcase">
             <div class="hero-ambient-glow" id="hero-ambient"></div>
             <div class="hero-backdrop" id="hero-backdrop"></div>
@@ -209,38 +230,39 @@
                 <i class="fa-solid fa-chevron-right"></i>
             </button>
 
-            <div class="hero-content-wrap" id="hero-content-wrap">
-                <div class="hero-meta-badges">
-                    <span class="badge-trend" id="hero-trend-badge"><i class="fa-solid fa-chart-line"></i> #1 TOP RANKED
-                        TODAY</span>
-                    <span class="badge-provider" id="hero-provider-badge">ANYREEL EXCLUSIVE</span>
-                    <span class="badge-quality">4K ULTRA HD</span>
-                </div>
-                <h1 class="hero-title" id="hero-title">Loading Featured Drama...</h1>
-                <div class="hero-rating-row">
-                    <div class="star-rating">
-                        <i class="fa-solid fa-star"></i>
-                        <i class="fa-solid fa-star"></i>
-                        <i class="fa-solid fa-star"></i>
-                        <i class="fa-solid fa-star"></i>
-                        <i class="fa-solid fa-star-half-stroke"></i>
-                        <span class="rating-num" id="hero-rating-num">4.9</span>
+            <!-- Main Layout Split: Info on Left, 3D Coverflow Cards on Right -->
+            <div class="hero-main-container">
+                <!-- Left: Drama Information & Actions -->
+                <div class="hero-content-wrap" id="hero-content-wrap">
+                    <div class="hero-tags" id="hero-tags">
+                        <span class="hero-tag-pill">Báo Thù</span>
+                        <span class="hero-tag-pill">Tình một đêm</span>
                     </div>
-                    <span class="dot-divider">•</span>
-                    <span id="hero-episodes-badge" class="meta-item"><i class="fa-solid fa-film"></i> Full Series</span>
-                    <span class="dot-divider">•</span>
-                    <span class="meta-item"><i class="fa-solid fa-shield-check text-success"></i> 100% Ad-Free</span>
+                    <h1 class="hero-title" id="hero-title">Loading Featured Drama...</h1>
+                    <p class="hero-synopsis" id="hero-desc">Discover the most captivating short drama stories with
+                        seamless HLS streaming, zero ad interruptions, and instant multi-episode navigation.</p>
+                    <div class="hero-meta-row" id="hero-meta-row">
+                        <span id="hero-episodes-badge" class="hero-ep-badge">... tập</span>
+                    </div>
+                    <div class="hero-cta-group">
+                        <button class="btn btn-hero-play" id="hero-play-btn">
+                            <i class="fa-solid fa-play"></i> <span id="hero-play-text">Xem Ngay</span>
+                        </button>
+                        <button class="btn btn-hero-detail" id="hero-more-btn">
+                            <span id="hero-detail-text">Chi Tiết</span>
+                        </button>
+                        <button class="btn btn-hero-fav" id="hero-fav-btn" title="Add to My List"
+                            aria-label="Add to My List">
+                            <i class="fa-regular fa-heart"></i>
+                        </button>
+                    </div>
                 </div>
-                <p class="hero-synopsis" id="hero-desc">Discover the most captivating short drama stories with seamless
-                    HLS streaming, zero ad interruptions, and instant multi-episode navigation.</p>
-                <div class="hero-tags" id="hero-tags"></div>
-                <div class="hero-cta-group">
-                    <button class="btn btn-hero-play" id="hero-play-btn"><i class="fa-solid fa-play"></i> Watch Episode
-                        1</button>
-                    <button class="btn btn-hero-fav" id="hero-fav-btn"><i class="fa-regular fa-heart"></i> Add to My
-                        List</button>
-                    <button class="btn btn-hero-glass" id="hero-more-btn"><i class="fa-solid fa-circle-info"></i>
-                        Synopsis</button>
+
+                <!-- Right: 3D Coverflow Vertical Posters Carousel -->
+                <div class="hero-coverflow-wrap" id="hero-coverflow-wrap">
+                    <div class="hero-coverflow-cards" id="hero-coverflow-cards">
+                        <!-- Dynamic 3D stacked cards rendered by JavaScript -->
+                    </div>
                 </div>
             </div>
 
@@ -256,8 +278,8 @@
             <div class="row-header">
                 <div class="row-title-group">
                     <div class="section-icon-badge text-emerald"><i class="fa-solid fa-clock-rotate-left"></i></div>
-                    <h2>Continue Watching</h2>
-                    <span class="row-subtitle">Resume your recent episodes</span>
+                    <h2 id="history-title">Continue Watching</h2>
+                    <span class="row-subtitle" id="history-subtitle">Resume your recent episodes</span>
                 </div>
                 <div class="row-actions-group">
                     <div class="rail-scroll-nav">
@@ -266,8 +288,8 @@
                         <button class="rail-nav-btn" id="history-next-btn" aria-label="Next"><i
                                 class="fa-solid fa-chevron-right"></i></button>
                     </div>
-                    <button class="clear-history-btn" id="clear-history-btn"><i class="fa-solid fa-trash-can"></i> Clear
-                        History</button>
+                    <button class="clear-history-btn" id="clear-history-btn"><i class="fa-solid fa-trash-can"></i> <span
+                            id="clear-history-text">Clear History</span></button>
                 </div>
             </div>
             <div class="cards-rail-container">
@@ -282,8 +304,8 @@
             <div class="row-header">
                 <div class="row-title-group">
                     <div class="section-icon-badge text-rose"><i class="fa-solid fa-fire"></i></div>
-                    <h2>Top 10 Short Dramas Today</h2>
-                    <span class="row-subtitle">Most viewed and trending releases</span>
+                    <h2 id="top10-title">Top 10 Short Dramas Today</h2>
+                    <span class="row-subtitle" id="top10-subtitle">Most viewed and trending releases</span>
                 </div>
                 <div class="rail-scroll-nav">
                     <button class="rail-nav-btn" id="top10-prev-btn" aria-label="Previous"><i
@@ -304,8 +326,8 @@
             <div class="row-header">
                 <div class="row-title-group">
                     <div class="section-icon-badge text-accent"><i class="fa-solid fa-heart"></i></div>
-                    <h2>My List (<span id="favorites-count">0</span>)</h2>
-                    <span class="row-subtitle">Your bookmarked and saved dramas</span>
+                    <h2 id="favorites-title">My List (<span id="favorites-count">0</span>)</h2>
+                    <span class="row-subtitle" id="favorites-subtitle">Your bookmarked and saved dramas</span>
                 </div>
                 <div class="rail-scroll-nav">
                     <button class="rail-nav-btn" id="favorites-prev-btn" aria-label="Previous"><i
@@ -327,15 +349,24 @@
                 <div class="row-title-group">
                     <div class="section-icon-badge text-primary"><i class="fa-solid fa-clapperboard"></i></div>
                     <div>
-                        <h2><span id="current-provider-title">AnyReel</span> Catalog</h2>
+                        <div class="catalog-heading-row">
+                            <h2><span id="current-provider-title">AnyReel</span> <span
+                                    id="catalog-title-suffix">Catalog</span></h2>
+                            <button type="button" class="catalog-discovery-btn" id="catalog-discovery-btn"
+                                title="Khám phá phim theo gu &amp; độ dài tập">
+                                <span id="catalog-discovery-btn-text">Bộ lọc thông minh</span>
+                            </button>
+                        </div>
                         <span class="row-subtitle" id="catalog-subtitle">High definition streaming collection</span>
                     </div>
                 </div>
 
                 <!-- Active Filter Banner (for Tags, Genre, Anime) -->
                 <div id="active-filter-banner" class="active-filter-banner" hidden>
-                    <span class="active-filter-pill"><i class="fa-solid fa-filter"></i> <span id="active-filter-text">#CEO</span></span>
-                    <button type="button" id="clear-filter-btn" class="clear-filter-btn" title="Reset filter to full catalog">
+                    <span class="active-filter-pill"><i class="fa-solid fa-filter"></i> <span
+                            id="active-filter-text">#CEO</span></span>
+                    <button type="button" id="clear-filter-btn" class="clear-filter-btn"
+                        title="Reset filter to full catalog">
                         <i class="fa-solid fa-xmark"></i> Clear Filter
                     </button>
                 </div>
@@ -365,8 +396,8 @@
                 <!-- Empty State -->
                 <div id="empty-state" class="empty-state-card" hidden>
                     <div class="empty-icon-wrap"><i class="fa-solid fa-folder-open"></i></div>
-                    <h3>No Titles Found</h3>
-                    <p>Try switching to another provider tab or adjusting your search keywords.</p>
+                    <h3 id="empty-title">No Titles Found</h3>
+                    <p id="empty-desc">Try switching to another provider tab or adjusting your search keywords.</p>
                 </div>
             </div>
 
@@ -388,11 +419,17 @@
             <!-- Modal Top Bar -->
             <div class="player-top-bar">
                 <div class="player-title-info">
-                    <span class="live-pill"><i class="fa-solid fa-circle text-rose live-pulse"></i> NOW STREAMING</span>
+                    <span class="live-pill"><i class="fa-solid fa-circle text-rose live-pulse"></i> <span
+                            id="live-pill-text">NOW STREAMING</span></span>
                     <h3 id="modal-drama-title">Drama Title</h3>
                     <span id="modal-episode-title" class="current-ep-pill">Episode 1</span>
                 </div>
                 <div class="player-top-actions">
+                    <button class="top-action-btn reels-toggle-btn" id="reels-feed-toggle-btn"
+                        title="Chế độ lướt dọc Reels/TikTok"><i class="fa-solid fa-mobile-screen"></i> <span
+                            class="reels-btn-badge">Reels</span></button>
+                    <button class="top-action-btn" id="modal-minimize-btn" title="Thu nhỏ màn hình (Miniplayer)"><i
+                            class="fa-solid fa-chevron-down"></i></button>
                     <button class="top-action-btn" id="theater-toggle-btn" title="Toggle Theater Mode"><i
                             class="fa-solid fa-film"></i></button>
                     <button class="top-action-btn" id="modal-fav-btn" title="Save to My List"><i
@@ -408,31 +445,181 @@
             <div class="player-main-split">
                 <!-- Left: Video Screen & Metadata -->
                 <div class="screen-column">
-                    <div class="video-ambient-glow" id="video-ambient"></div>
                     <div class="video-viewport" id="video-viewport">
+                        <!-- Ambient Glow (inside video-viewport, position:absolute) -->
+                        <div class="video-ambient-glow" id="video-ambient"></div>
+                        <canvas id="ambient-canvas" class="ambient-canvas" width="64" height="36"></canvas>
+
                         <video id="main-video" controls playsinline></video>
                         <div id="video-overlay-loader" class="video-loading-screen" hidden>
                             <div class="stream-spinner"></div>
-                            <!-- <span class="loading-status-text">Connecting to CDN Stream...</span> -->
                         </div>
-                        <div class="mobile-scroll-hint episodes-scroll-btn" id="mobile-scroll-hint" title="Scroll down for episodes">
+                        <div id="custom-subtitle-overlay" class="custom-subtitle-overlay hidden"></div>
+
+                        <!-- Miniplayer Viewport Hover Overlay -->
+                        <div class="miniplayer-viewport-overlay" id="miniplayer-viewport-overlay">
+                            <button type="button" class="mini-ov-btn" id="mini-ov-expand-btn"
+                                title="Phóng to toàn màn hình"><i class="fa-solid fa-expand"></i></button>
+                            <button type="button" class="mini-ov-btn mini-ov-play" id="mini-ov-play-btn"
+                                title="Phát / Tạm dừng"><i class="fa-solid fa-play"></i></button>
+                            <button type="button" class="mini-ov-btn" id="mini-ov-close-btn" title="Đóng hẳn"><i
+                                    class="fa-solid fa-xmark"></i></button>
+                        </div>
+
+                        <!-- Micro Action HUD (Flashes icon when using shortcuts) -->
+                        <div id="player-action-hud" class="player-action-hud" hidden>
+                            <span id="player-action-hud-icon"><i class="fa-solid fa-play"></i></span>
+                            <span id="player-action-hud-text">Play</span>
+                        </div>
+
+                        <!-- Mobile Double Tap Seek Overlays -->
+                        <div id="touch-seek-left" class="touch-seek-overlay left">
+                            <div class="seek-ripple-icon"><i class="fa-solid fa-backward"></i></div>
+                            <span>-10s</span>
+                        </div>
+                        <div id="touch-seek-right" class="touch-seek-overlay right">
+                            <div class="seek-ripple-icon"><i class="fa-solid fa-forward"></i></div>
+                            <span>+10s</span>
+                        </div>
+
+                        <!-- Swipe Episode Indicator -->
+                        <div id="swipe-ep-indicator" class="swipe-ep-indicator"></div>
+
+                        <!-- Next Episode Auto-Countdown Overlay -->
+                        <div id="next-ep-countdown" class="next-ep-countdown-card" hidden>
+                            <div class="countdown-badge" id="countdown-badge"><i class="fa-solid fa-forward-step"></i>
+                                TẬP TIẾP THEO</div>
+                            <div class="countdown-text" id="countdown-label">Tập kế tiếp sau <strong
+                                    id="countdown-timer-sec">3</strong>s</div>
+                            <div class="countdown-actions">
+                                <button type="button" id="btn-countdown-now" class="btn-cd-now"><i
+                                        class="fa-solid fa-play"></i> <span id="countdown-now-text">Xem
+                                        ngay</span></button>
+                                <button type="button" id="btn-countdown-cancel" class="btn-cd-cancel"
+                                    title="Hủy tự chuyển"><i class="fa-solid fa-xmark"></i> <span
+                                        id="countdown-cancel-text">Hủy</span></button>
+                            </div>
+                            <div class="countdown-progress-bar">
+                                <div id="countdown-progress-fill" class="countdown-fill"></div>
+                            </div>
+                        </div>
+
+                        <!-- Resume Playback Floating Banner -->
+                        <div id="resume-playback-banner" class="resume-playback-banner" hidden>
+                            <div class="resume-info">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span id="resume-playback-prompt">Tiếp tục từ <strong
+                                        id="resume-time-label">00:00</strong>?</span>
+                            </div>
+                            <div class="resume-actions">
+                                <button type="button" id="btn-resume-accept" class="btn-resume-yes">Tiếp tục</button>
+                                <button type="button" id="btn-resume-dismiss" class="btn-resume-no" title="Bỏ qua"><i
+                                        class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="mobile-scroll-hint episodes-scroll-btn" id="mobile-scroll-hint"
+                            title="Scroll down for episodes">
                             <span>Episodes</span> <i class="fa-solid fa-chevron-down"></i>
+                        </div>
+
+                        <!-- Reels Feed Mode Right Floating Action Bar (TikTok / Shorts Style) -->
+                        <div class="reels-actions-bar" id="reels-actions-bar">
+                            <div class="reels-action-item reels-author-avatar" id="reels-poster-badge" title="Tác phẩm">
+                                <img id="reels-poster-thumb" src="" alt="Poster" />
+                                <span class="reels-badge-pulse"><i class="fa-solid fa-play"></i></span>
+                            </div>
+                            <button type="button" class="reels-action-btn" id="reels-like-btn"
+                                title="Thích / Lưu danh sách">
+                                <div class="reels-icon-circle"><i class="fa-solid fa-heart"></i></div>
+                                <span class="reels-action-label" id="reels-like-label">Thích</span>
+                            </button>
+                            <button type="button" class="reels-action-btn" id="reels-episodes-btn"
+                                title="Danh sách tập">
+                                <div class="reels-icon-circle"><i class="fa-solid fa-list-ol"></i></div>
+                                <span class="reels-action-label" id="reels-ep-badge-text">Tập</span>
+                            </button>
+                            <button type="button" class="reels-action-btn" id="reels-share-btn"
+                                title="Chia sẻ liên kết">
+                                <div class="reels-icon-circle"><i class="fa-solid fa-share"></i></div>
+                                <span class="reels-action-label">Chia sẻ</span>
+                            </button>
+                            <button type="button" class="reels-action-btn" id="reels-speed-btn" title="Tốc độ phát">
+                                <div class="reels-icon-circle"><i class="fa-solid fa-gauge-high"></i></div>
+                                <span class="reels-action-label" id="reels-speed-label">1.0x</span>
+                            </button>
+                            <button type="button" class="reels-action-btn reels-exit-btn" id="reels-exit-btn"
+                                title="Thoát chế độ Reels">
+                                <div class="reels-icon-circle"><i class="fa-solid fa-compress"></i></div>
+                                <span class="reels-action-label">Thoát</span>
+                            </button>
+                        </div>
+
+                        <!-- Reels Mode Bottom Overlay Info -->
+                        <div class="reels-bottom-info" id="reels-bottom-info">
+                            <div class="reels-title-line">
+                                <span class="reels-provider-tag" id="reels-provider-tag">DramaFlow</span>
+                                <h4 class="reels-drama-title" id="reels-drama-title">Drama Title</h4>
+                            </div>
+                            <div class="reels-ep-badge" id="reels-ep-badge">
+                                <i class="fa-solid fa-circle-play"></i> <span id="reels-ep-badge-num">Tập 1</span> •
+                                <span class="reels-swipe-hint">Vuốt lên/xuống đổi tập</span>
+                            </div>
+                        </div>
+
+                        <!-- Reels Mode Bottom Thin Progress Line -->
+                        <div class="reels-progress-line" id="reels-progress-line">
+                            <div class="reels-progress-fill" id="reels-progress-fill"></div>
+                        </div>
+
+                        <!-- Reels Mode Floating Heart Particle Container (Double Tap to Like) -->
+                        <div class="reels-heart-effects" id="reels-heart-effects"></div>
+                    </div>
+
+                    <!-- Miniplayer Bottom Bar (Matches YouTube Miniplayer) -->
+                    <div class="miniplayer-bottom-bar" id="miniplayer-bottom-bar">
+                        <div class="miniplayer-progress-track" id="miniplayer-progress-track">
+                            <div class="miniplayer-progress-fill" id="miniplayer-progress-fill"></div>
+                        </div>
+                        <div class="miniplayer-info-row">
+                            <div class="miniplayer-text-wrap" id="miniplayer-expand-area" title="Bấm để phóng to">
+                                <div class="miniplayer-title" id="miniplayer-title">Drama Title</div>
+                                <div class="miniplayer-subtitle" id="miniplayer-subtitle">Episode 1</div>
+                            </div>
+                            <div class="miniplayer-actions">
+                                <button type="button" class="miniplayer-action-btn" id="miniplayer-play-btn"
+                                    title="Phát / Tạm dừng">
+                                    <i class="fa-solid fa-play"></i>
+                                </button>
+                                <button type="button" class="miniplayer-action-btn" id="miniplayer-next-btn"
+                                    title="Tập tiếp theo">
+                                    <i class="fa-solid fa-forward-step"></i>
+                                </button>
+                                <button type="button" class="miniplayer-action-btn" id="miniplayer-expand-btn"
+                                    title="Phóng to (Mở rộng)">
+                                    <i class="fa-solid fa-chevron-up"></i>
+                                </button>
+                                <button type="button" class="miniplayer-action-btn close-action"
+                                    id="miniplayer-close-btn" title="Đóng hẳn">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Commercial Media Controller Strip -->
                     <div class="media-control-strip">
                         <div class="media-nav-group">
-                            <button id="prev-ep-btn" class="ctrl-action-btn" title="Previous Episode"><i
+                            <button id="prev-ep-btn" class="ctrl-action-btn" title="Previous Episode (P)"><i
                                     class="fa-solid fa-backward-step"></i> Prev</button>
-                            <button id="next-ep-btn" class="ctrl-action-btn" title="Next Episode">Next <i
+                            <button id="next-ep-btn" class="ctrl-action-btn" title="Next Episode (N)">Next <i
                                     class="fa-solid fa-forward-step"></i></button>
                             <!-- Speed Selector -->
                             <div class="speed-control-wrap">
                                 <label for="speed-select"><i class="fa-solid fa-gauge-high"></i></label>
                                 <select id="speed-select" class="speed-select">
                                     <option value="0.75">0.75x</option>
-                                    <option value="1.0" selected>1.0x (Normal)</option>
+                                    <option value="1.0" selected>1.0x</option>
                                     <option value="1.25">1.25x</option>
                                     <option value="1.5">1.5x</option>
                                     <option value="2.0">2.0x</option>
@@ -441,13 +628,66 @@
                         </div>
 
                         <div class="media-settings-group">
-                            <label class="toggle-control" title="Automatically advance to next episode when video ends">
+                            <button type="button" id="btn-pip" class="ctrl-icon-btn" title="Picture-in-Picture (I)"><i
+                                    class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                            <button type="button" id="btn-shortcuts-hint" class="ctrl-icon-btn"
+                                title="Keyboard Shortcuts (?)"><i class="fa-solid fa-keyboard"></i></button>
+
+                            <!-- Quality Switcher Dropdown -->
+                            <div class="ctrl-dropdown-wrap" id="quality-dropdown-wrap">
+                                <button type="button" class="ctrl-dropdown-btn" id="quality-btn"
+                                    title="Switch Stream Quality">
+                                    <i class="fa-solid fa-sliders"></i>
+                                    <span id="quality-label">Auto</span>
+                                    <i class="fa-solid fa-chevron-up" style="font-size:10px"></i>
+                                </button>
+                                <div class="ctrl-dropdown-menu" id="quality-menu" hidden>
+                                    <div class="ctrl-dropdown-header" id="quality-menu-header"><i
+                                            class="fa-solid fa-sliders"></i> <span
+                                            id="quality-menu-header-text">Quality</span></div>
+                                    <button class="ctrl-dropdown-menu-item active" data-quality="auto" id="q-auto"><span
+                                            id="q-auto-text">Auto (HLS Adaptive)</span> <span class="item-check"><i
+                                                class="fa-solid fa-check"></i></span></button>
+                                    <button class="ctrl-dropdown-menu-item" data-quality="1080">1080p HD</button>
+                                    <button class="ctrl-dropdown-menu-item" data-quality="720">720p</button>
+                                    <button class="ctrl-dropdown-menu-item" data-quality="480">480p</button>
+                                </div>
+                            </div>
+
+                            <!-- Subtitle / CC Dropdown -->
+                            <div class="ctrl-dropdown-wrap" id="subtitle-dropdown-wrap">
+                                <button type="button" class="ctrl-dropdown-btn" id="subtitle-btn" title="Chọn phụ đề">
+                                    <i class="fa-solid fa-closed-captioning"></i>
+                                    <span id="subtitle-label">CC Off</span>
+                                    <i class="fa-solid fa-chevron-up" style="font-size:10px"></i>
+                                </button>
+                                <div class="ctrl-dropdown-menu" id="subtitle-menu" hidden>
+                                    <div class="ctrl-dropdown-header" id="subtitle-menu-header"><i
+                                            class="fa-solid fa-closed-captioning"></i> <span
+                                            id="subtitle-menu-header-text">Phụ đề AI Âm Thanh</span></div>
+                                    <button class="ctrl-dropdown-menu-item active" data-sub="off" id="sub-off-btn"><span
+                                            id="sub-off-text">Tắt phụ đề</span> <span class="item-check"><i
+                                                class="fa-solid fa-check"></i></span></button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="vi">🇻🇳 Tiếng Việt</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="en">🇺🇸 English</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="zh">🇨🇳 中文</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="ko">🇰🇷 한국어</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="ja">🇯🇵 日本語</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="th">🇹🇭 ภาษาไทย</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="id">🇮🇩 Bahasa Indonesia</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="fr">🇫🇷 Français</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="es">🇪🇸 Español</button>
+                                </div>
+                            </div>
+
+                            <label class="toggle-control" id="autoplay-toggle-wrapper"
+                                title="Automatically advance to next episode when video ends">
                                 <input type="checkbox" id="autoplay-next-toggle" checked>
                                 <span class="toggle-track"></span>
-                                <span class="toggle-text">Autoplay Next</span>
+                                <span class="toggle-text" id="autoplay-next-label">Autoplay Next</span>
                             </label>
-                            <span id="stream-type-badge" class="quality-badge"><i class="fa-solid fa-signal"></i> HLS
-                                1080p</span>
+                            <span id="stream-type-badge" class="quality-badge"><i class="fa-solid fa-signal"></i> <span
+                                    id="stream-type-text">HLS 1080p</span></span>
                         </div>
                     </div>
 
@@ -470,7 +710,10 @@
                 <aside class="episodes-drawer">
                     <div class="drawer-header">
                         <div class="drawer-title-row">
-                            <h4><i class="fa-solid fa-list-ol"></i> Episodes (<span id="episodes-count">0</span>)</h4>
+                            <h4><i class="fa-solid fa-list-ol"></i> <span id="episodes-drawer-heading">Episodes</span>
+                                (<span id="episodes-count">0</span>) <span id="drawer-current-ep"
+                                    class="drawer-current-ep-badge" hidden><i class="fa-solid fa-circle-play"></i>
+                                    <strong id="drawer-current-ep-num">1</strong></span></h4>
                             <div class="quick-jump-box">
                                 <input type="number" id="jump-ep-input" placeholder="Ep " min="1">
                                 <button id="jump-ep-btn" class="jump-btn">Go</button>
@@ -486,6 +729,24 @@
                         <!-- Dynamic episode buttons -->
                     </div>
                 </aside>
+            </div>
+        </div>
+        <!-- Reels Mode Episodes Bottom Sheet Modal -->
+        <div class="reels-episodes-sheet" id="reels-episodes-sheet" hidden>
+            <div class="reels-sheet-backdrop" id="reels-sheet-backdrop"></div>
+            <div class="reels-sheet-content">
+                <div class="reels-sheet-handle-bar"><span class="sheet-handle"></span></div>
+                <div class="reels-sheet-header">
+                    <div class="reels-sheet-title">
+                        <h4><i class="fa-solid fa-list-ol"></i> <span id="reels-sheet-heading">Danh Sách Tập</span>
+                            (<span id="reels-sheet-total">0</span>)</h4>
+                        <span class="reels-sheet-current-tag" id="reels-sheet-current-tag">Tập 1</span>
+                    </div>
+                    <button type="button" class="reels-sheet-close" id="reels-sheet-close" aria-label="Đóng"><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="reels-sheet-batches" id="reels-sheet-batches"></div>
+                <div class="reels-sheet-grid" id="reels-sheet-grid"></div>
             </div>
         </div>
     </div>
@@ -555,34 +816,178 @@
         </div>
     </footer>
 
+    <!-- Smart Discovery Filter Modal -->
+    <div id="discovery-modal" class="discovery-modal" hidden>
+        <div class="discovery-modal-backdrop" id="discovery-modal-backdrop"></div>
+        <div class="discovery-modal-card">
+            <button type="button" class="discovery-modal-close" id="discovery-modal-close" title="Đóng">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="discovery-modal-header">
+                <div class="discovery-badge" id="discovery-badge-text">KHÁM PHÁ THÔNG MINH</div>
+                <h3 class="discovery-heading" id="discovery-heading-text">Chọn Phim Theo Gu &amp; Thời Lượng</h3>
+                <p class="discovery-subheading" id="discovery-subheading-text">Lọc nhanh các bộ phim phù hợp với sở
+                    thích và thời gian của bạn</p>
+            </div>
+
+            <div class="discovery-modal-body">
+                <!-- Row 1: Mood Picker (NO ICONS) -->
+                <div class="discovery-row">
+                    <div class="discovery-row-label" id="mood-row-label-text">Gu phim:</div>
+                    <div class="discovery-chips-track" id="mood-chips-track">
+                        <button type="button" class="discovery-chip active" data-mood="all">
+                            <div class="chip-text">
+                                <span class="chip-title">Tất cả gu</span>
+                            </div>
+                        </button>
+                        <button type="button" class="discovery-chip" data-mood="ceo">
+                            <div class="chip-text">
+                                <span class="chip-title">Tổng Tài Bá Đạo</span>
+                                <span class="chip-sub">Hào môn • Chiều vợ</span>
+                            </div>
+                        </button>
+                        <button type="button" class="discovery-chip" data-mood="revenge">
+                            <div class="chip-text">
+                                <span class="chip-title">Báo Thù Rửa Hận</span>
+                                <span class="chip-sub">Ngược luyến • Vạch mặt</span>
+                            </div>
+                        </button>
+                        <button type="button" class="discovery-chip" data-mood="rebirth">
+                            <div class="chip-text">
+                                <span class="chip-title">Trọng Sinh / Xuyên Không</span>
+                                <span class="chip-sub">Làm lại cuộc đời</span>
+                            </div>
+                        </button>
+                        <button type="button" class="discovery-chip" data-mood="comedy">
+                            <div class="chip-text">
+                                <span class="chip-title">Hài Hước Xả Stress</span>
+                                <span class="chip-sub">Vui vẻ • Giải trí</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Row 2: Episode Length Filter (NO ICONS) -->
+                <div class="discovery-row">
+                    <div class="discovery-row-label" id="length-row-label-text">Độ dài tập:</div>
+                    <div class="discovery-chips-track" id="length-chips-track">
+                        <button type="button" class="discovery-chip active" data-length="all">
+                            <div class="chip-text">
+                                <span class="chip-title">Tất cả số tập</span>
+                            </div>
+                        </button>
+                        <button type="button" class="discovery-chip" data-length="short">
+                            <div class="chip-text">
+                                <span class="chip-title">Xem nhanh (&lt; 35 tập)</span>
+                                <span class="chip-sub">Nhanh gọn • Tiết kiệm giờ</span>
+                            </div>
+                        </button>
+                        <button type="button" class="discovery-chip" data-length="medium">
+                            <div class="chip-text">
+                                <span class="chip-title">Vừa phải (35 – 70 tập)</span>
+                                <span class="chip-sub">Cốt truyện trọn vẹn</span>
+                            </div>
+                        </button>
+                        <button type="button" class="discovery-chip" data-length="long">
+                            <div class="chip-text">
+                                <span class="chip-title">Trọn bộ dài tập (&gt; 70 tập)</span>
+                                <span class="chip-sub">Gay cấn • Đầy kịch tính</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="discovery-modal-footer">
+                <div class="discovery-footer-left">
+                    <span id="discovery-results-count" class="discovery-count-pill" hidden>0 phim</span>
+                </div>
+                <div class="discovery-footer-right">
+                    <button type="button" id="discovery-reset-btn" class="discovery-reset-btn" hidden
+                        title="Xóa tất cả bộ lọc">
+                        <span id="discovery-reset-text">Đặt lại</span>
+                    </button>
+                    <button type="button" id="discovery-apply-btn" class="discovery-apply-btn">
+                        <span id="discovery-apply-text">Xem kết quả</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Reference Modal -->
+    <div id="shortcuts-modal" class="login-modal" hidden>
+        <div class="login-modal-backdrop" id="shortcuts-backdrop"></div>
+        <div class="login-modal-card" style="max-width: 440px;">
+            <button type="button" class="login-close-btn" id="shortcuts-close-btn" title="Close"><i
+                    class="fa-solid fa-xmark"></i></button>
+            <div class="login-modal-header" style="text-align: left; margin-bottom: 16px;">
+                <div class="login-badge-pro" style="display: inline-flex;" id="shortcuts-badge"><i
+                        class="fa-solid fa-keyboard"></i> HOTKEYS
+                </div>
+                <h3 style="margin-top: 6px; font-size: 18px;" id="shortcuts-modal-title">Phím tắt trình phát Video</h3>
+            </div>
+            <div class="shortcuts-grid" id="shortcuts-grid">
+                <div class="shortcut-item"><kbd>Space</kbd> / <kbd>K</kbd> <span data-sc="play_pause">Phát / Tạm
+                        dừng</span></div>
+                <div class="shortcut-item"><kbd>F</kbd> <span data-sc="fullscreen">Toàn màn hình</span></div>
+                <div class="shortcut-item"><kbd>M</kbd> <span data-sc="mute">Bật / Tắt tiếng</span></div>
+                <div class="shortcut-item"><kbd>←</kbd> / <kbd>→</kbd> <span data-sc="seek">Tua lùi / tiến 5 giây</span>
+                </div>
+                <div class="shortcut-item"><kbd>↑</kbd> / <kbd>↓</kbd> <span data-sc="volume">Tăng / Giảm âm
+                        lượng</span></div>
+                <div class="shortcut-item"><kbd>N</kbd> <span data-sc="next_ep">Tập tiếp theo (Next)</span></div>
+                <div class="shortcut-item"><kbd>P</kbd> <span data-sc="prev_ep">Tập trước đó (Prev)</span></div>
+                <div class="shortcut-item"><kbd>I</kbd> <span data-sc="pip">Thu nhỏ góc (Picture-in-Picture)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- VIP Login / Member Access Modal -->
     <div id="login-modal" class="login-modal" hidden>
         <div class="login-modal-backdrop" id="login-modal-backdrop"></div>
         <div class="login-modal-card">
-            <button type="button" class="login-close-btn" id="login-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            <button type="button" class="login-close-btn" id="login-close-btn" title="Close"><i
+                    class="fa-solid fa-xmark"></i></button>
             <div class="login-modal-header">
-                <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> VIP ACCESS</div>
-                <h3>DramaFlow PRO Member</h3>
-                <p>Enjoy ad-free streaming, 4K multi-episode playback, and cloud watchlist synchronization.</p>
+                <div class="login-badge-pro" id="login-modal-badge"><i class="fa-solid fa-crown"></i> VIP ACCESS</div>
+                <h3 id="login-modal-title">DramaFlow PRO Member</h3>
+                <p id="login-modal-desc">Enjoy ad-free streaming, 4K multi-episode playback, and cloud watchlist
+                    synchronization.</p>
             </div>
             <form class="login-form" id="login-form">
                 <div class="login-input-group">
-                    <label for="login-username"><i class="fa-solid fa-user"></i> Member Username / Nickname</label>
-                    <input type="text" id="login-username" placeholder="Enter username or Guest VIP" value="VIP Guest" autocomplete="username">
+                    <label for="login-username" id="login-username-label"><i class="fa-solid fa-user"></i> Member
+                        Username / Nickname</label>
+                    <input type="text" id="login-username" placeholder="Enter username or Guest VIP" value="VIP Guest"
+                        autocomplete="username">
                 </div>
                 <div class="login-input-group">
-                    <label for="login-email"><i class="fa-solid fa-envelope"></i> Email (Optional)</label>
+                    <label for="login-email" id="login-email-label"><i class="fa-solid fa-envelope"></i> Email
+                        (Optional)</label>
                     <input type="email" id="login-email" placeholder="vip@dramaflow.pro" autocomplete="email">
                 </div>
-                <button type="submit" class="btn-submit-login"><i class="fa-solid fa-right-to-bracket"></i> Sign In to VIP Account</button>
-                <div class="login-guest-status">
-                    <i class="fa-solid fa-circle-check text-success"></i> Active VIP Status: <strong>Free Unlimited Ad-Free Access Enabled</strong>
+                <button type="submit" class="btn-submit-login" id="login-submit-btn"><i
+                        class="fa-solid fa-right-to-bracket"></i> <span id="login-submit-text">Sign In to VIP
+                        Account</span></button>
+                <div class="login-guest-status" id="login-guest-status">
+                    <i class="fa-solid fa-circle-check text-success"></i> <span id="login-status-text">Active VIP
+                        Status: <strong>Free Unlimited Ad-Free Access Enabled</strong></span>
                 </div>
             </form>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Global Blocking Screen Loader (Blurs everything & disables interaction) -->
+    <div id="screen-blocking-loader" class="screen-blocking-loader" hidden>
+        <div class="blocking-loader-backdrop"></div>
+        <div class="blocking-loader-center">
+            <div class="blocking-spinner"></div>
+        </div>
+    </div>
+
+    <script src="/app.js?v=2.1.2"></script>
 </body>
 
 </html>
