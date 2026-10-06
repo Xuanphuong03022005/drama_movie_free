@@ -4,7 +4,8 @@
   "description": "Custom streaming interface for short dramas",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "prefetch-subs": "node scripts/prefetch_subs.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

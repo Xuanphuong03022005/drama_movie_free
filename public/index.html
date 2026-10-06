@@ -972,6 +972,60 @@
         </div>
     </div>
 
+    <!-- Cloud AI Subtitle Setup Modal -->
+    <div id="ai-subtitle-modal" class="modal-overlay hidden" style="z-index: 99999;">
+        <div class="modal-backdrop" id="ai-sub-backdrop"></div>
+        <div class="modal-card" style="max-width: 520px; background: #18181b; border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.8); position: relative; z-index: 10;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
+                <div class="modal-title" style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #fff;">
+                    <i class="fa-solid fa-wand-magic-sparkles" style="color: #60a5fa;"></i>
+                    <span>Kích hoạt Phụ đề AI Tiếng Việt trên Vercel</span>
+                </div>
+                <button class="modal-close" id="ai-sub-close-btn" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer; line-height: 1;">&times;</button>
+            </div>
+            <div class="modal-body" style="font-size: 13.5px; line-height: 1.6; color: #a1a1aa;">
+                <p style="margin-bottom: 16px; color: #e4e4e7;">
+                    Tập phim này chưa có sẵn trong kho phụ đề tạo sẵn. Vì Vercel Serverless không hỗ trợ cài FFmpeg, bạn có thể xử lý phần dịch bằng các giải pháp sau:
+                </p>
+
+                <!-- Method 1: Groq AI -->
+                <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(96,165,250,0.3); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+                    <div style="font-weight: 600; color: #fff; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                        <span style="background: #2563eb; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 700;">Khuyên dùng</span>
+                        <span style="font-size: 14px;">1. Groq Cloud AI (Miễn phí 100% - Dịch trong 3 giây)</span>
+                    </div>
+                    <p style="font-size: 12.5px; margin-bottom: 10px; color: #a1a1aa;">
+                        Lấy API Key miễn phí trong 10 giây tại <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline; font-weight: 600;">console.groq.com/keys</a> (chỉ cần đăng nhập bằng Google).
+                    </p>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="password" id="df-groq-key-input" placeholder="Dán Groq API Key (gsk_...)" style="flex: 1; padding: 9px 12px; border-radius: 8px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2); color: #fff; font-size: 13px; outline: none;">
+                        <button id="df-save-groq-key-btn" style="padding: 9px 16px; border-radius: 8px; background: #2563eb; color: #fff; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; transition: 0.2s;">Lưu & Dịch</button>
+                    </div>
+                </div>
+
+                <!-- Method 2: Live Caption -->
+                <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+                    <div style="font-weight: 600; color: #fff; margin-bottom: 4px; font-size: 14px;">
+                        2. Phụ đề trực tiếp của Chrome / Edge (Live Caption)
+                    </div>
+                    <p style="font-size: 12.5px; margin-bottom: 0; color: #a1a1aa;">
+                        Mở Menu Chrome → Cài đặt (Settings) → Trợ năng (Accessibility) → Bật <strong>"Phụ đề trực tiếp" (Live Caption)</strong>. Trình duyệt sẽ tự động nghe tiếng và hiện phụ đề trên màn hình cho mọi video.
+                    </p>
+                </div>
+
+                <!-- Method 3: Local prefetch -->
+                <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 14px;">
+                    <div style="font-weight: 600; color: #fff; margin-bottom: 4px; font-size: 14px;">
+                        3. Bóc băng sẵn từ máy tính (Local PC)
+                    </div>
+                    <p style="font-size: 12.5px; margin-bottom: 0; color: #a1a1aa;">
+                        Chạy lệnh <code style="background: #111; padding: 2px 6px; border-radius: 4px; color: #38bdf8; font-size: 12px;">npm run prefetch-subs &lt;slug&gt;</code> trên máy local để bóc băng hàng loạt cả bộ phim rồi đẩy lên Git.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Global Blocking Screen Loader (Blurs everything & disables interaction) -->
     <div id="screen-blocking-loader" class="screen-blocking-loader" hidden>
         <div class="blocking-loader-backdrop"></div>

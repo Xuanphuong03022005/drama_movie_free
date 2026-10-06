@@ -1796,10 +1796,187 @@ app.get('/api/subtitles/prefetch', async (req, res) => {
     })();
 });
 
+function formatVttTimestamp(seconds) {
+    const s = Math.max(0, Number(seconds) || 0);
+    const hrs = Math.floor(s / 3600).toString().padStart(2, '0');
+    const mins = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+    const secs = Math.floor(s % 60).toString().padStart(2, '0');
+    const ms = Math.floor((s % 1) * 1000).toString().padStart(3, '0');
+    return `${hrs}:${mins}:${secs}.${ms}`;
+}
+
+async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey) {
+    const dramaSlug = cleanDramaSlug(slug);
+    const key = `${dramaSlug}_ep${epNum}`;
+    const vttFile = `${key}_${cleanTarget}.vtt`;
+    const vttPath = path.join(SUBTITLES_DIR, vttFile);
+    const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
+
+    let activeStreamUrl = streamUrl;
+    if (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl)) {
+        const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+        if (fresh && fresh.play_url) {
+            activeStreamUrl = fresh.play_url;
+        }
+    }
+    if (!activeStreamUrl) {
+        throw new Error('Could not resolve stream URL for episode');
+    }
+
+    let fileBlob = null;
+    let fileName = 'audio.mp4';
+
+    // 1. Fetch media stream
+    if (activeStreamUrl.includes('.m3u8')) {
+        const plRes = await fetch(activeStreamUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        const plText = await plRes.text();
+        let targetPlUrl = activeStreamUrl;
+        let segUrls = [];
+
+        if (plText.includes('#EXT-X-STREAM-INF')) {
+            const lines = plText.split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('#')) {
+                    targetPlUrl = new URL(trimmed, activeStreamUrl).href;
+                    break;
+                }
+            }
+            const varRes = await fetch(targetPlUrl, {
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+            const varText = await varRes.text();
+            for (const line of varText.split('\n')) {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('#')) {
+                    segUrls.push(new URL(trimmed, targetPlUrl).href);
+                }
+            }
+        } else {
+            for (const line of plText.split('\n')) {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('#')) {
+                    segUrls.push(new URL(trimmed, activeStreamUrl).href);
+                }
+            }
+        }
+
+        const chunks = [];
+        let totalBytes = 0;
+        const maxSegments = Math.min(segUrls.length, 12);
+        for (let i = 0; i < maxSegments; i++) {
+            try {
+                const segRes = await fetch(segUrls[i], {
+                    headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (segRes.ok) {
+                    const buf = await segRes.arrayBuffer();
+                    chunks.push(Buffer.from(buf));
+                    totalBytes += buf.byteLength;
+                    if (totalBytes > 22 * 1024 * 1024) break;
+                }
+            } catch (e) { }
+        }
+
+        if (chunks.length === 0) {
+            throw new Error('Failed to download HLS audio segments');
+        }
+
+        const combinedBuf = Buffer.concat(chunks);
+        fileBlob = new File([combinedBuf], 'audio.mp4', { type: 'video/mp4' });
+        fileName = 'audio.mp4';
+    } else {
+        const videoRes = await fetch(activeStreamUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        if (!videoRes.ok) {
+            throw new Error(`Failed to fetch video stream: HTTP ${videoRes.status}`);
+        }
+        let buf = await videoRes.arrayBuffer();
+        if (buf.byteLength > 24 * 1024 * 1024) {
+            buf = buf.slice(0, 24 * 1024 * 1024);
+        }
+        fileBlob = new File([buf], 'audio.mp4', { type: 'video/mp4' });
+    }
+
+    const isGroq = apiKey.startsWith('gsk_') || !apiKey.startsWith('sk-');
+    const endpoint = isGroq
+        ? 'https://api.groq.com/openai/v1/audio/transcriptions'
+        : 'https://api.openai.com/v1/audio/transcriptions';
+    const model = isGroq ? 'whisper-large-v3' : 'whisper-1';
+
+    const formData = new FormData();
+    formData.append('file', fileBlob);
+    formData.append('model', model);
+    formData.append('response_format', 'verbose_json');
+    formData.append('language', 'en');
+
+    console.log(`[Cloud STT] Sending ${fileName} to ${isGroq ? 'Groq' : 'OpenAI'} (${model}) for ${key}...`);
+    const cloudRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: formData
+    });
+
+    if (!cloudRes.ok) {
+        const errText = await cloudRes.text();
+        console.error(`[Cloud STT] API error (${cloudRes.status}):`, errText);
+        throw new Error(`Cloud STT API error: ${cloudRes.status} - ${errText.slice(0, 100)}`);
+    }
+
+    const cloudData = await cloudRes.json();
+    let rawSegments = cloudData.segments || [];
+
+    if (rawSegments.length === 0 && cloudData.text) {
+        rawSegments.push({ start: 0, end: 60, text: cloudData.text });
+    }
+
+    const cues = rawSegments.map((seg, idx) => ({
+        id: idx + 1,
+        start: formatVttTimestamp(seg.start),
+        end: formatVttTimestamp(seg.end),
+        text: (seg.text || '').trim()
+    })).filter(c => c.text);
+
+    try {
+        fs.writeFileSync(baseJsonPath, JSON.stringify(cues, null, 2), 'utf8');
+        fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, `${key}_base.json`), JSON.stringify(cues, null, 2), 'utf8');
+    } catch (e) { }
+
+    const translatedTexts = (cleanTarget !== 'en' && cleanTarget !== 'auto')
+        ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'en')
+        : cues.map(c => c.text);
+
+    const vttLines = ['WEBVTT', ''];
+    for (let i = 0; i < cues.length; i++) {
+        vttLines.push(`${cues[i].start} --> ${cues[i].end}`);
+        vttLines.push(translatedTexts[i] || cues[i].text);
+        vttLines.push('');
+    }
+    const vttContent = vttLines.join('\n');
+    try {
+        fs.writeFileSync(vttPath, vttContent, 'utf8');
+        fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), vttContent, 'utf8');
+    } catch (e) { }
+
+    console.log(`[Cloud STT] ✅ Successfully generated and translated ${cues.length} cues for ${key}!`);
+    return {
+        ok: true,
+        ready: true,
+        isComplete: true,
+        lang: cleanTarget,
+        url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(epNum)}&lang=${encodeURIComponent(cleanTarget)}`
+    };
+}
+
 // Subtitle Generation & Status Check Endpoint
 app.get('/api/subtitles/generate', async (req, res) => {
     try {
-        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi' } = req.query;
+        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi', groq_key = '' } = req.query;
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
 
         // 1. Check if pre-cached VTT already exists on disk (repo cache or temp)
@@ -1832,13 +2009,27 @@ app.get('/api/subtitles/generate', async (req, res) => {
             }
         }
 
-        // 3. Check if FFmpeg is available in the current environment (absent on Vercel Serverless)
+        // 3. Check for Cloud STT API Key (Groq / OpenAI) — Runs natively on Vercel Serverless without FFmpeg!
+        const cloudApiKey = (groq_key || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+        if (cloudApiKey) {
+            try {
+                const cloudResult = await transcribeViaCloudApi(slug, ep, stream_url, cleanTarget, cloudApiKey);
+                if (cloudResult && cloudResult.ready) {
+                    return res.json(cloudResult);
+                }
+            } catch (cloudErr) {
+                console.error(`[Cloud STT] Cloud transcription error for ${key}:`, cloudErr.message);
+            }
+        }
+
+        // 4. Check if FFmpeg is available in the current environment (local machine or VPS/Render)
         const hasFfmpeg = await isFfmpegAvailable();
         if (!hasFfmpeg) {
             return res.json({
                 ok: false,
-                error: 'ffmpeg_unavailable',
-                message: 'Tập phim này chưa có sẵn phụ đề tiếng Việt trong kho cache. Máy chủ Vercel Serverless không hỗ trợ FFmpeg/Whisper STT để tự bóc băng âm thanh. Bạn có thể mở xem trên máy local để hệ thống tự tạo phụ đề hoặc triển khai backend lên Render.com.'
+                error: 'cloud_key_needed',
+                can_use_cloud: true,
+                message: 'Tập phim này chưa có sẵn phụ đề tiếng Việt trên Vercel. Bạn có thể kích hoạt bóc băng tự động bằng Groq AI miễn phí hoặc bật tính năng Phụ đề trực tiếp của trình duyệt.'
             });
         }
 
