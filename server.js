@@ -1885,7 +1885,9 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         }
 
         const combinedBuf = Buffer.concat(chunks);
-        fileBlob = new File([combinedBuf], 'audio.mp4', { type: 'video/mp4' });
+        fileBlob = (typeof File !== 'undefined')
+            ? new File([combinedBuf], 'audio.mp4', { type: 'video/mp4' })
+            : new Blob([combinedBuf], { type: 'video/mp4' });
         fileName = 'audio.mp4';
     } else {
         const videoRes = await fetch(activeStreamUrl, {
@@ -1898,7 +1900,9 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         if (buf.byteLength > 24 * 1024 * 1024) {
             buf = buf.slice(0, 24 * 1024 * 1024);
         }
-        fileBlob = new File([buf], 'audio.mp4', { type: 'video/mp4' });
+        fileBlob = (typeof File !== 'undefined')
+            ? new File([buf], 'audio.mp4', { type: 'video/mp4' })
+            : new Blob([buf], { type: 'video/mp4' });
     }
 
     const isGroq = apiKey.startsWith('gsk_') || !apiKey.startsWith('sk-');
@@ -1908,7 +1912,7 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
     const model = isGroq ? 'whisper-large-v3' : 'whisper-1';
 
     const formData = new FormData();
-    formData.append('file', fileBlob);
+    formData.append('file', fileBlob, fileName);
     formData.append('model', model);
     formData.append('response_format', 'verbose_json');
     formData.append('language', 'en');
