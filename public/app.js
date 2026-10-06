@@ -981,14 +981,7 @@
     const SUBTITLE_LABELS = {
         off: 'Tắt phụ đề',
         vi: '🇻🇳 Tiếng Việt',
-        en: '🇺🇸 English',
-        zh: '🇨🇳 中文',
-        ko: '🇰🇷 한국어',
-        ja: '🇯🇵 日本語',
-        th: '🇹🇭 ภาษาไทย',
-        id: '🇮🇩 Bahasa Indonesia',
-        fr: '🇫🇷 Français',
-        es: '🇪🇸 Español'
+        en: '🇺🇸 English'
     };
 
     function loadEpisodeSubtitle(subLang) {
@@ -1090,7 +1083,7 @@
 
                 if (data && data.error === 'ffmpeg_unavailable') {
                     if (subStatusToast) subStatusToast.classList.add('hidden');
-                    showToast('Vercel Serverless không hỗ trợ FFmpeg/Whisper STT (Chạy trên Render/VPS hoặc máy local để bóc băng AI)', 'fa-triangle-exclamation');
+                    showToast(data.message || 'Tập phim này chưa có phụ đề bóc sẵn. Chạy trên máy local để AI bóc băng tự động.', 'fa-circle-info');
                     return;
                 }
 

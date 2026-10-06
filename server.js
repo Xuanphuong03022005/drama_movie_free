@@ -1313,6 +1313,7 @@ app.get('/api/translate', async (req, res) => {
 // immediately after serving so they never accumulate in the source folder.
 const os = require('os');
 const SUBTITLES_DIR = path.join(os.tmpdir(), 'DramaFlow');
+const REPO_SUBTITLES_DIR = path.join(__dirname, 'subtitles_cache');
 try {
     if (!fs.existsSync(SUBTITLES_DIR)) {
         fs.mkdirSync(SUBTITLES_DIR, { recursive: true });
@@ -1320,7 +1321,21 @@ try {
 } catch (e) {
     console.warn('[STT] Could not create SUBTITLES_DIR:', e.message);
 }
-console.log('[STT] Temp subtitle dir:', SUBTITLES_DIR);
+try {
+    if (!fs.existsSync(REPO_SUBTITLES_DIR)) {
+        fs.mkdirSync(REPO_SUBTITLES_DIR, { recursive: true });
+    }
+} catch (e) { }
+
+function findSubtitleFile(filename) {
+    if (!filename) return null;
+    const repoPath = path.join(REPO_SUBTITLES_DIR, filename);
+    if (fs.existsSync(repoPath)) return repoPath;
+    const tmpPath = path.join(SUBTITLES_DIR, filename);
+    if (fs.existsSync(tmpPath)) return tmpPath;
+    return null;
+}
+console.log('[STT] Temp subtitle dir:', SUBTITLES_DIR, '| Repo cache:', REPO_SUBTITLES_DIR);
 
 // CRITICAL: In ffmpeg -af filter strings, Windows drive-letter colons must be escaped
 // as \: otherwise ffmpeg treats them as option separators.
@@ -1634,10 +1649,17 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
     const key = `${dramaSlug}_ep${epNum}`;
     const cleanTarget = (targetLang || 'vi').toLowerCase().split('-')[0];
     const vttFile = `${key}_${cleanTarget}.vtt`;
-    const vttPath = path.join(SUBTITLES_DIR, vttFile);
-    const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
 
-    // 1. If base transcript exists, ensure full target VTT is generated
+    // 0. Check if target VTT already exists in persistent repo cache or temp dir
+    const existingVtt = findSubtitleFile(vttFile);
+    if (existingVtt) {
+        return { ready: true, isComplete: true, path: existingVtt, filename: vttFile };
+    }
+
+    const vttPath = path.join(SUBTITLES_DIR, vttFile);
+    const baseJsonPath = findSubtitleFile(`${key}_base.json`) || path.join(SUBTITLES_DIR, `${key}_base.json`);
+
+    // 1. If base transcript exists, ensure full target VTT is generated via text translation (No FFmpeg needed!)
     let cues = null;
     if (fs.existsSync(baseJsonPath)) {
         try {
@@ -1646,7 +1668,7 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
     }
 
     if (cues && cues.length > 0) {
-        if (!fs.existsSync(vttPath)) {
+        if (!fs.existsSync(vttPath) && !findSubtitleFile(vttFile)) {
             console.log(`[Audio STT] Translating ${cues.length} cues for ${key} to [${cleanTarget}] in parallel...`);
             const translatedTexts = (cleanTarget !== 'en' && cleanTarget !== 'auto')
                 ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'en')
@@ -1657,10 +1679,13 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
                 vttLines.push(translatedTexts[i] || cues[i].text);
                 vttLines.push('');
             }
-            fs.writeFileSync(vttPath, vttLines.join('\n'), 'utf8');
+            const vttContent = vttLines.join('\n');
+            try { fs.writeFileSync(vttPath, vttContent, 'utf8'); } catch (e) { }
+            try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), vttContent, 'utf8'); } catch (e) { }
             console.log(`[Audio STT] Generated WebVTT: ${vttFile}`);
         }
-        return { ready: true, isComplete: true, path: vttPath, filename: vttFile };
+        const activeVtt = findSubtitleFile(vttFile) || vttPath;
+        return { ready: true, isComplete: true, path: activeVtt, filename: vttFile };
     }
 
     // 2. If target VTT exists (from Stage 1 fast chunk), trigger Stage 2 in background and return ready!
@@ -1777,12 +1802,12 @@ app.get('/api/subtitles/generate', async (req, res) => {
         const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi' } = req.query;
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
 
-        // Check if pre-cached VTT already exists on disk (e.g. from prior run or static asset)
+        // 1. Check if pre-cached VTT already exists on disk (repo cache or temp)
         const dramaSlug = cleanDramaSlug(slug);
         const key = `${dramaSlug}_ep${ep}`;
         const vttFile = `${key}_${cleanTarget}.vtt`;
-        const vttPath = path.join(SUBTITLES_DIR, vttFile);
-        if (fs.existsSync(vttPath)) {
+        const existingVtt = findSubtitleFile(vttFile);
+        if (existingVtt) {
             return res.json({
                 ok: true,
                 ready: true,
@@ -1792,13 +1817,28 @@ app.get('/api/subtitles/generate', async (req, res) => {
             });
         }
 
-        // Check if FFmpeg is available in the current environment (e.g. absent on Vercel Serverless)
+        // 2. Check if base transcript exists — if so, we can generate the target VTT via text translation (No FFmpeg required!)
+        const existingBaseJson = findSubtitleFile(`${key}_base.json`);
+        if (existingBaseJson) {
+            const result = await getOrGenerateVtt(slug, ep, stream_url, cleanTarget);
+            if (result && result.ready) {
+                return res.json({
+                    ok: true,
+                    ready: true,
+                    isComplete: !!result.isComplete,
+                    lang: cleanTarget,
+                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+                });
+            }
+        }
+
+        // 3. Check if FFmpeg is available in the current environment (absent on Vercel Serverless)
         const hasFfmpeg = await isFfmpegAvailable();
         if (!hasFfmpeg) {
             return res.json({
                 ok: false,
                 error: 'ffmpeg_unavailable',
-                message: 'Máy chủ hiện tại (Vercel Serverless) không cài đặt FFmpeg/Whisper STT. Để chạy tính năng bóc băng âm thanh AI, vui lòng triển khai backend trên Render.com, Railway hoặc VPS.'
+                message: 'Tập phim này chưa có sẵn phụ đề tiếng Việt trong kho cache. Máy chủ Vercel Serverless không hỗ trợ FFmpeg/Whisper STT để tự bóc băng âm thanh. Bạn có thể mở xem trên máy local để hệ thống tự tạo phụ đề hoặc triển khai backend lên Render.com.'
             });
         }
 
@@ -1835,19 +1875,19 @@ app.get('/api/subtitles/vtt', (req, res) => {
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
         const key = `${dramaSlug}_ep${ep}`;
         const vttFile = `${key}_${cleanTarget}.vtt`;
-        const vttPath = path.join(SUBTITLES_DIR, vttFile);
-        const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
+        const vttPath = findSubtitleFile(vttFile);
 
-        if (!fs.existsSync(vttPath)) {
+        if (!vttPath || !fs.existsSync(vttPath)) {
             return res.status(404).send('WEBVTT\n\n1\n00:00:00.000 --> 00:00:05.000\n[Đang tạo phụ đề...]');
         }
 
         res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
 
         res.sendFile(vttPath);
     } catch (err) {
+        console.error('Error in /api/subtitles/vtt:', err);
         res.status(500).send(err.message);
     }
 });

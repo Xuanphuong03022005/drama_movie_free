@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "subtitles_cache/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
