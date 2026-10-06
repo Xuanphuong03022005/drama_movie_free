@@ -886,9 +886,17 @@ app.get('/api/proxy-stream', async (req, res) => {
 //  • Global throttle: max 8 concurrent translation requests
 // ─────────────────────────────────────────────────────
 
-// Translation cache lives in %APPDATA%\DramaFlow\ — persistent, outside source, not wiped by OS temp cleanup
-const CACHE_DATA_DIR = path.join(require('os').homedir(), 'AppData', 'Roaming', 'DramaFlow');
-if (!fs.existsSync(CACHE_DATA_DIR)) fs.mkdirSync(CACHE_DATA_DIR, { recursive: true });
+// Translation cache lives in %APPDATA%\DramaFlow\ on Windows, or os.tmpdir() on Linux/Vercel
+const isWin = process.platform === 'win32';
+const CACHE_DATA_DIR = isWin
+    ? path.join(require('os').homedir(), 'AppData', 'Roaming', 'DramaFlow')
+    : path.join(require('os').tmpdir(), 'DramaFlow');
+
+try {
+    if (!fs.existsSync(CACHE_DATA_DIR)) fs.mkdirSync(CACHE_DATA_DIR, { recursive: true });
+} catch (e) {
+    console.warn('[Translation] Could not create cache dir:', e.message);
+}
 const TRANSLATION_CACHE_FILE = path.join(CACHE_DATA_DIR, 'translation_cache.json');
 const translationCache = new Map();
 console.log('[Translation] Cache file:', TRANSLATION_CACHE_FILE);
@@ -1305,8 +1313,12 @@ app.get('/api/translate', async (req, res) => {
 // immediately after serving so they never accumulate in the source folder.
 const os = require('os');
 const SUBTITLES_DIR = path.join(os.tmpdir(), 'DramaFlow');
-if (!fs.existsSync(SUBTITLES_DIR)) {
-    fs.mkdirSync(SUBTITLES_DIR, { recursive: true });
+try {
+    if (!fs.existsSync(SUBTITLES_DIR)) {
+        fs.mkdirSync(SUBTITLES_DIR, { recursive: true });
+    }
+} catch (e) {
+    console.warn('[STT] Could not create SUBTITLES_DIR:', e.message);
 }
 console.log('[STT] Temp subtitle dir:', SUBTITLES_DIR);
 
@@ -1804,9 +1816,18 @@ app.get('/api/subtitles/vtt', (req, res) => {
 
 // SPA fallback
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('Not Found');
+    }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
