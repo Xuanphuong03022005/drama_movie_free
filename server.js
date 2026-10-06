@@ -1341,6 +1341,18 @@ const WHISPER_MODEL = path.join(__dirname, 'models', 'ggml-tiny.bin');
 // Cap Whisper threads to 6 (leaves 60%+ CPU free on multi-core Ryzen systems)
 const WHISPER_THREADS = Math.min(6, Math.max(4, Math.floor(os.cpus().length / 2)));
 
+let _ffmpegAvailable = null;
+async function isFfmpegAvailable() {
+    if (_ffmpegAvailable !== null) return _ffmpegAvailable;
+    try {
+        await execPromise('ffmpeg -version');
+        _ffmpegAvailable = true;
+    } catch (e) {
+        _ffmpegAvailable = false;
+    }
+    return _ffmpegAvailable;
+}
+
 // Run ffmpeg with bulletproof timeout & process tree cleanup on Windows
 function runFfmpeg(cmd, timeoutMs = 60000, abortSignal = null) {
     return new Promise((resolve, reject) => {
@@ -1764,6 +1776,32 @@ app.get('/api/subtitles/generate', async (req, res) => {
     try {
         const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi' } = req.query;
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
+
+        // Check if pre-cached VTT already exists on disk (e.g. from prior run or static asset)
+        const dramaSlug = cleanDramaSlug(slug);
+        const key = `${dramaSlug}_ep${ep}`;
+        const vttFile = `${key}_${cleanTarget}.vtt`;
+        const vttPath = path.join(SUBTITLES_DIR, vttFile);
+        if (fs.existsSync(vttPath)) {
+            return res.json({
+                ok: true,
+                ready: true,
+                isComplete: true,
+                lang: cleanTarget,
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+            });
+        }
+
+        // Check if FFmpeg is available in the current environment (e.g. absent on Vercel Serverless)
+        const hasFfmpeg = await isFfmpegAvailable();
+        if (!hasFfmpeg) {
+            return res.json({
+                ok: false,
+                error: 'ffmpeg_unavailable',
+                message: 'Máy chủ hiện tại (Vercel Serverless) không cài đặt FFmpeg/Whisper STT. Để chạy tính năng bóc băng âm thanh AI, vui lòng triển khai backend trên Render.com, Railway hoặc VPS.'
+            });
+        }
+
         const result = await getOrGenerateVtt(slug, ep, stream_url, cleanTarget);
 
         if (result.ready) {

@@ -1088,6 +1088,12 @@
                     return;
                 }
 
+                if (data && data.error === 'ffmpeg_unavailable') {
+                    if (subStatusToast) subStatusToast.classList.add('hidden');
+                    showToast('Vercel Serverless không hỗ trợ FFmpeg/Whisper STT (Chạy trên Render/VPS hoặc máy local để bóc băng AI)', 'fa-triangle-exclamation');
+                    return;
+                }
+
                 // Still transcribing or extracting audio
                 pollCount++;
                 if (pollCount < maxPolls) {
@@ -2453,6 +2459,49 @@
         return val;
     }
 
+    const dynamicTranslationCache = new Map();
+
+    async function translateDynamicText(text, targetLang = 'vi') {
+        if (!text || typeof text !== 'string' || !text.trim()) return text;
+        const clean = text.trim();
+        const short = (targetLang || 'vi').toLowerCase().split('-')[0];
+        if (short === 'en') return clean;
+        const cacheKey = `${short}:${clean}`;
+        if (dynamicTranslationCache.has(cacheKey)) {
+            return dynamicTranslationCache.get(cacheKey);
+        }
+
+        try {
+            // Method 1: Direct Google Translate gtx from client (fast, CORS enabled, residential IP)
+            const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(short)}&dt=t&q=${encodeURIComponent(clean)}`;
+            const res = await fetch(gUrl);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data) && Array.isArray(data[0])) {
+                    const joined = data[0].map(s => (s && s[0]) ? s[0] : '').join('').trim();
+                    if (joined) {
+                        dynamicTranslationCache.set(cacheKey, joined);
+                        return joined;
+                    }
+                }
+            }
+        } catch (e) { }
+
+        // Method 2: Server API endpoint fallback
+        try {
+            const res2 = await fetch(`/api/translate?text=${encodeURIComponent(clean)}&target=${encodeURIComponent(short)}`);
+            if (res2.ok) {
+                const j2 = await res2.json();
+                if (j2.ok && j2.translated) {
+                    dynamicTranslationCache.set(cacheKey, j2.translated);
+                    return j2.translated;
+                }
+            }
+        } catch (e) { }
+
+        return clean;
+    }
+
     function applyTranslations(langCode = currentLang) {
         const isVi = langCode.startsWith('vi');
         document.documentElement.lang = isVi ? 'vi' : (langCode.split('-')[0] || 'en');
@@ -3308,7 +3357,16 @@
 
         const applyContent = () => {
             if (heroTitle) heroTitle.textContent = item.title || 'Featured Drama Series';
-            if (heroDesc) heroDesc.textContent = item.description || 'Watch all episodes of trending short dramas in full HD without ads.';
+            if (heroDesc) {
+                const rawHeroDesc = item.description || 'Watch all episodes of trending short dramas in full HD without ads.';
+                heroDesc.textContent = rawHeroDesc;
+                const shortLang = (currentLang || 'vi').split('-')[0];
+                if (shortLang !== 'en' && item.description) {
+                    translateDynamicText(item.description, shortLang).then(trans => {
+                        if (trans && heroDesc) heroDesc.textContent = trans;
+                    });
+                }
+            }
             if (heroBackdrop) heroBackdrop.style.backgroundImage = `url('${formatPosterUrl(item.poster_url)}')`;
 
             // Episode count badge (accurate real-time episode count per drama)
@@ -4157,7 +4215,16 @@
         const cleanTitle = decodeHtml(item.title || item.slug || 'Đang tải...');
         modalDramaTitle.textContent = cleanTitle;
         detailDramaTitle.textContent = cleanTitle;
-        detailDramaDesc.textContent = decodeHtml(item.description || t('synopsis_loading'));
+        const rawInitialDesc = item.description || '';
+        detailDramaDesc.textContent = decodeHtml(rawInitialDesc || t('synopsis_loading'));
+        const initShortLang = (currentLang || 'vi').split('-')[0];
+        if (initShortLang !== 'en' && rawInitialDesc) {
+            translateDynamicText(rawInitialDesc, initShortLang).then(trans => {
+                if (trans && detailDramaDesc && !playerModal.hidden) {
+                    detailDramaDesc.textContent = trans;
+                }
+            });
+        }
         episodesCount.textContent = '...';
         episodesGrid.innerHTML = '<div style="grid-column: 1/-1; padding:24px; text-align:center; color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin"></i> Initializing streaming pipeline...</div>';
         epBatchTabs.innerHTML = '';
@@ -4223,7 +4290,18 @@
             const loadedTitle = decodeHtml(data.title || item.title);
             modalDramaTitle.textContent = loadedTitle;
             detailDramaTitle.textContent = loadedTitle;
-            if (data.description) detailDramaDesc.textContent = decodeHtml(data.description);
+            if (data.description) {
+                const rawDesc = decodeHtml(data.description);
+                detailDramaDesc.textContent = rawDesc;
+                const shortLang = (currentLang || 'vi').split('-')[0];
+                if (shortLang !== 'en') {
+                    translateDynamicText(rawDesc, shortLang).then(trans => {
+                        if (trans && detailDramaDesc && !playerModal.hidden) {
+                            detailDramaDesc.textContent = trans;
+                        }
+                    });
+                }
+            }
             episodesCount.textContent = data.total_episodes;
 
             // Setup Multi-batch tabs
