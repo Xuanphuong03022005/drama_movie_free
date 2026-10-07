@@ -1125,6 +1125,26 @@
         checkSubtitle();
     }
 
+    function stopAiSubtitleEngine() {
+        activeSubtitleRequest = null;
+        if (subtitlePollTimer) {
+            clearTimeout(subtitlePollTimer);
+            subtitlePollTimer = null;
+        }
+        currentSubtitleCues = [];
+        if (customSubtitleOverlay) {
+            customSubtitleOverlay.classList.add('hidden');
+            customSubtitleOverlay.innerHTML = '';
+        }
+        if (subStatusToast) subStatusToast.classList.add('hidden');
+        if (mainVideo) {
+            mainVideo.querySelectorAll('track').forEach(t => t.remove());
+            if (mainVideo.textTracks) {
+                Array.from(mainVideo.textTracks).forEach(t => { t.mode = 'disabled'; });
+            }
+        }
+    }
+
     function openAiSubtitleModal(customMsg) {
         const modal = document.getElementById('ai-subtitle-modal');
         if (!modal) return;
