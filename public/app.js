@@ -316,6 +316,7 @@
     async function init() {
         initLanguageSelector();
         applyTranslations(currentLang);
+        syncSubtitleUI();
         bindEvents();
         bindPlayerEvents();
         setupDiscoveryFilters();
@@ -605,8 +606,8 @@
     // VIDEO TIME UPDATE
     // ==========================================
     function handleTimeUpdate() {
-        if (!mainVideo.duration || mainVideo.duration <= 0) return;
         updateCustomSubtitleOverlay();
+        if (!mainVideo.duration || mainVideo.duration <= 0) return;
         const timeLeft = mainVideo.duration - mainVideo.currentTime;
         const pct = Math.min(100, Math.round((mainVideo.currentTime / mainVideo.duration) * 100));
         if (currentDramaData && mainVideo.currentTime > 2) {
@@ -1084,7 +1085,7 @@
 
                 if (data && (data.error === 'cloud_key_needed' || data.error === 'ffmpeg_unavailable')) {
                     if (subStatusToast) subStatusToast.classList.add('hidden');
-                    openAiSubtitleModal(data.message);
+                    console.info('[Subtitle]', data.message);
                     return;
                 }
 
@@ -1141,21 +1142,27 @@
         });
     }
 
+    function syncSubtitleUI() {
+        const sub = selectedSubtitle || 'vi';
+        const label = SUBTITLE_LABELS[sub] || sub;
+        if (subtitleLabel) subtitleLabel.textContent = sub === 'off' ? t('sub_label_off') : label;
+        if (subtitleMenu) {
+            subtitleMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => {
+                const isA = item.getAttribute('data-sub') === sub;
+                item.classList.toggle('active', isA);
+                const ch = item.querySelector('.item-check');
+                if (isA && !ch) item.innerHTML += ' <span class="item-check"><i class="fa-solid fa-check"></i></span>';
+                else if (!isA && ch) ch.remove();
+            });
+        }
+    }
+
     function selectSubtitle(sub) {
         selectedSubtitle = sub;
         localStorage.setItem('df_selected_sub', sub);
-        const label = SUBTITLE_LABELS[sub] || sub;
-        if (subtitleLabel) subtitleLabel.textContent = sub === 'off' ? t('sub_label_off') : label;
-
-        subtitleMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => {
-            const isA = item.getAttribute('data-sub') === sub;
-            item.classList.toggle('active', isA);
-            const ch = item.querySelector('.item-check');
-            if (isA && !ch) item.innerHTML += ' <span class="item-check"><i class="fa-solid fa-check"></i></span>';
-            else if (!isA && ch) ch.remove();
-        });
-
+        syncSubtitleUI();
         loadEpisodeSubtitle(sub);
+        const label = SUBTITLE_LABELS[sub] || sub;
         showToast(sub === 'off' ? t('sub_off') : `Phụ đề: ${label}`, 'fa-closed-captioning');
     }
 

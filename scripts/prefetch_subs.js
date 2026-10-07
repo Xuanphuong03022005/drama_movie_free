@@ -81,9 +81,18 @@ function sleep(ms) {
                 const gRes = await fetch(genUrl);
                 const gData = await gRes.json();
 
-                if (gData.ok && gData.ready) {
+                if (gData.ok && gData.ready && gData.url) {
                     done = true;
                     successCount++;
+                    try {
+                        const vRes = await fetch(`${BASE_URL}${gData.url}`);
+                        const vText = await vRes.text();
+                        if (vText && vText.startsWith('WEBVTT')) {
+                            fs.writeFileSync(path.join(CACHE_DIR, vttFile), vText, 'utf8');
+                        }
+                    } catch (err) {
+                        console.warn(`[Prefetch] Error saving VTT file:`, err.message);
+                    }
                     console.log(`[Tập ${epNum}/${episodes.length}] ✅ Hoàn tất Tập ${epNum}! Đã lưu: ${vttFile}`);
                     break;
                 }
