@@ -574,12 +574,13 @@
                     textLines.push(lines[i].trim());
                     i++;
                 }
-                const text = textLines.join('\n');
-                if (text && !text.startsWith('NOTE') && !text.startsWith('[Đang tạo')) {
+                const rawText = textLines.join('\n');
+                const cleanText = rawText.replace(/<[^>]+>/g, '').trim();
+                if (cleanText && !cleanText.startsWith('NOTE') && !cleanText.startsWith('[Đang tạo')) {
                     // Filter out cues that are pure English noise descriptors like [engine revving]
-                    const isPureSoundEffect = /^\s*[\(\[][a-zA-Z\s\-_]+[\)\]]\s*$/i.test(text);
+                    const isPureSoundEffect = /^\s*[\(\[][a-zA-Z\s\-_]+[\)\]]\s*$/i.test(cleanText);
                     if (!isPureSoundEffect) {
-                        cues.push({ start, end, text });
+                        cues.push({ start, end, text: cleanText });
                     }
                 }
             }
@@ -1064,14 +1065,71 @@
             }
         }
 
-        // Fast path: Check in-memory client cache (0ms instant attach)
+        // Fast path 1: Check in-memory client cache (0ms instant attach)
         if (clientSubtitleCache.has(cacheKey)) {
             const cached = clientSubtitleCache.get(cacheKey);
-            console.log(`[Subtitle] ⚡ Phụ đề Tập ${epNum} đã dịch sẵn từ trước! Áp dụng ngay lập tức.`);
+            console.log(`[Subtitle] ⚡ Phụ đề Tập ${epNum} đã có sẵn trong bộ nhớ! Áp dụng ngay lập tức.`);
             if (subStatusToast) subStatusToast.classList.add('hidden');
             attachVtt(cached.url, cached.vttText);
-            setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 400);
+            setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
             return;
+        }
+
+        // Fast path 2: Direct upstream official subtitle (0-50ms instant)
+        const cleanSubLang = subLang.toLowerCase().split('-')[0];
+        let directSubTrack = null;
+        if (Array.isArray(episode.subtitles) && episode.subtitles.length > 0) {
+            directSubTrack = episode.subtitles.find(s => {
+                const sCode = (s.language_code || '').toLowerCase();
+                return sCode === subLang || sCode.startsWith(cleanSubLang) || (cleanSubLang === 'vi' && (s.label || '').toLowerCase().includes('việt'));
+            });
+        }
+
+        let candidateUpstreamUrl = directSubTrack ? directSubTrack.subtitle_url : (episode.subtitle_url || '');
+
+        if (candidateUpstreamUrl && (directSubTrack || cleanSubLang === 'vi')) {
+            try {
+                let fetchUrl = candidateUpstreamUrl;
+                if (!fetchUrl.startsWith('http')) fetchUrl = `${window.location.origin}${fetchUrl.startsWith('/') ? '' : '/'}${fetchUrl}`;
+                fetch(fetchUrl).then(subRes => {
+                    if (subRes.ok) {
+                        return subRes.text().then(text => {
+                            if (text && text.includes('-->') && activeSubtitleRequest === reqId) {
+                                if (subStatusToast) subStatusToast.classList.add('hidden');
+                                clientSubtitleCache.set(cacheKey, { vttText: text, url: fetchUrl });
+                                attachVtt(fetchUrl, text);
+                                setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
+                            }
+                        });
+                    }
+                }).catch(() => { });
+            } catch (e) {
+                console.warn('[Subtitle] Direct upstream fetch failed:', e.message);
+            }
+        }
+
+        // Fast path 3: Upstream subtitle in another language -> Translate via fast text translator (~0.5s)
+        if (!candidateUpstreamUrl && Array.isArray(episode.subtitles) && episode.subtitles.length > 0) {
+            const fallbackTrack = episode.subtitles.find(s => (s.language_code || '').toLowerCase().startsWith('en')) || episode.subtitles[0];
+            if (fallbackTrack && fallbackTrack.subtitle_url) {
+                candidateUpstreamUrl = fallbackTrack.subtitle_url;
+            }
+        }
+
+        if (candidateUpstreamUrl && cleanSubLang === 'vi' && !directSubTrack) {
+            try {
+                const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
+                fetch(transUrl).then(r => r.json()).then(transData => {
+                    if (transData.ok && transData.vttText && activeSubtitleRequest === reqId) {
+                        if (subStatusToast) subStatusToast.classList.add('hidden');
+                        clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
+                        attachVtt(transData.url, transData.vttText);
+                        setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
+                    }
+                }).catch(() => { });
+            } catch (e) {
+                console.warn('[Subtitle] Upstream VTT translation failed:', e.message);
+            }
         }
 
         if (subStatusToast && (!currentSubtitleCues || currentSubtitleCues.length === 0)) {
@@ -1082,7 +1140,7 @@
             if (activeSubtitleRequest !== reqId) return;
             try {
                 const groqKey = localStorage.getItem('df_groq_key') || '';
-                const checkUrl = `/api/subtitles/generate?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
+                const checkUrl = `/api/subtitles/generate?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}${candidateUpstreamUrl ? '&upstream_sub_url=' + encodeURIComponent(candidateUpstreamUrl) : ''}${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
                 const res = await fetch(checkUrl);
                 const data = await res.json();
 
@@ -1120,7 +1178,7 @@
                     return;
                 }
 
-                if (data && (data.error === 'cloud_key_needed' || data.error === 'ffmpeg_unavailable')) {
+                if (data && (data.error === 'cloud_key_needed' || data.error === 'ffmpeg_unavailable' || data.error === 'subtitles_unavailable')) {
                     if (subStatusToast) subStatusToast.classList.add('hidden');
                     console.info('[Subtitle]', data.message);
                     return;
@@ -4639,6 +4697,8 @@
                     episode.play_url = epData.play_url;
                     episode.direct_play_url = epData.direct_play_url || '';
                     episode.is_hls = epData.is_hls;
+                    if (epData.subtitle_url) episode.subtitle_url = epData.subtitle_url;
+                    if (epData.subtitles && epData.subtitles.length > 0) episode.subtitles = epData.subtitles;
                     streamUrl = epData.play_url;
                 }
             } catch (e) { console.error('Error fetching episode stream:', e); }
@@ -4680,6 +4740,8 @@
                         episode.play_url = epData.play_url;
                         episode.direct_play_url = epData.direct_play_url || '';
                         episode.is_hls = epData.is_hls;
+                        if (epData.subtitle_url) episode.subtitle_url = epData.subtitle_url;
+                        if (epData.subtitles && epData.subtitles.length > 0) episode.subtitles = epData.subtitles;
                         loadVideoStream(episode);
                         return;
                     }
@@ -4769,10 +4831,53 @@
         if (clientSubtitleCache.has(cacheKey) || inFlightPrefetches.has(cacheKey)) return;
         inFlightPrefetches.add(cacheKey);
 
-        console.log(`[Subtitle Prefetch] ⏳ Đang dịch trước phụ đề cho Tập ${epNum} trong khi đang xem Tập ${currentEpisodeIndex + 1}...`);
+        console.log(`[Subtitle Prefetch] ⏳ Đang nạp/dịch trước phụ đề cho Tập ${epNum}...`);
 
         async function startPrefetch() {
             try {
+                // Fast path 1: If nextEp already has upstream official subtitle matching subLang
+                const cleanSubLang = subLang.toLowerCase().split('-')[0];
+                let directSubTrack = null;
+                if (Array.isArray(nextEp.subtitles) && nextEp.subtitles.length > 0) {
+                    directSubTrack = nextEp.subtitles.find(s => {
+                        const sCode = (s.language_code || '').toLowerCase();
+                        return sCode === subLang || sCode.startsWith(cleanSubLang) || (cleanSubLang === 'vi' && (s.label || '').toLowerCase().includes('việt'));
+                    });
+                }
+                let candidateUpstreamUrl = directSubTrack ? directSubTrack.subtitle_url : (nextEp.subtitle_url || '');
+
+                if (candidateUpstreamUrl && (directSubTrack || cleanSubLang === 'vi')) {
+                    try {
+                        let fetchUrl = candidateUpstreamUrl;
+                        if (!fetchUrl.startsWith('http')) fetchUrl = `${window.location.origin}${fetchUrl.startsWith('/') ? '' : '/'}${fetchUrl}`;
+                        const subRes = await fetch(fetchUrl);
+                        if (subRes.ok) {
+                            const text = await subRes.text();
+                            if (text && text.includes('-->')) {
+                                clientSubtitleCache.set(cacheKey, { vttText: text, url: fetchUrl });
+                                console.log(`[Subtitle Prefetch] ⚡ Phụ đề Tập ${epNum} đã sẵn sàng từ trước!`);
+                                inFlightPrefetches.delete(cacheKey);
+                                return;
+                            }
+                        }
+                    } catch (e) { }
+                }
+
+                // Fast path 2: Upstream VTT translation
+                if (candidateUpstreamUrl && cleanSubLang === 'vi') {
+                    try {
+                        const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
+                        const transRes = await fetch(transUrl);
+                        const transData = await transRes.json();
+                        if (transData.ok && transData.vttText) {
+                            clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
+                            console.log(`[Subtitle Prefetch] ⚡ Phụ đề Tập ${epNum} đã dịch xong từ trước!`);
+                            inFlightPrefetches.delete(cacheKey);
+                            return;
+                        }
+                    } catch (e) { }
+                }
+
                 let streamUrl = nextEp.play_url || nextEp.direct_play_url || '';
                 if (!streamUrl || isAuthKeyExpired(streamUrl)) {
                     const watchUrl = nextEp.watch_url || currentDramaData?.watch_url || '';
@@ -4782,17 +4887,20 @@
                         nextEp.play_url = rData.play_url;
                         nextEp.direct_play_url = rData.direct_play_url || '';
                         nextEp.is_hls = rData.is_hls;
+                        if (rData.subtitle_url) nextEp.subtitle_url = rData.subtitle_url;
+                        if (rData.subtitles && rData.subtitles.length > 0) nextEp.subtitles = rData.subtitles;
                         streamUrl = rData.play_url;
+                        if (!candidateUpstreamUrl && rData.subtitle_url) candidateUpstreamUrl = rData.subtitle_url;
                     }
                 }
 
-                if (!streamUrl) {
+                if (!streamUrl && !candidateUpstreamUrl) {
                     inFlightPrefetches.delete(cacheKey);
                     return;
                 }
 
                 const groqKey = localStorage.getItem('df_groq_key') || '';
-                const prefetchUrl = `/api/subtitles/prefetch?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
+                const prefetchUrl = `/api/subtitles/prefetch?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}${candidateUpstreamUrl ? '&upstream_sub_url=' + encodeURIComponent(candidateUpstreamUrl) : ''}${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
                 const res = await fetch(prefetchUrl);
                 const data = await res.json();
                 if (data && data.ok && data.ready) {

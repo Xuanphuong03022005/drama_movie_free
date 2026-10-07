@@ -499,6 +499,30 @@ app.get('/api/drama', async (req, res) => {
                 const epNum = item.route_episode_number || item.number || idx + 1;
                 const playUrl = item.play_url || item.direct_play_url || '';
                 const epWatchUrl = item.watch_url || (dramaSlug ? `${BASE_URL}/detail/watch/${dramaSlug}/${epNum}?lang=${encodeURIComponent(lang)}&from=home` : '');
+
+                let subUrl = item.subtitle_url || item.direct_subtitle_url || '';
+                if (subUrl && !subUrl.startsWith('http')) {
+                    subUrl = `${BASE_URL}${subUrl}`;
+                }
+
+                let directSubUrl = item.direct_subtitle_url || '';
+                if (directSubUrl && !directSubUrl.startsWith('http')) {
+                    directSubUrl = `${BASE_URL}${directSubUrl}`;
+                }
+
+                const cleanSubs = Array.isArray(item.subtitles) ? item.subtitles.map(s => {
+                    let sUrl = s.subtitle_url || '';
+                    if (sUrl && !sUrl.startsWith('http')) {
+                        sUrl = `${BASE_URL}${sUrl}`;
+                    }
+                    return {
+                        language_code: s.language_code || '',
+                        label: s.label || '',
+                        subtitle_url: sUrl,
+                        is_default: !!s.is_default
+                    };
+                }) : [];
+
                 return {
                     id: item.id || idx + 1,
                     number: epNum,
@@ -507,7 +531,10 @@ app.get('/api/drama', async (req, res) => {
                     direct_play_url: item.direct_play_url || '',
                     watch_url: epWatchUrl,
                     thumb_url: item.thumb_url || poster,
-                    subtitle_url: item.subtitle_url || '',
+                    subtitle_url: subUrl,
+                    direct_subtitle_url: directSubUrl,
+                    subtitles: cleanSubs,
+                    selected_subtitle_language: item.selected_subtitle_language || '',
                     is_playable: !!(playUrl || item.direct_play_url),
                     is_hls: playUrl.includes('.m3u8') || item.browser_prefetch_mode === 'hls'
                 };
@@ -520,10 +547,12 @@ app.get('/api/drama', async (req, res) => {
                     console.log(`[Auto-Refresh] Episode 1 auth_key expired or missing for ${dramaSlug}. Resolving fresh token...`);
                     try {
                         const freshEp1 = await resolveFreshEpisodeStream(dramaSlug, ep1.number || 1, lang);
-                        if (freshEp1 && freshEp1.play_url) {
-                            ep1.play_url = freshEp1.play_url;
+                        if (freshEp1 && (freshEp1.play_url || freshEp1.direct_play_url)) {
+                            ep1.play_url = freshEp1.play_url || ep1.play_url;
                             ep1.direct_play_url = freshEp1.direct_play_url || '';
-                            ep1.is_hls = freshEp1.is_hls;
+                            if (freshEp1.is_hls !== undefined) ep1.is_hls = freshEp1.is_hls;
+                            if (freshEp1.subtitle_url) ep1.subtitle_url = freshEp1.subtitle_url;
+                            if (freshEp1.subtitles && freshEp1.subtitles.length > 0) ep1.subtitles = freshEp1.subtitles;
                             ep1.is_playable = true;
                             console.log(`[Auto-Refresh] Successfully refreshed Episode 1 stream for ${dramaSlug}`);
                         }
@@ -722,11 +751,22 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
 
     if (streamData && (streamData.play_url || streamData.direct_play_url)) {
         const playUrl = streamData.play_url || streamData.direct_play_url;
+        let subUrl = streamData.subtitle_url || streamData.direct_subtitle_url || '';
+        if (subUrl && !subUrl.startsWith('http')) subUrl = `${BASE_URL}${subUrl}`;
+        const cleanSubs = Array.isArray(streamData.subtitles) ? streamData.subtitles.map(s => ({
+            language_code: s.language_code || '',
+            label: s.label || '',
+            subtitle_url: s.subtitle_url ? (s.subtitle_url.startsWith('http') ? s.subtitle_url : `${BASE_URL}${s.subtitle_url}`) : '',
+            is_default: !!s.is_default
+        })) : [];
+
         return {
             play_url: playUrl,
             direct_play_url: streamData.direct_play_url || '',
             is_hls: playUrl.includes('.m3u8') || streamData.direct_play_is_hls === true,
-            source_refreshed: streamData.source_refreshed === true
+            source_refreshed: streamData.source_refreshed === true,
+            subtitle_url: subUrl,
+            subtitles: cleanSubs
         };
     }
 
@@ -742,10 +782,21 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
                 const matched = rawList.find(e => e.number === epNum || e.route_episode_number === epNum);
                 if (matched && (matched.play_url || matched.direct_play_url)) {
                     const pUrl = matched.play_url || matched.direct_play_url;
+                    let subUrl = matched.subtitle_url || matched.direct_subtitle_url || '';
+                    if (subUrl && !subUrl.startsWith('http')) subUrl = `${BASE_URL}${subUrl}`;
+                    const cleanSubs = Array.isArray(matched.subtitles) ? matched.subtitles.map(s => ({
+                        language_code: s.language_code || '',
+                        label: s.label || '',
+                        subtitle_url: s.subtitle_url ? (s.subtitle_url.startsWith('http') ? s.subtitle_url : `${BASE_URL}${s.subtitle_url}`) : '',
+                        is_default: !!s.is_default
+                    })) : [];
+
                     return {
                         play_url: pUrl,
                         direct_play_url: matched.direct_play_url || '',
-                        is_hls: pUrl.includes('.m3u8') || matched.browser_prefetch_mode === 'hls'
+                        is_hls: pUrl.includes('.m3u8') || matched.browser_prefetch_mode === 'hls',
+                        subtitle_url: subUrl,
+                        subtitles: cleanSubs
                     };
                 }
             }
@@ -791,6 +842,26 @@ app.get('/api/episode/refresh', async (req, res) => {
     } catch (err) {
         console.error('[RefreshSource] Error:', err);
         res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// 4.3 Proxy Upstream WebVTT Subtitles (/e/s/*)
+app.get('/e/s/*', async (req, res) => {
+    try {
+        const targetUrl = `${BASE_URL}${req.originalUrl}`;
+        const upstreamRes = await fetch(targetUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': BASE_URL
+            }
+        });
+        res.set('Content-Type', 'text/vtt; charset=utf-8');
+        res.set('Access-Control-Allow-Origin', '*');
+        const text = await upstreamRes.text();
+        res.send(text);
+    } catch (err) {
+        console.error('[ProxySub] Error forwarding subtitle:', err.message);
+        res.status(500).send('Error proxying subtitle');
     }
 });
 
@@ -1292,6 +1363,89 @@ app.get('/api/translate', async (req, res) => {
     }
 });
 
+// Helper: Parse WebVTT raw text into clean cues and timing lines
+function parseVttContent(vttText) {
+    if (!vttText || typeof vttText !== 'string') return [];
+    const cues = [];
+    const lines = vttText.split(/\r?\n/);
+    let i = 0;
+    while (i < lines.length) {
+        const line = lines[i].trim();
+        if (line.includes('-->')) {
+            const timeLine = line;
+            i++;
+            let textLines = [];
+            while (i < lines.length && lines[i].trim() !== '') {
+                textLines.push(lines[i].trim());
+                i++;
+            }
+            const rawText = textLines.join('\n');
+            const cleanText = rawText.replace(/<[^>]+>/g, '').trim();
+            if (cleanText) {
+                cues.push({ timeLine, text: cleanText });
+            }
+        }
+        i++;
+    }
+    return cues;
+}
+
+// 6.2 High-Speed Upstream WebVTT Translator (Instant 0.5s translation from official timed cues)
+app.get('/api/subtitles/translate-vtt', async (req, res) => {
+    try {
+        const { url, slug = 'unknown', ep = '1', target_lang = 'vi', source_lang = 'auto' } = req.query;
+        if (!url) return res.status(400).json({ ok: false, error: 'url is required' });
+
+        const cleanTarget = (target_lang || 'vi').toLowerCase().split('-')[0];
+        const dramaSlug = cleanDramaSlug(slug);
+        const cacheKey = `${dramaSlug}_ep${ep}_${cleanTarget}`;
+
+        if (vttMemoryCache.has(cacheKey)) {
+            return res.json({
+                ok: true,
+                ready: true,
+                lang: cleanTarget,
+                vttText: vttMemoryCache.get(cacheKey),
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+            });
+        }
+
+        let fullUrl = url;
+        if (!fullUrl.startsWith('http')) fullUrl = `${BASE_URL}${fullUrl}`;
+        const subRes = await fetch(fullUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': BASE_URL }
+        });
+        if (!subRes.ok) return res.status(502).json({ ok: false, error: 'Failed to fetch upstream VTT' });
+        const rawVtt = await subRes.text();
+        const cues = parseVttContent(rawVtt);
+        if (cues.length === 0) {
+            return res.json({ ok: true, ready: true, vttText: rawVtt, url: fullUrl });
+        }
+
+        const sl = source_lang || 'auto';
+        const translatedTexts = await batchTranslate(cues.map(c => c.text), cleanTarget, sl);
+        const vttLines = ['WEBVTT', ''];
+        for (let i = 0; i < cues.length; i++) {
+            vttLines.push(cues[i].timeLine);
+            vttLines.push(translatedTexts[i] || cues[i].text);
+            vttLines.push('');
+        }
+        const vttContent = vttLines.join('\n');
+        vttMemoryCache.set(cacheKey, vttContent);
+
+        res.json({
+            ok: true,
+            ready: true,
+            lang: cleanTarget,
+            vttText: vttContent,
+            url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+        });
+    } catch (err) {
+        console.error('Error in /api/subtitles/translate-vtt:', err);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
 // 7. AI Audio Speech-to-Text & Subtitle System (Whisper STT + Multi-Language WebVTT)
 // Subtitles are stored in OS temp dir — wiped automatically by Windows, and deleted
 // immediately after serving so they never accumulate in the source folder.
@@ -1715,7 +1869,7 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
 // Proactive Subtitle Prefetch Endpoint: Runs in background while user watches previous episode
 app.get('/api/subtitles/prefetch', async (req, res) => {
     try {
-        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi', groq_key = '' } = req.query;
+        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi', groq_key = '', upstream_sub_url = '', upstream_lang = 'auto' } = req.query;
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
         const dramaSlug = cleanDramaSlug(slug);
         const epNum = parseInt(ep, 10) || 1;
@@ -1732,8 +1886,56 @@ app.get('/api/subtitles/prefetch', async (req, res) => {
             });
         }
 
-        // 2. Resolve stream URL if not provided
+        // Fast path: Upstream official subtitle provided or resolved
+        let targetUpstreamSub = upstream_sub_url;
         let activeStreamUrl = stream_url;
+        if (!targetUpstreamSub && (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl))) {
+            const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+            if (fresh) {
+                if (fresh.play_url) activeStreamUrl = fresh.play_url;
+                if (fresh.subtitle_url) targetUpstreamSub = fresh.subtitle_url;
+            }
+        }
+
+        if (targetUpstreamSub) {
+            try {
+                let fullUrl = targetUpstreamSub;
+                if (!fullUrl.startsWith('http')) fullUrl = `${BASE_URL}${fullUrl}`;
+                const subRes = await fetch(fullUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': BASE_URL }
+                });
+                if (subRes.ok) {
+                    const rawVtt = await subRes.text();
+                    const cues = parseVttContent(rawVtt);
+                    if (cues.length > 0) {
+                        const cleanSrc = (upstream_lang || 'auto').toLowerCase().split('-')[0];
+                        let finalVtt = rawVtt;
+                        if (cleanSrc !== cleanTarget && (cleanTarget !== 'en' || (cleanSrc !== 'en' && cleanSrc !== 'auto'))) {
+                            const translated = await batchTranslate(cues.map(c => c.text), cleanTarget, cleanSrc);
+                            const vttLines = ['WEBVTT', ''];
+                            for (let i = 0; i < cues.length; i++) {
+                                vttLines.push(cues[i].timeLine);
+                                vttLines.push(translated[i] || cues[i].text);
+                                vttLines.push('');
+                            }
+                            finalVtt = vttLines.join('\n');
+                        }
+                        vttMemoryCache.set(cacheKey, finalVtt);
+                        console.log(`[Prefetch] ⚡ Upstream subtitle pre-cached in memory for ${key}!`);
+                        return res.json({
+                            ok: true,
+                            ready: true,
+                            vttText: finalVtt,
+                            url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${epNum}&lang=${encodeURIComponent(cleanTarget)}`
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn(`[Prefetch] Upstream subtitle prefetch failed for ${key}:`, e.message);
+            }
+        }
+
+        // 2. Resolve stream URL if not provided
         if (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl)) {
             const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
             if (fresh && fresh.play_url) {
@@ -1880,13 +2082,12 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         }
 
         if (!combinedBuf || combinedBuf.length === 0) {
-            const chunks = [];
-            for (let i = 0; i < Math.min(segUrls.length, 6); i++) {
-                try {
-                    const segRes = await fetch(segUrls[i], { headers: { 'User-Agent': 'Mozilla/5.0' } });
-                    if (segRes.ok) chunks.push(Buffer.from(await segRes.arrayBuffer()));
-                } catch (e) { }
-            }
+            const chunkPromises = segUrls.slice(0, 6).map(url =>
+                fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+                    .then(r => r.ok ? r.arrayBuffer() : null)
+                    .catch(() => null)
+            );
+            const chunks = (await Promise.all(chunkPromises)).filter(Boolean).map(ab => Buffer.from(ab));
             combinedBuf = Buffer.concat(chunks);
         }
 
@@ -1924,7 +2125,7 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
     formData.append('file', fileBlob, fileName);
     formData.append('model', model);
     formData.append('response_format', 'verbose_json');
-    formData.append('language', 'en');
+    // Whisper auto-detects speech language (Chinese, Korean, Vietnamese, English, etc.)
 
     console.log(`[Cloud STT] Sending ${fileName} to ${isGroq ? 'Groq' : 'OpenAI'} (${model}) for ${key}...`);
     const cloudRes = await fetch(endpoint, {
@@ -1960,7 +2161,7 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
     } catch (e) { }
 
     const translatedTexts = (cleanTarget !== 'en' && cleanTarget !== 'auto')
-        ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'en')
+        ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'auto')
         : cues.map(c => c.text);
 
     const vttLines = ['WEBVTT', ''];
@@ -1989,7 +2190,7 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
 // Subtitle Generation & Status Check Endpoint
 app.get('/api/subtitles/generate', async (req, res) => {
     try {
-        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi', groq_key = '' } = req.query;
+        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi', groq_key = '', upstream_sub_url = '', upstream_lang = 'auto' } = req.query;
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
 
         // 1. Check if pre-cached VTT already exists in memory or disk
@@ -2006,6 +2207,46 @@ app.get('/api/subtitles/generate', async (req, res) => {
                 url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
                 vttText: vttMemoryCache.get(cacheKey)
             });
+        }
+
+        // Fast path: Upstream official subtitle provided
+        if (upstream_sub_url) {
+            try {
+                let fullUrl = upstream_sub_url;
+                if (!fullUrl.startsWith('http')) fullUrl = `${BASE_URL}${fullUrl}`;
+                const subRes = await fetch(fullUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': BASE_URL }
+                });
+                if (subRes.ok) {
+                    const rawVtt = await subRes.text();
+                    const cues = parseVttContent(rawVtt);
+                    if (cues.length > 0) {
+                        const cleanSrc = (upstream_lang || 'auto').toLowerCase().split('-')[0];
+                        let finalVtt = rawVtt;
+                        if (cleanSrc !== cleanTarget && (cleanTarget !== 'en' || (cleanSrc !== 'en' && cleanSrc !== 'auto'))) {
+                            const translated = await batchTranslate(cues.map(c => c.text), cleanTarget, cleanSrc);
+                            const vttLines = ['WEBVTT', ''];
+                            for (let i = 0; i < cues.length; i++) {
+                                vttLines.push(cues[i].timeLine);
+                                vttLines.push(translated[i] || cues[i].text);
+                                vttLines.push('');
+                            }
+                            finalVtt = vttLines.join('\n');
+                        }
+                        vttMemoryCache.set(cacheKey, finalVtt);
+                        return res.json({
+                            ok: true,
+                            ready: true,
+                            isComplete: true,
+                            lang: cleanTarget,
+                            url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
+                            vttText: finalVtt
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('[Generate] Upstream subtitle fetch/translation failed, falling back to STT:', err.message);
+            }
         }
 
         const vttFile = `${key}_${cleanTarget}.vtt`;
