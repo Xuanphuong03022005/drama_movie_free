@@ -1313,7 +1313,6 @@ app.get('/api/translate', async (req, res) => {
 // Subtitles are stored in OS temp dir — wiped automatically by Windows, and deleted
 // immediately after serving so they never accumulate in the source folder.
 const SUBTITLES_DIR = path.join(os.tmpdir(), 'DramaFlow');
-const REPO_SUBTITLES_DIR = path.join(__dirname, 'subtitles_cache');
 try {
     if (!fs.existsSync(SUBTITLES_DIR)) {
         fs.mkdirSync(SUBTITLES_DIR, { recursive: true });
@@ -1321,21 +1320,14 @@ try {
 } catch (e) {
     console.warn('[STT] Could not create SUBTITLES_DIR:', e.message);
 }
-try {
-    if (!fs.existsSync(REPO_SUBTITLES_DIR)) {
-        fs.mkdirSync(REPO_SUBTITLES_DIR, { recursive: true });
-    }
-} catch (e) { }
 
 function findSubtitleFile(filename) {
     if (!filename) return null;
-    const repoPath = path.join(REPO_SUBTITLES_DIR, filename);
-    if (fs.existsSync(repoPath)) return repoPath;
     const tmpPath = path.join(SUBTITLES_DIR, filename);
     if (fs.existsSync(tmpPath)) return tmpPath;
     return null;
 }
-console.log('[STT] Temp subtitle dir:', SUBTITLES_DIR, '| Repo cache:', REPO_SUBTITLES_DIR);
+console.log('[STT] Subtitle temp dir:', SUBTITLES_DIR);
 
 // CRITICAL: In ffmpeg -af filter strings, Windows drive-letter colons must be escaped
 // as \: otherwise ffmpeg treats them as option separators.
@@ -1507,7 +1499,6 @@ async function runStage1FastChunk(dramaSlug, epNum, streamUrl, cleanTarget) {
                         vttLines.push('');
                     }
                     fs.writeFileSync(vttPath, vttLines.join('\n'), 'utf8');
-                    try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), vttLines.join('\n'), 'utf8'); } catch (e) { }
                     return { ready: true, isComplete: false };
                 }
             }
@@ -1613,7 +1604,6 @@ async function runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarg
             const cues = parseSrtToCues(srtContent);
 
             fs.writeFileSync(baseJsonPath, JSON.stringify(cues, null, 2), 'utf8');
-            try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, `${key}_base.json`), JSON.stringify(cues, null, 2), 'utf8'); } catch (e) { }
             console.log(`[Audio STT] ✅ Successfully transcribed full ${cues.length} speech cues for ${key}! Updating full VTT...`);
 
             // Update full VTT file
@@ -1627,7 +1617,6 @@ async function runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarg
                 fullVttLines.push('');
             }
             fs.writeFileSync(vttPath, fullVttLines.join('\n'), 'utf8');
-            try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), fullVttLines.join('\n'), 'utf8'); } catch (e) { }
             return cues;
         } catch (err) {
             if (err.message !== 'Operation aborted') {
@@ -1684,7 +1673,6 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
             }
             const vttContent = vttLines.join('\n');
             try { fs.writeFileSync(vttPath, vttContent, 'utf8'); } catch (e) { }
-            try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), vttContent, 'utf8'); } catch (e) { }
             console.log(`[Audio STT] Generated WebVTT: ${vttFile}`);
         }
         const activeVtt = findSubtitleFile(vttFile) || vttPath;
@@ -1977,7 +1965,6 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
 
     try {
         fs.writeFileSync(baseJsonPath, JSON.stringify(cues, null, 2), 'utf8');
-        fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, `${key}_base.json`), JSON.stringify(cues, null, 2), 'utf8');
     } catch (e) { }
 
     const translatedTexts = (cleanTarget !== 'en' && cleanTarget !== 'auto')
@@ -1993,7 +1980,6 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
     const vttContent = vttLines.join('\n');
     try {
         fs.writeFileSync(vttPath, vttContent, 'utf8');
-        fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), vttContent, 'utf8');
     } catch (e) { }
 
     console.log(`[Cloud STT] ✅ Successfully generated and translated ${cues.length} cues for ${key}!`);
