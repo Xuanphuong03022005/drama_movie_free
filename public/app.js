@@ -1031,33 +1031,52 @@
 
                 if (activeSubtitleRequest !== reqId) return;
 
-                if (data.ok && data.ready && data.url) {
+                if (data.ok && data.ready && (data.url || data.vttText)) {
                     if (subStatusToast) subStatusToast.classList.add('hidden');
 
-                    function attachVtt(vttUrl) {
-                        // 1. Fetch text directly for Custom Cinema Overlay
-                        fetch(vttUrl)
-                            .then(r => r.text())
-                            .then(vttText => {
-                                if (activeSubtitleRequest === reqId) {
-                                    currentSubtitleCues = parseWebVTT(vttText);
-                                    updateCustomSubtitleOverlay();
-                                }
-                            })
-                            .catch(() => { });
+                    function attachVtt(vttUrl, directVttText) {
+                        if (directVttText && directVttText.startsWith('WEBVTT')) {
+                            if (activeSubtitleRequest === reqId) {
+                                currentSubtitleCues = parseWebVTT(directVttText);
+                                updateCustomSubtitleOverlay();
+                            }
+                            mainVideo.querySelectorAll('track').forEach(t => t.remove());
+                            const track = document.createElement('track');
+                            track.kind = 'subtitles';
+                            track.label = langName;
+                            track.srclang = subLang;
+                            const blob = new Blob([directVttText], { type: 'text/vtt' });
+                            track.src = URL.createObjectURL(blob);
+                            track.default = true;
+                            mainVideo.appendChild(track);
+                            return;
+                        }
 
-                        // 2. Also keep native track in sync
-                        mainVideo.querySelectorAll('track').forEach(t => t.remove());
-                        const track = document.createElement('track');
-                        track.kind = 'subtitles';
-                        track.label = langName;
-                        track.srclang = subLang;
-                        track.src = `${vttUrl}&_v=${Date.now()}`;
-                        track.default = true;
-                        mainVideo.appendChild(track);
+                        if (vttUrl) {
+                            // 1. Fetch text directly for Custom Cinema Overlay
+                            fetch(vttUrl)
+                                .then(r => r.text())
+                                .then(vttText => {
+                                    if (activeSubtitleRequest === reqId) {
+                                        currentSubtitleCues = parseWebVTT(vttText);
+                                        updateCustomSubtitleOverlay();
+                                    }
+                                })
+                                .catch(() => { });
+
+                            // 2. Also keep native track in sync
+                            mainVideo.querySelectorAll('track').forEach(t => t.remove());
+                            const track = document.createElement('track');
+                            track.kind = 'subtitles';
+                            track.label = langName;
+                            track.srclang = subLang;
+                            track.src = `${vttUrl}&_v=${Date.now()}`;
+                            track.default = true;
+                            mainVideo.appendChild(track);
+                        }
                     }
 
-                    attachVtt(data.url);
+                    attachVtt(data.url, data.vttText);
 
                     // Stage 2 Poller: If initial VTT is partial, poll until full episode is complete!
                     if (!data.isComplete) {
@@ -1075,7 +1094,7 @@
                                 if (fullData.ok && fullData.ready && fullData.isComplete && activeSubtitleRequest === reqId) {
                                     clearInterval(stage2Timer);
                                     console.log(`[Subtitle] Full episode VTT completed and attached for ep ${epNum}`);
-                                    attachVtt(fullData.url);
+                                    attachVtt(fullData.url, fullData.vttText);
                                 }
                             } catch (e) { }
                         }, 2000);

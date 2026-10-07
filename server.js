@@ -253,44 +253,12 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
-// 4. Drama Detail & Episodes Resolver
+// 4. Drama Detail & Episodes Resolver (In-Memory Only, zero disk caching)
 const dramaCache = new Map();
 const dramaInFlight = new Map();
 const DRAMA_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
-
-const EPISODE_CACHE_FILE = path.join(os.tmpdir(), 'DramaFlow_episodes_cache.json');
 const episodeCountCache = new Map();
 
-// Load persistent disk cache
-try {
-    if (fs.existsSync(EPISODE_CACHE_FILE)) {
-        const raw = fs.readFileSync(EPISODE_CACHE_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-            for (const [k, v] of Object.entries(parsed)) {
-                if (typeof v === 'number' && v > 0) {
-                    episodeCountCache.set(k, v);
-                }
-            }
-            console.log(`[EpisodeCache] Loaded ${episodeCountCache.size} drama episode counts from disk`);
-        }
-    }
-} catch (e) {
-    console.warn('[EpisodeCache] Failed to load disk cache:', e.message);
-}
-
-let saveDiskTimeout = null;
-function saveEpisodeCacheToDisk() {
-    clearTimeout(saveDiskTimeout);
-    saveDiskTimeout = setTimeout(() => {
-        try {
-            const obj = Object.fromEntries(episodeCountCache);
-            fs.writeFileSync(EPISODE_CACHE_FILE, JSON.stringify(obj, null, 2), 'utf-8');
-        } catch (e) {
-            console.warn('[EpisodeCache] Failed to save to disk:', e.message);
-        }
-    }, 2000);
-}
 
 app.get('/api/drama', async (req, res) => {
     try {
@@ -1988,7 +1956,8 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         ready: true,
         isComplete: true,
         lang: cleanTarget,
-        url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(epNum)}&lang=${encodeURIComponent(cleanTarget)}`
+        url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(epNum)}&lang=${encodeURIComponent(cleanTarget)}`,
+        vttText: vttContent
     };
 }
 
@@ -2004,12 +1973,15 @@ app.get('/api/subtitles/generate', async (req, res) => {
         const vttFile = `${key}_${cleanTarget}.vtt`;
         const existingVtt = findSubtitleFile(vttFile);
         if (existingVtt) {
+            let vttText = '';
+            try { vttText = fs.readFileSync(existingVtt, 'utf8'); } catch (e) { }
             return res.json({
                 ok: true,
                 ready: true,
                 isComplete: true,
                 lang: cleanTarget,
-                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
+                vttText
             });
         }
 
@@ -2018,12 +1990,15 @@ app.get('/api/subtitles/generate', async (req, res) => {
         if (existingBaseJson) {
             const result = await getOrGenerateVtt(slug, ep, stream_url, cleanTarget);
             if (result && result.ready) {
+                let vttText = '';
+                try { if (result.path) vttText = fs.readFileSync(result.path, 'utf8'); } catch (e) { }
                 return res.json({
                     ok: true,
                     ready: true,
                     isComplete: !!result.isComplete,
                     lang: cleanTarget,
-                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
+                    vttText
                 });
             }
         }
@@ -2055,12 +2030,15 @@ app.get('/api/subtitles/generate', async (req, res) => {
         const result = await getOrGenerateVtt(slug, ep, stream_url, cleanTarget);
 
         if (result.ready) {
+            let vttText = '';
+            try { if (result.path) vttText = fs.readFileSync(result.path, 'utf8'); } catch (e) { }
             return res.json({
                 ok: true,
                 ready: true,
                 isComplete: !!result.isComplete,
                 lang: cleanTarget,
-                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
+                vttText
             });
         }
 
@@ -2078,16 +2056,31 @@ app.get('/api/subtitles/generate', async (req, res) => {
 });
 
 // Serve WebVTT File Endpoint
-app.get('/api/subtitles/vtt', (req, res) => {
+app.get('/api/subtitles/vtt', async (req, res) => {
     try {
-        const { slug = 'unknown', ep = '1', lang = 'vi' } = req.query;
+        const { slug = 'unknown', ep = '1', lang = 'vi', stream_url = '', groq_key = '' } = req.query;
         const dramaSlug = cleanDramaSlug(slug);
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
         const key = `${dramaSlug}_ep${ep}`;
         const vttFile = `${key}_${cleanTarget}.vtt`;
-        const vttPath = findSubtitleFile(vttFile);
+        let vttPath = findSubtitleFile(vttFile);
 
+        // If not found in /tmp, and stream_url + cloud key is available, generate dynamically on-the-fly
         if (!vttPath || !fs.existsSync(vttPath)) {
+            const cloudApiKey = (groq_key || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+            if (cloudApiKey && stream_url) {
+                try {
+                    const cloudRes = await transcribeViaCloudApi(slug, ep, stream_url, cleanTarget, cloudApiKey);
+                    if (cloudRes && cloudRes.vttText) {
+                        res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+                        res.setHeader('Access-Control-Allow-Origin', '*');
+                        res.setHeader('Cache-Control', 'public, max-age=86400');
+                        return res.send(cloudRes.vttText);
+                    }
+                } catch (e) {
+                    console.warn(`[VTT On-Demand] Failed:`, e.message);
+                }
+            }
             return res.status(404).send('WEBVTT\n\n1\n00:00:00.000 --> 00:00:05.000\n[Đang tạo phụ đề...]');
         }
 
