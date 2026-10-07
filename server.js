@@ -5,6 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const { exec } = require('child_process');
 const util = require('util');
+const os = require('os');
 const execPromise = util.promisify(exec);
 
 const pkg = require('./package.json');
@@ -257,7 +258,7 @@ const dramaCache = new Map();
 const dramaInFlight = new Map();
 const DRAMA_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
 
-const EPISODE_CACHE_FILE = path.join(__dirname, 'data_episodes_cache.json');
+const EPISODE_CACHE_FILE = path.join(os.tmpdir(), 'DramaFlow_episodes_cache.json');
 const episodeCountCache = new Map();
 
 // Load persistent disk cache
@@ -1311,7 +1312,6 @@ app.get('/api/translate', async (req, res) => {
 // 7. AI Audio Speech-to-Text & Subtitle System (Whisper STT + Multi-Language WebVTT)
 // Subtitles are stored in OS temp dir — wiped automatically by Windows, and deleted
 // immediately after serving so they never accumulate in the source folder.
-const os = require('os');
 const SUBTITLES_DIR = path.join(os.tmpdir(), 'DramaFlow');
 const REPO_SUBTITLES_DIR = path.join(__dirname, 'subtitles_cache');
 try {
@@ -2043,8 +2043,7 @@ app.get('/api/subtitles/generate', async (req, res) => {
         }
 
         // 3. Check for Cloud STT API Key (Groq / OpenAI) — Runs natively on Vercel Serverless without FFmpeg!
-        const _gk = Buffer.from('Z3NrX2VSY1QwOXNkbTBsUkhheDE3Vm5iV0dkeWIzRlljajVLRFNENk5FdjQxdTlVdnhmcVRFdw==', 'base64').toString('utf8');
-        const cloudApiKey = (groq_key || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || _gk).trim();
+        const cloudApiKey = (groq_key || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
         if (cloudApiKey) {
             try {
                 const cloudResult = await transcribeViaCloudApi(slug, ep, stream_url, cleanTarget, cloudApiKey);

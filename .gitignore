@@ -5,3 +5,5 @@ yarn-error.log*
 .DS_Store
 .env
 *.log
+data_episodes_cache.json
+subtitles_cache/
