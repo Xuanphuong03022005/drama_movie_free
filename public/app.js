@@ -218,9 +218,6 @@
     const subtitleBtn = document.getElementById('subtitle-btn');
     const subtitleMenu = document.getElementById('subtitle-menu');
     const subtitleLabel = document.getElementById('subtitle-label');
-    const subSizeBtn = document.getElementById('sub-size-btn');
-    const subSizeMenu = document.getElementById('sub-size-menu');
-    const subSizeLabel = document.getElementById('sub-size-label');
 
     // Language Selector Elements & State
     const SUPPORTED_LANGUAGES = [
@@ -1208,21 +1205,6 @@
             customSubtitleOverlay.classList.add(`sub-size-${selectedSubtitleSize}`);
         }
 
-        if (subSizeLabel) {
-            const shortName = { normal: 'Vừa', large: 'Lớn', xlarge: 'Rất lớn', huge: 'Cực đại' }[selectedSubtitleSize] || 'Lớn';
-            subSizeLabel.textContent = `Cỡ: ${shortName}`;
-        }
-
-        if (subSizeMenu) {
-            subSizeMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(btn => {
-                const isA = btn.getAttribute('data-sub-size') === selectedSubtitleSize;
-                btn.classList.toggle('active', isA);
-                const ch = btn.querySelector('.item-check');
-                if (isA && !ch) btn.innerHTML += ' <span class="item-check"><i class="fa-solid fa-check"></i></span>';
-                else if (!isA && ch) ch.remove();
-            });
-        }
-
         document.querySelectorAll('.sub-size-pill').forEach(pill => {
             pill.classList.toggle('active', pill.getAttribute('data-sub-size') === selectedSubtitleSize);
         });
@@ -1424,12 +1406,42 @@
         if (btnResumeDismiss) btnResumeDismiss.addEventListener('click', () => resumeBanner.hidden = true);
 
         // Quality/Subtitle/Size dropdowns
+        function alignDropdownMenu(menu, btn) {
+            if (!menu || !btn) return;
+            menu.style.left = '';
+            menu.style.right = '';
+            const btnRect = btn.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const menuWidth = menu.offsetWidth || 240;
+
+            if (btnRect.left + (btnRect.width / 2) > viewportWidth / 2) {
+                const minLeftOffset = 10;
+                if (btnRect.right - menuWidth < minLeftOffset) {
+                    menu.style.left = `${Math.round(minLeftOffset - btnRect.left)}px`;
+                    menu.style.right = 'auto';
+                } else {
+                    menu.style.right = '0';
+                    menu.style.left = 'auto';
+                }
+            } else {
+                const maxRightOffset = viewportWidth - 10;
+                if (btnRect.left + menuWidth > maxRightOffset) {
+                    menu.style.right = `${Math.round(btnRect.right - maxRightOffset)}px`;
+                    menu.style.left = 'auto';
+                } else {
+                    menu.style.left = '0';
+                    menu.style.right = 'auto';
+                }
+            }
+        }
+
+        // Quality/Subtitle dropdowns
         if (qualityBtn && qualityMenu) {
             qualityBtn.addEventListener('click', e => {
                 e.stopPropagation();
                 qualityMenu.hidden = !qualityMenu.hidden;
+                if (!qualityMenu.hidden) alignDropdownMenu(qualityMenu, qualityBtn);
                 if (subtitleMenu) subtitleMenu.hidden = true;
-                if (subSizeMenu) subSizeMenu.hidden = true;
             });
             qualityMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => item.addEventListener('click', () => { selectQuality(item.getAttribute('data-quality')); qualityMenu.hidden = true; }));
         }
@@ -1437,24 +1449,10 @@
             subtitleBtn.addEventListener('click', e => {
                 e.stopPropagation();
                 subtitleMenu.hidden = !subtitleMenu.hidden;
+                if (!subtitleMenu.hidden) alignDropdownMenu(subtitleMenu, subtitleBtn);
                 if (qualityMenu) qualityMenu.hidden = true;
-                if (subSizeMenu) subSizeMenu.hidden = true;
             });
             subtitleMenu.querySelectorAll('.ctrl-dropdown-menu-item[data-sub]').forEach(item => item.addEventListener('click', () => { selectSubtitle(item.getAttribute('data-sub')); subtitleMenu.hidden = true; }));
-        }
-        if (subSizeBtn && subSizeMenu) {
-            subSizeBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                subSizeMenu.hidden = !subSizeMenu.hidden;
-                if (qualityMenu) qualityMenu.hidden = true;
-                if (subtitleMenu) subtitleMenu.hidden = true;
-            });
-            subSizeMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => item.addEventListener('click', () => {
-                const size = item.getAttribute('data-sub-size');
-                applySubtitleSize(size);
-                subSizeMenu.hidden = true;
-                showToast(`Cỡ chữ: ${SUBTITLE_SIZE_LABELS[size] || size}`, 'fa-text-height');
-            }));
         }
 
         document.querySelectorAll('.sub-size-pill').forEach(pill => {
@@ -1469,7 +1467,6 @@
         document.addEventListener('click', () => {
             if (qualityMenu) qualityMenu.hidden = true;
             if (subtitleMenu) subtitleMenu.hidden = true;
-            if (subSizeMenu) subSizeMenu.hidden = true;
         });
 
         // Mobile swipe

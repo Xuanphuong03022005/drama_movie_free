@@ -671,41 +671,28 @@
                                                 class="fa-solid fa-check"></i></span></button>
                                     <button class="ctrl-dropdown-menu-item" data-sub="en">🇺🇸 English</button>
 
-                                    <!-- Quick font size pills inside subtitle menu -->
-                                    <div class="ctrl-dropdown-header" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
-                                        <i class="fa-solid fa-text-height"></i> <span>Cỡ chữ phụ đề</span>
+                                    <!-- Subtitle Font Size Selection inside Subtitle Menu -->
+                                    <div class="ctrl-dropdown-header sub-size-dropdown-header">
+                                        <i class="fa-solid fa-text-height"></i> <span>Kích cỡ chữ phụ đề</span>
                                     </div>
-                                    <div class="sub-size-quick-pills" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px 8px 6px;">
-                                        <button type="button" class="sub-size-pill" data-sub-size="normal" title="Cỡ vừa (18px)">Vừa</button>
-                                        <button type="button" class="sub-size-pill active" data-sub-size="large" title="Cỡ lớn (22px - Mặc định)">Lớn</button>
-                                        <button type="button" class="sub-size-pill" data-sub-size="xlarge" title="Cỡ rất lớn (26px)">Rất lớn</button>
-                                        <button type="button" class="sub-size-pill" data-sub-size="huge" title="Cỡ cực đại (31px)">Cực đại</button>
+                                    <div class="sub-size-pills-container">
+                                        <button type="button" class="sub-size-pill" data-sub-size="normal" title="Cỡ vừa (18px)">
+                                            <span class="sub-size-title">Vừa</span>
+                                            <span class="sub-size-val">18px</span>
+                                        </button>
+                                        <button type="button" class="sub-size-pill active" data-sub-size="large" title="Cỡ lớn (22px - Chuẩn)">
+                                            <span class="sub-size-title">Lớn</span>
+                                            <span class="sub-size-val">22px</span>
+                                        </button>
+                                        <button type="button" class="sub-size-pill" data-sub-size="xlarge" title="Cỡ rất lớn (26px)">
+                                            <span class="sub-size-title">Rất lớn</span>
+                                            <span class="sub-size-val">26px</span>
+                                        </button>
+                                        <button type="button" class="sub-size-pill" data-sub-size="huge" title="Cỡ cực đại (31px)">
+                                            <span class="sub-size-title">Cực đại</span>
+                                            <span class="sub-size-val">31px</span>
+                                        </button>
                                     </div>
-                                </div>
-                            </div>
-
-                            <!-- Dedicated Subtitle Font Size Dropdown -->
-                            <div class="ctrl-dropdown-wrap" id="sub-size-dropdown-wrap">
-                                <button type="button" class="ctrl-dropdown-btn" id="sub-size-btn" title="Cỡ chữ phụ đề">
-                                    <i class="fa-solid fa-text-height"></i>
-                                    <span id="sub-size-label">Cỡ: Lớn</span>
-                                    <i class="fa-solid fa-chevron-up" style="font-size:10px"></i>
-                                </button>
-                                <div class="ctrl-dropdown-menu" id="sub-size-menu" hidden>
-                                    <div class="ctrl-dropdown-header"><i class="fa-solid fa-text-height"></i> <span>Kích cỡ chữ phụ đề</span></div>
-                                    <button type="button" class="ctrl-dropdown-menu-item" data-sub-size="normal">
-                                        <span>Cỡ vừa (18px)</span>
-                                    </button>
-                                    <button type="button" class="ctrl-dropdown-menu-item active" data-sub-size="large">
-                                        <span>Cỡ lớn (22px - Chuẩn)</span>
-                                        <span class="item-check"><i class="fa-solid fa-check"></i></span>
-                                    </button>
-                                    <button type="button" class="ctrl-dropdown-menu-item" data-sub-size="xlarge">
-                                        <span>Cỡ rất lớn (26px)</span>
-                                    </button>
-                                    <button type="button" class="ctrl-dropdown-menu-item" data-sub-size="huge">
-                                        <span>Cỡ cực đại (31px)</span>
-                                    </button>
                                 </div>
                             </div>
 
