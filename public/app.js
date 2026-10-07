@@ -989,6 +989,29 @@
         en: '🇺🇸 English'
     };
 
+    function isVttContentVietnamese(vttText) {
+        if (!vttText || typeof vttText !== 'string') return false;
+        return /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i.test(vttText);
+    }
+
+    function isTrackMatchingLanguage(track, targetLang) {
+        if (!track) return false;
+        const cleanTarget = (targetLang || 'vi').toLowerCase().split('-')[0];
+        const code = (track.language_code || '').toLowerCase();
+        const label = (track.label || '').toLowerCase();
+        const url = (track.subtitle_url || (typeof track === 'string' ? track : '')).toLowerCase();
+
+        if (cleanTarget === 'vi') {
+            return code.startsWith('vi') || label.includes('việt') || label.includes('viet') ||
+                   url.includes('/vi.') || url.includes('/vi-') || url.includes('_vi.') || url.includes('lang=vi');
+        }
+        if (cleanTarget === 'en') {
+            return code.startsWith('en') || label.includes('eng') ||
+                   url.includes('/en.') || url.includes('/en-') || url.includes('_en.') || url.includes('lang=en');
+        }
+        return code === cleanTarget || code.startsWith(cleanTarget) || label.includes(cleanTarget);
+    }
+
     function loadEpisodeSubtitle(subLang) {
         if (subtitlePollTimer) {
             clearTimeout(subtitlePollTimer);
@@ -1011,7 +1034,7 @@
         if (!currentDramaData || !currentDramaData.episodes || !currentDramaData.episodes[currentEpisodeIndex]) return;
         const episode = currentDramaData.episodes[currentEpisodeIndex];
         const epNum = episode.number || (currentEpisodeIndex + 1);
-        const slug = currentDramaData.slug || '';
+        const slug = currentDramaData?.slug || '';
         const streamUrl = episode.play_url || episode.direct_play_url || '';
 
         const langName = SUBTITLE_LABELS[subLang] || subLang;
@@ -1022,6 +1045,7 @@
         const maxPolls = 80;
 
         const cacheKey = `${slug}_ep${epNum}_${subLang}`;
+        const cleanSubLang = subLang.toLowerCase().split('-')[0];
 
         function attachVtt(vttUrl, directVttText) {
             if (directVttText && directVttText.startsWith('WEBVTT')) {
@@ -1068,28 +1092,27 @@
         // Fast path 1: Check in-memory client cache (0ms instant attach)
         if (clientSubtitleCache.has(cacheKey)) {
             const cached = clientSubtitleCache.get(cacheKey);
-            console.log(`[Subtitle] ⚡ Phụ đề Tập ${epNum} đã có sẵn trong bộ nhớ! Áp dụng ngay lập tức.`);
-            if (subStatusToast) subStatusToast.classList.add('hidden');
-            attachVtt(cached.url, cached.vttText);
-            setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
-            return;
+            if (cleanSubLang !== 'vi' || isVttContentVietnamese(cached.vttText)) {
+                console.log(`[Subtitle] ⚡ Phụ đề Tập ${epNum} đã có sẵn trong bộ nhớ! Áp dụng ngay lập tức.`);
+                if (subStatusToast) subStatusToast.classList.add('hidden');
+                attachVtt(cached.url, cached.vttText);
+                setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
+                return;
+            } else {
+                console.warn(`[Subtitle] ⚠️ Bản ghi đệm Tập ${epNum} không phải tiếng Việt, loại bỏ và dịch lại.`);
+                clientSubtitleCache.delete(cacheKey);
+            }
         }
 
-        // Fast path 2: Direct upstream official subtitle (0-50ms instant)
-        const cleanSubLang = subLang.toLowerCase().split('-')[0];
+        // Fast path 2: Direct upstream official subtitle (ONLY if confirmed matching target subLang)
         let directSubTrack = null;
         if (Array.isArray(episode.subtitles) && episode.subtitles.length > 0) {
-            directSubTrack = episode.subtitles.find(s => {
-                const sCode = (s.language_code || '').toLowerCase();
-                return sCode === subLang || sCode.startsWith(cleanSubLang) || (cleanSubLang === 'vi' && (s.label || '').toLowerCase().includes('việt'));
-            });
+            directSubTrack = episode.subtitles.find(s => isTrackMatchingLanguage(s, subLang));
         }
 
-        let candidateUpstreamUrl = directSubTrack ? directSubTrack.subtitle_url : (episode.subtitle_url || '');
-
-        if (candidateUpstreamUrl && (directSubTrack || cleanSubLang === 'vi')) {
+        if (directSubTrack && directSubTrack.subtitle_url) {
             try {
-                let fetchUrl = candidateUpstreamUrl;
+                let fetchUrl = directSubTrack.subtitle_url;
                 if (!fetchUrl.startsWith('http')) fetchUrl = `${window.location.origin}${fetchUrl.startsWith('/') ? '' : '/'}${fetchUrl}`;
                 fetch(fetchUrl).then(subRes => {
                     if (subRes.ok) {
@@ -1103,30 +1126,41 @@
                         });
                     }
                 }).catch(() => { });
+                return;
             } catch (e) {
                 console.warn('[Subtitle] Direct upstream fetch failed:', e.message);
             }
         }
 
         // Fast path 3: Upstream subtitle in another language -> Translate via fast text translator (~0.5s)
-        if (!candidateUpstreamUrl && Array.isArray(episode.subtitles) && episode.subtitles.length > 0) {
-            const fallbackTrack = episode.subtitles.find(s => (s.language_code || '').toLowerCase().startsWith('en')) || episode.subtitles[0];
-            if (fallbackTrack && fallbackTrack.subtitle_url) {
-                candidateUpstreamUrl = fallbackTrack.subtitle_url;
-            }
+        let candidateUpstreamUrl = '';
+        if (Array.isArray(episode.subtitles) && episode.subtitles.length > 0) {
+            const enTrack = episode.subtitles.find(s => isTrackMatchingLanguage(s, 'en'));
+            const zhTrack = episode.subtitles.find(s => (s.language_code || '').toLowerCase().startsWith('zh'));
+            const anyTrack = episode.subtitles[0];
+            candidateUpstreamUrl = (enTrack && enTrack.subtitle_url) || (zhTrack && zhTrack.subtitle_url) || (anyTrack && anyTrack.subtitle_url) || '';
+        }
+        if (!candidateUpstreamUrl) {
+            candidateUpstreamUrl = episode.subtitle_url || episode.direct_subtitle_url || '';
         }
 
-        if (candidateUpstreamUrl && cleanSubLang === 'vi' && !directSubTrack) {
+        if (candidateUpstreamUrl && cleanSubLang === 'vi') {
+            if (subStatusToast) subStatusToast.classList.remove('hidden');
             try {
                 const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
                 fetch(transUrl).then(r => r.json()).then(transData => {
-                    if (transData.ok && transData.vttText && activeSubtitleRequest === reqId) {
+                    if (transData.ok && transData.vttText && isVttContentVietnamese(transData.vttText) && activeSubtitleRequest === reqId) {
                         if (subStatusToast) subStatusToast.classList.add('hidden');
                         clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
                         attachVtt(transData.url, transData.vttText);
                         setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
+                    } else if (activeSubtitleRequest === reqId) {
+                        checkSubtitle();
                     }
-                }).catch(() => { });
+                }).catch(() => {
+                    if (activeSubtitleRequest === reqId) checkSubtitle();
+                });
+                return;
             } catch (e) {
                 console.warn('[Subtitle] Upstream VTT translation failed:', e.message);
             }
@@ -4825,30 +4859,33 @@
         const nextEp = currentDramaData.episodes[nextIndex];
         const epNum = nextEp.number || (nextIndex + 1);
         const slug = currentDramaData?.slug || '';
+        const cleanSubLang = subLang.toLowerCase().split('-')[0];
         const cacheKey = `${slug}_ep${epNum}_${subLang}`;
 
-        // Skip if already prefetched or in-flight
-        if (clientSubtitleCache.has(cacheKey) || inFlightPrefetches.has(cacheKey)) return;
+        // Skip if already correctly prefetched or in-flight
+        if (clientSubtitleCache.has(cacheKey)) {
+            const cached = clientSubtitleCache.get(cacheKey);
+            if (cleanSubLang !== 'vi' || isVttContentVietnamese(cached.vttText)) {
+                return;
+            }
+            clientSubtitleCache.delete(cacheKey);
+        }
+        if (inFlightPrefetches.has(cacheKey)) return;
         inFlightPrefetches.add(cacheKey);
 
         console.log(`[Subtitle Prefetch] ⏳ Đang nạp/dịch trước phụ đề cho Tập ${epNum}...`);
 
         async function startPrefetch() {
             try {
-                // Fast path 1: If nextEp already has upstream official subtitle matching subLang
-                const cleanSubLang = subLang.toLowerCase().split('-')[0];
+                // 1. Direct official subtitle ONLY if confirmed matching target subLang
                 let directSubTrack = null;
                 if (Array.isArray(nextEp.subtitles) && nextEp.subtitles.length > 0) {
-                    directSubTrack = nextEp.subtitles.find(s => {
-                        const sCode = (s.language_code || '').toLowerCase();
-                        return sCode === subLang || sCode.startsWith(cleanSubLang) || (cleanSubLang === 'vi' && (s.label || '').toLowerCase().includes('việt'));
-                    });
+                    directSubTrack = nextEp.subtitles.find(s => isTrackMatchingLanguage(s, subLang));
                 }
-                let candidateUpstreamUrl = directSubTrack ? directSubTrack.subtitle_url : (nextEp.subtitle_url || '');
 
-                if (candidateUpstreamUrl && (directSubTrack || cleanSubLang === 'vi')) {
+                if (directSubTrack && directSubTrack.subtitle_url) {
                     try {
-                        let fetchUrl = candidateUpstreamUrl;
+                        let fetchUrl = directSubTrack.subtitle_url;
                         if (!fetchUrl.startsWith('http')) fetchUrl = `${window.location.origin}${fetchUrl.startsWith('/') ? '' : '/'}${fetchUrl}`;
                         const subRes = await fetch(fetchUrl);
                         if (subRes.ok) {
@@ -4863,13 +4900,24 @@
                     } catch (e) { }
                 }
 
-                // Fast path 2: Upstream VTT translation
+                // 2. Upstream subtitle in another language -> Translate to target language
+                let candidateUpstreamUrl = '';
+                if (Array.isArray(nextEp.subtitles) && nextEp.subtitles.length > 0) {
+                    const enTrack = nextEp.subtitles.find(s => isTrackMatchingLanguage(s, 'en'));
+                    const zhTrack = nextEp.subtitles.find(s => (s.language_code || '').toLowerCase().startsWith('zh'));
+                    const anyTrack = nextEp.subtitles[0];
+                    candidateUpstreamUrl = (enTrack && enTrack.subtitle_url) || (zhTrack && zhTrack.subtitle_url) || (anyTrack && anyTrack.subtitle_url) || '';
+                }
+                if (!candidateUpstreamUrl) {
+                    candidateUpstreamUrl = nextEp.subtitle_url || nextEp.direct_subtitle_url || '';
+                }
+
                 if (candidateUpstreamUrl && cleanSubLang === 'vi') {
                     try {
                         const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
                         const transRes = await fetch(transUrl);
                         const transData = await transRes.json();
-                        if (transData.ok && transData.vttText) {
+                        if (transData.ok && transData.vttText && isVttContentVietnamese(transData.vttText)) {
                             clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
                             console.log(`[Subtitle Prefetch] ⚡ Phụ đề Tập ${epNum} đã dịch xong từ trước!`);
                             inFlightPrefetches.delete(cacheKey);
@@ -4903,9 +4951,11 @@
                 const prefetchUrl = `/api/subtitles/prefetch?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}${candidateUpstreamUrl ? '&upstream_sub_url=' + encodeURIComponent(candidateUpstreamUrl) : ''}${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
                 const res = await fetch(prefetchUrl);
                 const data = await res.json();
-                if (data && data.ok && data.ready) {
-                    clientSubtitleCache.set(cacheKey, { vttText: data.vttText, url: data.url });
-                    console.log(`[Subtitle Prefetch] 🎉 Đã dịch xong phụ đề Tập ${epNum}! Khi xem sẽ có ngay lập tức.`);
+                if (data && data.ok && data.ready && data.vttText) {
+                    if (cleanSubLang !== 'vi' || isVttContentVietnamese(data.vttText)) {
+                        clientSubtitleCache.set(cacheKey, { vttText: data.vttText, url: data.url });
+                        console.log(`[Subtitle Prefetch] 🎉 Đã dịch xong phụ đề Tập ${epNum}! Khi xem sẽ có ngay lập tức.`);
+                    }
                 }
             } catch (err) {
                 console.warn(`[Subtitle Prefetch] Lỗi dịch trước tập ${epNum}:`, err.message);

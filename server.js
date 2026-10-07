@@ -1390,6 +1390,13 @@ function parseVttContent(vttText) {
     return cues;
 }
 
+const vttMemoryCache = new Map(); // In-memory cache: ${dramaSlug}_ep${ep}_${lang} -> vttContent
+
+function isVttContentVietnamese(vttText) {
+    if (!vttText || typeof vttText !== 'string') return false;
+    return /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i.test(vttText);
+}
+
 // 6.2 High-Speed Upstream WebVTT Translator (Instant 0.5s translation from official timed cues)
 app.get('/api/subtitles/translate-vtt', async (req, res) => {
     try {
@@ -1401,13 +1408,17 @@ app.get('/api/subtitles/translate-vtt', async (req, res) => {
         const cacheKey = `${dramaSlug}_ep${ep}_${cleanTarget}`;
 
         if (vttMemoryCache.has(cacheKey)) {
-            return res.json({
-                ok: true,
-                ready: true,
-                lang: cleanTarget,
-                vttText: vttMemoryCache.get(cacheKey),
-                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
-            });
+            const cachedVtt = vttMemoryCache.get(cacheKey);
+            if (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt)) {
+                return res.json({
+                    ok: true,
+                    ready: true,
+                    lang: cleanTarget,
+                    vttText: cachedVtt,
+                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`
+                });
+            }
+            vttMemoryCache.delete(cacheKey);
         }
 
         let fullUrl = url;
@@ -1465,7 +1476,6 @@ function findSubtitleFile(filename) {
     return null;
 }
 console.log('[STT] Subtitle temp dir:', SUBTITLES_DIR);
-const vttMemoryCache = new Map(); // In-memory cache: ${dramaSlug}_ep${ep}_${lang} -> vttContent
 
 // CRITICAL: In ffmpeg -af filter strings, Windows drive-letter colons must be escaped
 // as \: otherwise ffmpeg treats them as option separators.
@@ -1801,7 +1811,7 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
         if (!fs.existsSync(vttPath) && !findSubtitleFile(vttFile)) {
             console.log(`[Audio STT] Translating ${cues.length} cues for ${key} to [${cleanTarget}] in parallel...`);
             const translatedTexts = (cleanTarget !== 'en' && cleanTarget !== 'auto')
-                ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'en')
+                ? await batchTranslate(cues.map(c => c.text), cleanTarget, 'auto')
                 : cues.map(c => c.text);
             const vttLines = ['WEBVTT', ''];
             for (let i = 0; i < cues.length; i++) {
@@ -1878,12 +1888,16 @@ app.get('/api/subtitles/prefetch', async (req, res) => {
 
         // 1. Check in-memory VTT cache first
         if (vttMemoryCache.has(cacheKey)) {
-            return res.json({
-                ok: true,
-                ready: true,
-                vttText: vttMemoryCache.get(cacheKey),
-                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${epNum}&lang=${encodeURIComponent(cleanTarget)}`
-            });
+            const cachedVtt = vttMemoryCache.get(cacheKey);
+            if (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt)) {
+                return res.json({
+                    ok: true,
+                    ready: true,
+                    vttText: cachedVtt,
+                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${epNum}&lang=${encodeURIComponent(cleanTarget)}`
+                });
+            }
+            vttMemoryCache.delete(cacheKey);
         }
 
         // Fast path: Upstream official subtitle provided or resolved
@@ -1910,7 +1924,10 @@ app.get('/api/subtitles/prefetch', async (req, res) => {
                     if (cues.length > 0) {
                         const cleanSrc = (upstream_lang || 'auto').toLowerCase().split('-')[0];
                         let finalVtt = rawVtt;
-                        if (cleanSrc !== cleanTarget && (cleanTarget !== 'en' || (cleanSrc !== 'en' && cleanSrc !== 'auto'))) {
+                        const needsTranslation = cleanTarget === 'vi'
+                            ? !isVttContentVietnamese(rawVtt)
+                            : (cleanSrc !== cleanTarget && (cleanTarget !== 'en' || (cleanSrc !== 'en' && cleanSrc !== 'auto')));
+                        if (needsTranslation) {
                             const translated = await batchTranslate(cues.map(c => c.text), cleanTarget, cleanSrc);
                             const vttLines = ['WEBVTT', ''];
                             for (let i = 0; i < cues.length; i++) {
@@ -2199,14 +2216,18 @@ app.get('/api/subtitles/generate', async (req, res) => {
         const cacheKey = `${key}_${cleanTarget}`;
 
         if (vttMemoryCache.has(cacheKey)) {
-            return res.json({
-                ok: true,
-                ready: true,
-                isComplete: true,
-                lang: cleanTarget,
-                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
-                vttText: vttMemoryCache.get(cacheKey)
-            });
+            const cachedVtt = vttMemoryCache.get(cacheKey);
+            if (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt)) {
+                return res.json({
+                    ok: true,
+                    ready: true,
+                    isComplete: true,
+                    lang: cleanTarget,
+                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
+                    vttText: cachedVtt
+                });
+            }
+            vttMemoryCache.delete(cacheKey);
         }
 
         // Fast path: Upstream official subtitle provided
@@ -2223,7 +2244,10 @@ app.get('/api/subtitles/generate', async (req, res) => {
                     if (cues.length > 0) {
                         const cleanSrc = (upstream_lang || 'auto').toLowerCase().split('-')[0];
                         let finalVtt = rawVtt;
-                        if (cleanSrc !== cleanTarget && (cleanTarget !== 'en' || (cleanSrc !== 'en' && cleanSrc !== 'auto'))) {
+                        const needsTranslation = cleanTarget === 'vi'
+                            ? !isVttContentVietnamese(rawVtt)
+                            : (cleanSrc !== cleanTarget && (cleanTarget !== 'en' || (cleanSrc !== 'en' && cleanSrc !== 'auto')));
+                        if (needsTranslation) {
                             const translated = await batchTranslate(cues.map(c => c.text), cleanTarget, cleanSrc);
                             const vttLines = ['WEBVTT', ''];
                             for (let i = 0; i < cues.length; i++) {
@@ -2254,14 +2278,16 @@ app.get('/api/subtitles/generate', async (req, res) => {
         if (existingVtt) {
             let vttText = '';
             try { vttText = fs.readFileSync(existingVtt, 'utf8'); } catch (e) { }
-            return res.json({
-                ok: true,
-                ready: true,
-                isComplete: true,
-                lang: cleanTarget,
-                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
-                vttText
-            });
+            if (cleanTarget !== 'vi' || isVttContentVietnamese(vttText)) {
+                return res.json({
+                    ok: true,
+                    ready: true,
+                    isComplete: true,
+                    lang: cleanTarget,
+                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
+                    vttText
+                });
+            }
         }
 
         // 2. Check if base transcript exists — if so, we can generate the target VTT via text translation (No FFmpeg required!)
@@ -2343,10 +2369,14 @@ app.get('/api/subtitles/vtt', async (req, res) => {
         const cacheKey = `${key}_${cleanTarget}`;
 
         if (vttMemoryCache.has(cacheKey)) {
-            res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Cache-Control', 'public, max-age=86400');
-            return res.send(vttMemoryCache.get(cacheKey));
+            const cachedVtt = vttMemoryCache.get(cacheKey);
+            if (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt)) {
+                res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+                res.setHeader('Access-Control-Allow-Origin', '*');
+                res.setHeader('Cache-Control', 'public, max-age=86400');
+                return res.send(cachedVtt);
+            }
+            vttMemoryCache.delete(cacheKey);
         }
 
         const vttFile = `${key}_${cleanTarget}.vtt`;
