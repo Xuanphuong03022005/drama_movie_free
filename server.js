@@ -1507,6 +1507,7 @@ async function runStage1FastChunk(dramaSlug, epNum, streamUrl, cleanTarget) {
                         vttLines.push('');
                     }
                     fs.writeFileSync(vttPath, vttLines.join('\n'), 'utf8');
+                    try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), vttLines.join('\n'), 'utf8'); } catch (e) { }
                     return { ready: true, isComplete: false };
                 }
             }
@@ -1612,6 +1613,7 @@ async function runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarg
             const cues = parseSrtToCues(srtContent);
 
             fs.writeFileSync(baseJsonPath, JSON.stringify(cues, null, 2), 'utf8');
+            try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, `${key}_base.json`), JSON.stringify(cues, null, 2), 'utf8'); } catch (e) { }
             console.log(`[Audio STT] ✅ Successfully transcribed full ${cues.length} speech cues for ${key}! Updating full VTT...`);
 
             // Update full VTT file
@@ -1625,6 +1627,7 @@ async function runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarg
                 fullVttLines.push('');
             }
             fs.writeFileSync(vttPath, fullVttLines.join('\n'), 'utf8');
+            try { fs.writeFileSync(path.join(REPO_SUBTITLES_DIR, vttFile), fullVttLines.join('\n'), 'utf8'); } catch (e) { }
             return cues;
         } catch (err) {
             if (err.message !== 'Operation aborted') {
