@@ -1312,6 +1312,7 @@ function findSubtitleFile(filename) {
     return null;
 }
 console.log('[STT] Subtitle temp dir:', SUBTITLES_DIR);
+const vttMemoryCache = new Map(); // In-memory cache: ${dramaSlug}_ep${ep}_${lang} -> vttContent
 
 // CRITICAL: In ffmpeg -af filter strings, Windows drive-letter colons must be escaped
 // as \: otherwise ffmpeg treats them as option separators.
@@ -1712,63 +1713,71 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
 }
 
 // 7.5 Subtitle Prefetch Endpoint — Fire-and-forget background warm-up for next episode
-// Called by the client while user is still watching current episode, so Stage 1
-// transcription is already done (or in progress) by the time they click "next".
+// Proactive Subtitle Prefetch Endpoint: Runs in background while user watches previous episode
 app.get('/api/subtitles/prefetch', async (req, res) => {
-    // Respond immediately — the actual work runs in the background
-    res.json({ ok: true, status: 'queued' });
+    try {
+        const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi', groq_key = '' } = req.query;
+        const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
+        const dramaSlug = cleanDramaSlug(slug);
+        const epNum = parseInt(ep, 10) || 1;
+        const key = `${dramaSlug}_ep${epNum}`;
+        const cacheKey = `${key}_${cleanTarget}`;
 
-    const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi' } = req.query;
-    const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
-    const dramaSlug = cleanDramaSlug(slug);
-    const epNum = parseInt(ep, 10) || 1;
-    const key = `${dramaSlug}_ep${epNum}`;
-    const baseJsonPath = path.join(SUBTITLES_DIR, `${key}_base.json`);
-    const vttFile = path.join(SUBTITLES_DIR, `${key}_${cleanTarget}.vtt`);
+        // 1. Check in-memory VTT cache first
+        if (vttMemoryCache.has(cacheKey)) {
+            return res.json({
+                ok: true,
+                ready: true,
+                vttText: vttMemoryCache.get(cacheKey),
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${epNum}&lang=${encodeURIComponent(cleanTarget)}`
+            });
+        }
 
-    // Skip if already fully transcribed
-    if (fs.existsSync(baseJsonPath) || fs.existsSync(vttFile)) {
-        return;
-    }
-
-    // Skip if Stage 1 is already running for this key
-    if (activeStage1Promises.has(key)) {
-        return;
-    }
-
-    // Run in background — resolve stream URL if not provided
-    (async () => {
-        try {
-            let activeStreamUrl = stream_url;
-
-            // If no stream_url provided, resolve it automatically
-            if (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl)) {
-                console.log(`[Prefetch] No stream URL for ${key}, resolving automatically...`);
-                const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
-                if (fresh && fresh.play_url) {
-                    activeStreamUrl = fresh.play_url;
-                    console.log(`[Prefetch] Resolved stream URL for ${key}`);
-                } else {
-                    console.warn(`[Prefetch] Could not resolve stream URL for ${key}, skipping`);
-                    return;
-                }
+        // 2. Resolve stream URL if not provided
+        let activeStreamUrl = stream_url;
+        if (!activeStreamUrl || isAuthKeyExpired(activeStreamUrl)) {
+            const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+            if (fresh && fresh.play_url) {
+                activeStreamUrl = fresh.play_url;
             }
+        }
 
-            // Kick off Stage 1 fast chunk in background
-            console.log(`[Prefetch] 🚀 Starting background Stage 1 pre-transcription for ${key}...`);
+        // 3. If cloud API is available (Groq / OpenAI) — run cloud STT
+        const cloudApiKey = (groq_key || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+        if (cloudApiKey && activeStreamUrl) {
+            try {
+                console.log(`[Prefetch] 🚀 Cloud AI prefetching subtitles for next episode ${key}...`);
+                const cloudResult = await transcribeViaCloudApi(slug, epNum, activeStreamUrl, cleanTarget, cloudApiKey);
+                if (cloudResult && cloudResult.ready) {
+                    if (cloudResult.vttText) vttMemoryCache.set(cacheKey, cloudResult.vttText);
+                    return res.json(cloudResult);
+                }
+            } catch (err) {
+                console.warn(`[Prefetch] Cloud STT prefetch failed for ${key}:`, err.message);
+            }
+        }
+
+        // 4. Local FFmpeg fallback if available
+        const hasFfmpeg = await isFfmpegAvailable();
+        if (hasFfmpeg && activeStreamUrl) {
             const result = await runStage1FastChunk(dramaSlug, epNum, activeStreamUrl, cleanTarget);
             if (result && result.ready) {
-                console.log(`[Prefetch] ✅ Stage 1 pre-transcription complete for ${key}!`);
-                // Also kick Stage 2 for full episode
-                if (!fs.existsSync(baseJsonPath) && !activeStage2Promises.has(key)) {
-                    runStage2FullTranscription(dramaSlug, epNum, activeStreamUrl, cleanTarget).catch(() => { });
-                }
+                let vttText = '';
+                try { if (result.path) vttText = fs.readFileSync(result.path, 'utf8'); } catch (e) { }
+                if (vttText) vttMemoryCache.set(cacheKey, vttText);
+                return res.json({
+                    ok: true,
+                    ready: true,
+                    vttText,
+                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${epNum}&lang=${encodeURIComponent(cleanTarget)}`
+                });
             }
-        } catch (e) {
-            // Non-critical background task — silently ignore
-            console.warn(`[Prefetch] Background prefetch error for ${key}:`, e.message);
         }
-    })();
+
+        res.json({ ok: false, error: 'prefetch_in_progress' });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
 });
 
 function formatVttTimestamp(seconds) {
@@ -1966,6 +1975,7 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         fs.writeFileSync(vttPath, vttContent, 'utf8');
     } catch (e) { }
 
+    vttMemoryCache.set(`${dramaSlug}_ep${epNum}_${cleanTarget}`, vttContent);
     console.log(`[Cloud STT] ✅ Successfully generated and translated ${cues.length} cues for ${key}!`);
     return {
         ok: true,
@@ -1983,9 +1993,22 @@ app.get('/api/subtitles/generate', async (req, res) => {
         const { slug = 'unknown', ep = '1', stream_url = '', lang = 'vi', groq_key = '' } = req.query;
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
 
-        // 1. Check if pre-cached VTT already exists on disk (repo cache or temp)
+        // 1. Check if pre-cached VTT already exists in memory or disk
         const dramaSlug = cleanDramaSlug(slug);
         const key = `${dramaSlug}_ep${ep}`;
+        const cacheKey = `${key}_${cleanTarget}`;
+
+        if (vttMemoryCache.has(cacheKey)) {
+            return res.json({
+                ok: true,
+                ready: true,
+                isComplete: true,
+                lang: cleanTarget,
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
+                vttText: vttMemoryCache.get(cacheKey)
+            });
+        }
+
         const vttFile = `${key}_${cleanTarget}.vtt`;
         const existingVtt = findSubtitleFile(vttFile);
         if (existingVtt) {
@@ -2077,6 +2100,15 @@ app.get('/api/subtitles/vtt', async (req, res) => {
         const dramaSlug = cleanDramaSlug(slug);
         const cleanTarget = (lang || 'vi').toLowerCase().split('-')[0];
         const key = `${dramaSlug}_ep${ep}`;
+        const cacheKey = `${key}_${cleanTarget}`;
+
+        if (vttMemoryCache.has(cacheKey)) {
+            res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.send(vttMemoryCache.get(cacheKey));
+        }
+
         const vttFile = `${key}_${cleanTarget}.vtt`;
         let vttPath = findSubtitleFile(vttFile);
 

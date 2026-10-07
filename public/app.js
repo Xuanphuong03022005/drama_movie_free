@@ -39,6 +39,8 @@
     let subtitlePollTimer = null;
     let activeSubtitleRequest = null;
     let currentSubtitleCues = [];
+    const clientSubtitleCache = new Map();
+    const inFlightPrefetches = new Set();
 
     // DOM Elements - Navigation & Header
     const providersContainer = document.getElementById('providers-container');
@@ -637,9 +639,8 @@
             if (!nextEpCountdown.hidden) hideCountdown();
         }
 
-        // Prefetch next episode only after user has actively watched for at least 15s or has <= 30s left
-        // Lowered from 18s → 15s so Stage 1 subtitle transcription has more warm-up time
-        if (currentDramaData && !_hasPrefetchedNext && (mainVideo.currentTime >= 15 || timeLeft <= 30)) {
+        // Prefetch next episode stream & subtitles after 3s of playback or <= 30s left
+        if (currentDramaData && !_hasPrefetchedNext && (mainVideo.currentTime >= 3 || timeLeft <= 30)) {
             _hasPrefetchedNext = true;
             prefetchNextEpisodeStream(currentEpisodeIndex + 1);
         }
@@ -1017,6 +1018,60 @@
         let pollCount = 0;
         const maxPolls = 80;
 
+        const cacheKey = `${slug}_ep${epNum}_${subLang}`;
+
+        function attachVtt(vttUrl, directVttText) {
+            if (directVttText && directVttText.startsWith('WEBVTT')) {
+                if (activeSubtitleRequest === reqId) {
+                    currentSubtitleCues = parseWebVTT(directVttText);
+                    updateCustomSubtitleOverlay();
+                }
+                mainVideo.querySelectorAll('track').forEach(t => t.remove());
+                const track = document.createElement('track');
+                track.kind = 'subtitles';
+                track.label = langName;
+                track.srclang = subLang;
+                const blob = new Blob([directVttText], { type: 'text/vtt' });
+                track.src = URL.createObjectURL(blob);
+                track.default = true;
+                mainVideo.appendChild(track);
+                return;
+            }
+
+            if (vttUrl) {
+                // 1. Fetch text directly for Custom Cinema Overlay
+                fetch(vttUrl)
+                    .then(r => r.text())
+                    .then(vttText => {
+                        if (activeSubtitleRequest === reqId) {
+                            currentSubtitleCues = parseWebVTT(vttText);
+                            updateCustomSubtitleOverlay();
+                        }
+                    })
+                    .catch(() => { });
+
+                // 2. Also keep native track in sync
+                mainVideo.querySelectorAll('track').forEach(t => t.remove());
+                const track = document.createElement('track');
+                track.kind = 'subtitles';
+                track.label = langName;
+                track.srclang = subLang;
+                track.src = `${vttUrl}&_v=${Date.now()}`;
+                track.default = true;
+                mainVideo.appendChild(track);
+            }
+        }
+
+        // Fast path: Check in-memory client cache (0ms instant attach)
+        if (clientSubtitleCache.has(cacheKey)) {
+            const cached = clientSubtitleCache.get(cacheKey);
+            console.log(`[Subtitle] ⚡ Phụ đề Tập ${epNum} đã dịch sẵn từ trước! Áp dụng ngay lập tức.`);
+            if (subStatusToast) subStatusToast.classList.add('hidden');
+            attachVtt(cached.url, cached.vttText);
+            setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 400);
+            return;
+        }
+
         if (subStatusToast && (!currentSubtitleCues || currentSubtitleCues.length === 0)) {
             subStatusToast.classList.remove('hidden');
         }
@@ -1033,50 +1088,11 @@
 
                 if (data.ok && data.ready && (data.url || data.vttText)) {
                     if (subStatusToast) subStatusToast.classList.add('hidden');
-
-                    function attachVtt(vttUrl, directVttText) {
-                        if (directVttText && directVttText.startsWith('WEBVTT')) {
-                            if (activeSubtitleRequest === reqId) {
-                                currentSubtitleCues = parseWebVTT(directVttText);
-                                updateCustomSubtitleOverlay();
-                            }
-                            mainVideo.querySelectorAll('track').forEach(t => t.remove());
-                            const track = document.createElement('track');
-                            track.kind = 'subtitles';
-                            track.label = langName;
-                            track.srclang = subLang;
-                            const blob = new Blob([directVttText], { type: 'text/vtt' });
-                            track.src = URL.createObjectURL(blob);
-                            track.default = true;
-                            mainVideo.appendChild(track);
-                            return;
-                        }
-
-                        if (vttUrl) {
-                            // 1. Fetch text directly for Custom Cinema Overlay
-                            fetch(vttUrl)
-                                .then(r => r.text())
-                                .then(vttText => {
-                                    if (activeSubtitleRequest === reqId) {
-                                        currentSubtitleCues = parseWebVTT(vttText);
-                                        updateCustomSubtitleOverlay();
-                                    }
-                                })
-                                .catch(() => { });
-
-                            // 2. Also keep native track in sync
-                            mainVideo.querySelectorAll('track').forEach(t => t.remove());
-                            const track = document.createElement('track');
-                            track.kind = 'subtitles';
-                            track.label = langName;
-                            track.srclang = subLang;
-                            track.src = `${vttUrl}&_v=${Date.now()}`;
-                            track.default = true;
-                            mainVideo.appendChild(track);
-                        }
-                    }
-
+                    clientSubtitleCache.set(cacheKey, { vttText: data.vttText, url: data.url });
                     attachVtt(data.url, data.vttText);
+
+                    // Proactively trigger prefetch for next episode
+                    setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 400);
 
                     // Stage 2 Poller: If initial VTT is partial, poll until full episode is complete!
                     if (!data.isComplete) {
@@ -4664,25 +4680,63 @@
 
     function prefetchNextEpisodeSubtitle(nextIndex) {
         if (!currentDramaData || !currentDramaData.episodes || !currentDramaData.episodes[nextIndex]) return;
-        if (!selectedSubtitle || selectedSubtitle === 'off') return;
+        const subLang = selectedSubtitle || 'vi';
+        if (!subLang || subLang === 'off') return;
+
         const nextEp = currentDramaData.episodes[nextIndex];
-        const streamUrl = nextEp.play_url || nextEp.direct_play_url || '';
         const epNum = nextEp.number || (nextIndex + 1);
         const slug = currentDramaData?.slug || '';
-        const subLang = selectedSubtitle;
+        const cacheKey = `${slug}_ep${epNum}_${subLang}`;
 
-        // Use /api/subtitles/prefetch — server responds instantly and does all heavy work
-        // in the background, including auto-resolving stream URL if not yet available.
-        // This means subtitle warm-up works even before the next episode stream is fetched.
-        fetch(`/api/subtitles/prefetch?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}`)
-            .catch(() => { });
+        // Skip if already prefetched or in-flight
+        if (clientSubtitleCache.has(cacheKey) || inFlightPrefetches.has(cacheKey)) return;
+        inFlightPrefetches.add(cacheKey);
+
+        console.log(`[Subtitle Prefetch] ⏳ Đang dịch trước phụ đề cho Tập ${epNum} trong khi đang xem Tập ${currentEpisodeIndex + 1}...`);
+
+        async function startPrefetch() {
+            try {
+                let streamUrl = nextEp.play_url || nextEp.direct_play_url || '';
+                if (!streamUrl || isAuthKeyExpired(streamUrl)) {
+                    const watchUrl = nextEp.watch_url || currentDramaData?.watch_url || '';
+                    const rRes = await fetch(`/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`);
+                    const rData = await rRes.json();
+                    if (rData.ok && rData.play_url) {
+                        nextEp.play_url = rData.play_url;
+                        nextEp.direct_play_url = rData.direct_play_url || '';
+                        nextEp.is_hls = rData.is_hls;
+                        streamUrl = rData.play_url;
+                    }
+                }
+
+                if (!streamUrl) {
+                    inFlightPrefetches.delete(cacheKey);
+                    return;
+                }
+
+                const groqKey = localStorage.getItem('df_groq_key') || '';
+                const prefetchUrl = `/api/subtitles/prefetch?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
+                const res = await fetch(prefetchUrl);
+                const data = await res.json();
+                if (data && data.ok && data.ready) {
+                    clientSubtitleCache.set(cacheKey, { vttText: data.vttText, url: data.url });
+                    console.log(`[Subtitle Prefetch] 🎉 Đã dịch xong phụ đề Tập ${epNum}! Khi xem sẽ có ngay lập tức.`);
+                }
+            } catch (err) {
+                console.warn(`[Subtitle Prefetch] Lỗi dịch trước tập ${epNum}:`, err.message);
+            } finally {
+                inFlightPrefetches.delete(cacheKey);
+            }
+        }
+
+        startPrefetch();
     }
 
     function prefetchNextEpisodeStream(nextIndex) {
         if (!currentDramaData || !currentDramaData.episodes || !currentDramaData.episodes[nextIndex]) return;
         const nextEp = currentDramaData.episodes[nextIndex];
+        prefetchNextEpisodeSubtitle(nextIndex);
         if (nextEp.play_url || nextEp.direct_play_url) {
-            prefetchNextEpisodeSubtitle(nextIndex);
             return;
         }
 
