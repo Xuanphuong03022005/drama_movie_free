@@ -274,6 +274,7 @@ const dramaCache = new Map();
 const dramaInFlight = new Map();
 const DRAMA_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
 const episodeCountCache = new Map();
+function saveEpisodeCacheToDisk() { /* In-memory only, zero disk writes */ }
 
 
 app.get('/api/drama', async (req, res) => {
@@ -568,7 +569,6 @@ app.get('/api/drama', async (req, res) => {
         if (result && result.total_episodes > 0) {
             episodeCountCache.set(cacheKey, result.total_episodes);
             if (watchUrl) episodeCountCache.set(watchUrl, result.total_episodes);
-            saveEpisodeCacheToDisk();
         }
 
         res.json(result);
@@ -656,7 +656,6 @@ app.post('/api/drama/batch-episode-counts', async (req, res) => {
                     }
                 }));
             }
-            saveEpisodeCacheToDisk();
         }
 
         res.json({ ok: true, counts });
