@@ -10,6 +10,22 @@ const execPromise = util.promisify(exec);
 
 const pkg = require('./package.json');
 
+// Load .env variables locally if present
+try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        envContent.split(/\r?\n/).forEach(line => {
+            const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+            if (m && !process.env[m[1]]) {
+                let v = m[2] || '';
+                if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+                process.env[m[1]] = v.trim();
+            }
+        });
+    }
+} catch (e) { }
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -2021,9 +2037,8 @@ app.get('/api/subtitles/generate', async (req, res) => {
         if (!hasFfmpeg) {
             return res.json({
                 ok: false,
-                error: 'cloud_key_needed',
-                can_use_cloud: true,
-                message: 'Tập phim này chưa có sẵn phụ đề tiếng Việt trên Vercel. Bạn có thể kích hoạt bóc băng tự động bằng Groq AI miễn phí hoặc bật tính năng Phụ đề trực tiếp của trình duyệt.'
+                error: 'subtitles_unavailable',
+                message: 'Chưa có phụ đề cho tập phim này.'
             });
         }
 

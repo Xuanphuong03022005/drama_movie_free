@@ -1145,41 +1145,7 @@
         }
     }
 
-    function openAiSubtitleModal(customMsg) {
-        const modal = document.getElementById('ai-subtitle-modal');
-        if (!modal) return;
-        const input = document.getElementById('df-groq-key-input');
-        if (input) input.value = localStorage.getItem('df_groq_key') || '';
-        modal.classList.remove('hidden');
-    }
 
-    function closeAiSubtitleModal() {
-        const modal = document.getElementById('ai-subtitle-modal');
-        if (modal) modal.classList.add('hidden');
-    }
-
-    // AI Subtitle Modal event listeners
-    const aiSubModal = document.getElementById('ai-subtitle-modal');
-    const aiSubCloseBtn = document.getElementById('ai-sub-close-btn');
-    const aiSubBackdrop = document.getElementById('ai-sub-backdrop');
-    const dfSaveGroqKeyBtn = document.getElementById('df-save-groq-key-btn');
-    const dfGroqKeyInput = document.getElementById('df-groq-key-input');
-
-    if (aiSubCloseBtn) aiSubCloseBtn.addEventListener('click', closeAiSubtitleModal);
-    if (aiSubBackdrop) aiSubBackdrop.addEventListener('click', closeAiSubtitleModal);
-    if (dfSaveGroqKeyBtn && dfGroqKeyInput) {
-        dfSaveGroqKeyBtn.addEventListener('click', () => {
-            const val = dfGroqKeyInput.value.trim();
-            if (val) {
-                localStorage.setItem('df_groq_key', val);
-                showToast('Đã lưu Groq API Key! Đang bóc băng và dịch tập phim...', 'fa-check');
-                closeAiSubtitleModal();
-                loadEpisodeSubtitle(selectedSubtitle || 'vi');
-            } else {
-                showToast('Vui lòng dán Groq API Key trước khi lưu', 'fa-triangle-exclamation');
-            }
-        });
-    }
 
     function syncSubtitleUI() {
         const sub = selectedSubtitle || 'vi';
