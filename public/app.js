@@ -35,6 +35,7 @@
     // Quality / subtitle state
     let selectedQuality = 'auto';
     let selectedSubtitle = localStorage.getItem('df_selected_sub') || 'vi';
+    let selectedSubtitleSize = localStorage.getItem('df_sub_size') || 'large';
     let _pendingResumeTime = 0;
     let subtitlePollTimer = null;
     let activeSubtitleRequest = null;
@@ -217,6 +218,9 @@
     const subtitleBtn = document.getElementById('subtitle-btn');
     const subtitleMenu = document.getElementById('subtitle-menu');
     const subtitleLabel = document.getElementById('subtitle-label');
+    const subSizeBtn = document.getElementById('sub-size-btn');
+    const subSizeMenu = document.getElementById('sub-size-menu');
+    const subSizeLabel = document.getElementById('sub-size-label');
 
     // Language Selector Elements & State
     const SUPPORTED_LANGUAGES = [
@@ -319,6 +323,7 @@
         initLanguageSelector();
         applyTranslations(currentLang);
         syncSubtitleUI();
+        applySubtitleSize(selectedSubtitleSize);
         bindEvents();
         bindPlayerEvents();
         setupDiscoveryFilters();
@@ -1187,6 +1192,42 @@
         showToast(sub === 'off' ? t('sub_off') : `Phụ đề: ${label}`, 'fa-closed-captioning');
     }
 
+    const SUBTITLE_SIZE_LABELS = {
+        normal: 'Vừa (18px)',
+        large: 'Lớn (22px - Mặc định)',
+        xlarge: 'Rất lớn (26px)',
+        huge: 'Cực đại (31px)'
+    };
+
+    function applySubtitleSize(size) {
+        selectedSubtitleSize = size || 'large';
+        localStorage.setItem('df_sub_size', selectedSubtitleSize);
+
+        if (customSubtitleOverlay) {
+            customSubtitleOverlay.classList.remove('sub-size-normal', 'sub-size-large', 'sub-size-xlarge', 'sub-size-huge');
+            customSubtitleOverlay.classList.add(`sub-size-${selectedSubtitleSize}`);
+        }
+
+        if (subSizeLabel) {
+            const shortName = { normal: 'Vừa', large: 'Lớn', xlarge: 'Rất lớn', huge: 'Cực đại' }[selectedSubtitleSize] || 'Lớn';
+            subSizeLabel.textContent = `Cỡ: ${shortName}`;
+        }
+
+        if (subSizeMenu) {
+            subSizeMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(btn => {
+                const isA = btn.getAttribute('data-sub-size') === selectedSubtitleSize;
+                btn.classList.toggle('active', isA);
+                const ch = btn.querySelector('.item-check');
+                if (isA && !ch) btn.innerHTML += ' <span class="item-check"><i class="fa-solid fa-check"></i></span>';
+                else if (!isA && ch) ch.remove();
+            });
+        }
+
+        document.querySelectorAll('.sub-size-pill').forEach(pill => {
+            pill.classList.toggle('active', pill.getAttribute('data-sub-size') === selectedSubtitleSize);
+        });
+    }
+
     // ==========================================
     // AUTO SCROLL TO ACTIVE EPISODE
     // ==========================================
@@ -1382,15 +1423,54 @@
         });
         if (btnResumeDismiss) btnResumeDismiss.addEventListener('click', () => resumeBanner.hidden = true);
 
-        // Quality/Subtitle dropdowns
+        // Quality/Subtitle/Size dropdowns
         if (qualityBtn && qualityMenu) {
-            qualityBtn.addEventListener('click', e => { e.stopPropagation(); qualityMenu.hidden = !qualityMenu.hidden; if (subtitleMenu) subtitleMenu.hidden = true; });
+            qualityBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                qualityMenu.hidden = !qualityMenu.hidden;
+                if (subtitleMenu) subtitleMenu.hidden = true;
+                if (subSizeMenu) subSizeMenu.hidden = true;
+            });
             qualityMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => item.addEventListener('click', () => { selectQuality(item.getAttribute('data-quality')); qualityMenu.hidden = true; }));
         }
         if (subtitleBtn && subtitleMenu) {
-            subtitleBtn.addEventListener('click', e => { e.stopPropagation(); subtitleMenu.hidden = !subtitleMenu.hidden; if (qualityMenu) qualityMenu.hidden = true; });
-            subtitleMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => item.addEventListener('click', () => { selectSubtitle(item.getAttribute('data-sub')); subtitleMenu.hidden = true; }));
+            subtitleBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                subtitleMenu.hidden = !subtitleMenu.hidden;
+                if (qualityMenu) qualityMenu.hidden = true;
+                if (subSizeMenu) subSizeMenu.hidden = true;
+            });
+            subtitleMenu.querySelectorAll('.ctrl-dropdown-menu-item[data-sub]').forEach(item => item.addEventListener('click', () => { selectSubtitle(item.getAttribute('data-sub')); subtitleMenu.hidden = true; }));
         }
+        if (subSizeBtn && subSizeMenu) {
+            subSizeBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                subSizeMenu.hidden = !subSizeMenu.hidden;
+                if (qualityMenu) qualityMenu.hidden = true;
+                if (subtitleMenu) subtitleMenu.hidden = true;
+            });
+            subSizeMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => item.addEventListener('click', () => {
+                const size = item.getAttribute('data-sub-size');
+                applySubtitleSize(size);
+                subSizeMenu.hidden = true;
+                showToast(`Cỡ chữ: ${SUBTITLE_SIZE_LABELS[size] || size}`, 'fa-text-height');
+            }));
+        }
+
+        document.querySelectorAll('.sub-size-pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const size = pill.getAttribute('data-sub-size');
+                applySubtitleSize(size);
+                showToast(`Cỡ chữ: ${SUBTITLE_SIZE_LABELS[size] || size}`, 'fa-text-height');
+            });
+        });
+
+        document.addEventListener('click', () => {
+            if (qualityMenu) qualityMenu.hidden = true;
+            if (subtitleMenu) subtitleMenu.hidden = true;
+            if (subSizeMenu) subSizeMenu.hidden = true;
+        });
 
         // Mobile swipe
         if (videoViewport) {
