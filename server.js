@@ -113,6 +113,61 @@ app.get('/api/analytics/status', (req, res) => {
     res.json({ ok: true, ...st, status: st });
 });
 
+// Endpoint to view dramas stored in Supabase
+app.get('/api/drama/supabase-list', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit || '50', 10);
+        const offset = parseInt(req.query.offset || '0', 10);
+        const provider = req.query.provider || null;
+        const dramas = await db.getDramas(limit, offset, provider);
+        const total = await db.getDramaCount();
+        res.json({ ok: true, count: dramas.length, total, dramas });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// Endpoint to trigger batch sync of dramas from top providers into Supabase
+app.post('/api/drama/sync-supabase', async (req, res) => {
+    try {
+        const providersToSync = ['dramabox', 'anyreel', 'reelshort', 'shortmax', 'meloshort'];
+        let totalSynced = 0;
+
+        for (const prov of providersToSync) {
+            try {
+                const url = `${BASE_URL}/home/providers/sections?provider=${prov}&lang=vi-VN`;
+                const upstreamRes = await fetch(url, {
+                    headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
+                });
+                if (upstreamRes.ok) {
+                    const data = await upstreamRes.json();
+                    if (Array.isArray(data.sections)) {
+                        const items = [];
+                        data.sections.forEach(s => {
+                            if (Array.isArray(s.items)) {
+                                s.items.forEach(it => {
+                                    if (it && (it.book_id || it.title)) {
+                                        items.push({ ...it, provider: prov });
+                                    }
+                                });
+                            }
+                        });
+                        const saved = await db.saveDramasBatch(items);
+                        totalSynced += saved;
+                    }
+                }
+            } catch (pErr) {
+                console.warn(`Sync failed for provider ${prov}:`, pErr.message);
+            }
+        }
+
+        const totalInDb = await db.getDramaCount();
+        res.json({ ok: true, totalSynced, totalInDb });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
 const BASE_URL = 'https://narto-drama.com';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -255,6 +310,21 @@ app.get('/api/sections', async (req, res) => {
                     sec.items.forEach(normalizeItem);
                 }
             });
+
+            // Automatically persist dramas into Supabase drama table in background
+            const allItems = [];
+            data.sections.forEach(sec => {
+                if (Array.isArray(sec.items)) {
+                    sec.items.forEach(it => {
+                        if (it && (it.book_id || it.title)) {
+                            allItems.push({ ...it, provider });
+                        }
+                    });
+                }
+            });
+            if (allItems.length > 0) {
+                db.saveDramasBatch(allItems).catch(e => console.error('[Supabase DB] saveDramasBatch error:', e.message));
+            }
         }
 
         res.json({
@@ -668,6 +738,21 @@ app.get('/api/drama', async (req, res) => {
         if (result && result.total_episodes > 0) {
             episodeCountCache.set(cacheKey, result.total_episodes);
             if (watchUrl) episodeCountCache.set(watchUrl, result.total_episodes);
+        }
+
+        // Save detailed drama info into Supabase drama table
+        if (result && result.title) {
+            const dramaBookId = result.slug || (watchUrl && (watchUrl.match(/book_id=([^&]+)/) || [])[1]) || result.title;
+            const dramaProv = (watchUrl && (watchUrl.match(/provider=([^&]+)/) || [])[1]) || 'dramabox';
+            db.saveDrama({
+                book_id: dramaBookId,
+                title: result.title,
+                description: result.description || '',
+                poster_url: result.poster || '',
+                watch_url: watchUrl || result.final_url || '',
+                provider: dramaProv,
+                total_episodes: result.total_episodes || 0
+            }).catch(e => console.error('[Supabase DB] saveDrama detail error:', e.message));
         }
 
         res.json(result);

@@ -107,7 +107,29 @@ async function initDatabase() {
             );
         `);
 
-        console.log('[Supabase DB] Analytics tables schema verified.');
+        // Ensure drama table exists and has all required columns
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS drama (
+                id BIGSERIAL PRIMARY KEY,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS book_id VARCHAR(128);
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS title TEXT;
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS description TEXT;
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS poster_url TEXT;
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS watch_url TEXT;
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS provider VARCHAR(64);
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS total_episodes INT DEFAULT 0;
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS is_adult BOOLEAN DEFAULT false;
+            ALTER TABLE drama ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_drama_book_provider ON drama (book_id, provider);
+            CREATE INDEX IF NOT EXISTS idx_drama_title ON drama (title);
+            CREATE INDEX IF NOT EXISTS idx_drama_provider ON drama (provider);
+        `);
+
+        console.log('[Supabase DB] Analytics and drama tables schema verified.');
         return true;
     } catch (err) {
         isConnected = false;
@@ -408,12 +430,126 @@ function parseUserAgent(uaString = '') {
     return { device, browser, os };
 }
 
+/**
+ * Upsert a single drama into Supabase drama table
+ */
+async function saveDrama(drama) {
+    if (!drama || (!drama.book_id && !drama.title)) return null;
+    if (!isConnected && !DB_PASSWORD && !process.env.DATABASE_URL) return null;
+
+    try {
+        const client = getPool();
+        const bookId = String(drama.book_id || drama.id || Math.random().toString(36).slice(2, 10));
+        const provider = String(drama.provider || drama.category_name || 'dramabox').toLowerCase().trim();
+        const title = String(drama.title || 'Untitled').trim();
+        const description = String(drama.description || '').trim();
+        const posterUrl = String(drama.poster_url || drama.poster || '').trim();
+        const watchUrl = String(drama.watch_url || '').trim();
+        const episodesCount = parseInt(drama.total_episodes || drama.episodes_count || (drama.episodes ? drama.episodes.length : 0), 10) || 0;
+        const tags = Array.isArray(drama.tag_names || drama.tags) ? (drama.tag_names || drama.tags) : [];
+        const isAdult = Boolean(drama.is_adult);
+
+        const sql = `
+            INSERT INTO drama (
+                book_id, title, description, poster_url, watch_url,
+                provider, total_episodes, tags, is_adult, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            ON CONFLICT (book_id, provider) DO UPDATE SET
+                title = CASE WHEN EXCLUDED.title != '' THEN EXCLUDED.title ELSE drama.title END,
+                description = CASE WHEN EXCLUDED.description != '' THEN EXCLUDED.description ELSE drama.description END,
+                poster_url = CASE WHEN EXCLUDED.poster_url != '' THEN EXCLUDED.poster_url ELSE drama.poster_url END,
+                watch_url = CASE WHEN EXCLUDED.watch_url != '' THEN EXCLUDED.watch_url ELSE drama.watch_url END,
+                total_episodes = GREATEST(EXCLUDED.total_episodes, drama.total_episodes),
+                tags = CASE WHEN EXCLUDED.tags != '[]'::jsonb THEN EXCLUDED.tags ELSE drama.tags END,
+                is_adult = EXCLUDED.is_adult,
+                updated_at = NOW()
+            RETURNING id, book_id, title;
+        `;
+
+        const values = [
+            bookId,
+            title,
+            description,
+            posterUrl,
+            watchUrl,
+            provider,
+            episodesCount,
+            JSON.stringify(tags),
+            isAdult
+        ];
+
+        const res = await client.query(sql, values);
+        return res.rows[0];
+    } catch (err) {
+        console.error('[Supabase DB] saveDrama error:', err.message);
+        return null;
+    }
+}
+
+/**
+ * Batch upsert dramas into Supabase drama table
+ */
+async function saveDramasBatch(dramaList) {
+    if (!Array.isArray(dramaList) || !dramaList.length) return 0;
+    let saved = 0;
+    for (const d of dramaList) {
+        if (d && (d.title || d.book_id)) {
+            const res = await saveDrama(d);
+            if (res) saved++;
+        }
+    }
+    return saved;
+}
+
+/**
+ * Query dramas from Supabase drama table
+ */
+async function getDramas(limit = 50, offset = 0, provider = null) {
+    if (!isConnected) return [];
+    try {
+        const client = getPool();
+        let sql = 'SELECT * FROM drama';
+        const params = [];
+        if (provider) {
+            params.push(provider.toLowerCase());
+            sql += ' WHERE provider = $1 ORDER BY updated_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+            params.push(limit, offset);
+        } else {
+            sql += ' ORDER BY updated_at DESC LIMIT $1 OFFSET $2';
+            params.push(limit, offset);
+        }
+        const res = await client.query(sql, params);
+        return res.rows;
+    } catch (err) {
+        console.error('[Supabase DB] getDramas error:', err.message);
+        return [];
+    }
+}
+
+/**
+ * Get total dramas count in Supabase
+ */
+async function getDramaCount() {
+    if (!isConnected) return 0;
+    try {
+        const client = getPool();
+        const res = await client.query('SELECT COUNT(*)::INT AS count FROM drama');
+        return res.rows[0]?.count || 0;
+    } catch (err) {
+        return 0;
+    }
+}
+
 module.exports = {
     initDatabase,
     recordVisit,
     getAnalyticsStats,
     getRecentVisits,
     parseUserAgent,
+    saveDrama,
+    saveDramasBatch,
+    getDramas,
+    getDramaCount,
     getStatus: () => ({
         connected: isConnected,
         host: DB_HOST,
