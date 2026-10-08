@@ -109,7 +109,8 @@ app.get('/api/analytics/recent', async (req, res) => {
 });
 
 app.get('/api/analytics/status', (req, res) => {
-    res.json({ ok: true, status: db.getStatus() });
+    const st = db.getStatus();
+    res.json({ ok: true, ...st, status: st });
 });
 
 const BASE_URL = 'https://narto-drama.com';

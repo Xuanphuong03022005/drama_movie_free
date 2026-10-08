@@ -81,8 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
 
             if (data.ok) {
+                const st = data.status || data;
+                const isConn = Boolean(st.connected);
                 const indicator = dbStatusBadge.querySelector('.status-indicator');
-                if (data.connected && data.source === 'supabase_postgres') {
+
+                if (isConn) {
                     indicator.className = 'status-indicator success';
                     dbStatusLabel.textContent = 'Supabase PostgreSQL Đã Kết Nối';
                     supabaseNoticeBanner.style.display = 'none';
@@ -97,12 +100,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     indicator.className = 'status-indicator warning';
                     dbStatusLabel.textContent = 'In-Memory Fallback (Chờ mật khẩu DB)';
                     supabaseNoticeBanner.style.display = 'flex';
-                    if (supabaseNoticeDesc && data.statusMessage) {
-                        supabaseNoticeDesc.innerHTML = `${data.statusMessage}. Backend tự động lưu trữ trên bộ nhớ RAM an toàn.`;
+                    if (supabaseNoticeDesc) {
+                        const errMsg = st.error || 'Vui lòng kiểm tra lại mật khẩu hoặc thông số trong .env';
+                        supabaseNoticeDesc.innerHTML = `${errMsg}. Backend đang lưu tạm trên bộ nhớ RAM an toàn.`;
                     }
 
                     if (cfgPasswordStatus) {
-                        cfgPasswordStatus.innerHTML = '<span class="badge badge-warning"><i class="fa-solid fa-key"></i> Chưa nhập mật khẩu trong .env</span>';
+                        cfgPasswordStatus.innerHTML = st.hasPassword 
+                            ? '<span class="badge badge-warning"><i class="fa-solid fa-triangle-exclamation"></i> Lỗi kết nối</span>'
+                            : '<span class="badge badge-warning"><i class="fa-solid fa-key"></i> Chưa nhập mật khẩu trong .env</span>';
                     }
                     if (cfgStorageMode) {
                         cfgStorageMode.innerHTML = '<span class="badge badge-info">Bộ nhớ RAM (In-Memory Buffer)</span>';
