@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DramaFlow | Quản Lý Lượt Truy Cập & Hệ Thống Backend</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <div class="admin-wrapper">
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar" id="adminSidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-chart-line"></i>
+                </div>
+                <div class="brand-text">
+                    <h2>DramaFlow</h2>
+                    <span>Backend Analytics</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#overview" class="nav-item active" data-tab="overview">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>Tổng quan</span>
+                </a>
+                <a href="#traffic" class="nav-item" data-tab="traffic">
+                    <i class="fa-solid fa-users-viewfinder"></i>
+                    <span>Lượt truy cập</span>
+                </a>
+                <a href="#dramas" class="nav-item" data-tab="dramas">
+                    <i class="fa-solid fa-film"></i>
+                    <span>Top phim xem nhiều</span>
+                </a>
+                <a href="#devices" class="nav-item" data-tab="devices">
+                    <i class="fa-solid fa-laptop-mobile"></i>
+                    <span>Thiết bị & Nền tảng</span>
+                </a>
+                <a href="#supabase" class="nav-item" data-tab="supabase">
+                    <i class="fa-solid fa-database"></i>
+                    <span>Supabase Database</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="/" target="_blank" class="nav-item client-link">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <span>Xem Trang chủ phim</span>
+                </a>
+                <div class="system-chip">
+                    <span class="pulse-dot active"></span>
+                    <span id="sidebarStatusText">Server Online</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="admin-main">
+            <!-- Top Header -->
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="mobile-toggle" id="mobileMenuBtn" aria-label="Toggle Menu">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="page-title-box">
+                        <h1 id="pageTitle">Bảng Điều Khiển Quản Trị</h1>
+                        <p class="subtitle">Thống kê lưu lượng truy cập thời gian thực & kết nối Supabase</p>
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <!-- DB Badge -->
+                    <div class="db-badge" id="dbStatusBadge">
+                        <span class="status-indicator warning"></span>
+                        <span class="db-badge-label" id="dbStatusLabel">Đang kiểm tra kết nối...</span>
+                    </div>
+
+                    <!-- Auto Refresh Dropdown -->
+                    <div class="refresh-controls">
+                        <select id="autoRefreshSelect" class="form-select">
+                            <option value="0">Tắt tự động cập nhật</option>
+                            <option value="10" selected>Tự cập nhật (10 giây)</option>
+                            <option value="30">Tự cập nhật (30 giây)</option>
+                            <option value="60">Tự cập nhật (1 phút)</option>
+                        </select>
+                        <button id="refreshBtn" class="btn btn-primary" title="Làm mới dữ liệu ngay">
+                            <i class="fa-solid fa-arrows-rotate" id="refreshIcon"></i>
+                            <span class="btn-text">Làm mới</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-body">
+                <!-- Overview KPI Stat Cards -->
+                <section class="kpi-grid">
+                    <div class="kpi-card card-glow-indigo">
+                        <div class="kpi-icon-wrap bg-indigo-subtle">
+                            <i class="fa-solid fa-chart-simple text-indigo"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Tổng Lượt Xem (Visits)</span>
+                            <h3 class="kpi-value" id="statTotalVisits">--</h3>
+                            <span class="kpi-sub" id="statTotalIpsSub">-- IP độc lập</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card card-glow-emerald">
+                        <div class="kpi-icon-wrap bg-emerald-subtle">
+                            <i class="fa-solid fa-users text-emerald"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Khách Độc Lập (Unique)</span>
+                            <h3 class="kpi-value" id="statUniqueVisitors">--</h3>
+                            <span class="kpi-sub" id="statUniqueRatio">Đang tính toán...</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card card-glow-amber">
+                        <div class="kpi-icon-wrap bg-amber-subtle">
+                            <i class="fa-solid fa-calendar-day text-amber"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Hôm Nay (Today)</span>
+                            <h3 class="kpi-value" id="statTodayVisits">--</h3>
+                            <span class="kpi-sub" id="statTodayUniqueSub">-- khách hôm nay</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card card-glow-rose">
+                        <div class="kpi-icon-wrap bg-rose-subtle pulse-online">
+                            <i class="fa-solid fa-tower-broadcast text-rose"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Đang Trực Tuyến</span>
+                            <h3 class="kpi-value" id="statActiveNow">--</h3>
+                            <span class="kpi-sub text-emerald"><i class="fa-solid fa-circle-dot"></i> Hoạt động 15p gần nhất</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Supabase Notice Banner if not configured -->
+                <div class="supabase-notice-banner" id="supabaseNoticeBanner" style="display: none;">
+                    <div class="notice-icon">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div class="notice-content">
+                        <h4>Supabase PostgreSQL đang chạy ở chế độ đệm bộ nhớ (In-Memory Buffer)</h4>
+                        <p id="supabaseNoticeDesc">
+                            Backend đã sẵn sàng kết nối tới Supabase host <code>db.dlywumjpdatioiayewmq.supabase.co</code>. Vui lòng nhập mật khẩu database vào file <code>.env</code> ở dòng <code>SUPABASE_DB_PASSWORD=...</code> để lưu trữ vĩnh viễn vào Supabase.
+                        </p>
+                    </div>
+                    <button class="btn btn-outline" id="btnShowDbConfig">
+                        <i class="fa-solid fa-gear"></i> Xem Cấu Hình
+                    </button>
+                </div>
+
+                <!-- Main Analytics Section (2 Columns) -->
+                <div class="dashboard-split-grid">
+                    <!-- Left: Top Dramas & Providers -->
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-fire text-amber"></i>
+                                <span>Phim Được Xem Nhiều Nhất</span>
+                            </div>
+                            <span class="badge badge-subtle" id="topDramasCount">Top 10</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="ranking-list" id="topDramasContainer">
+                                <div class="loading-state">
+                                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                                    <span>Đang tải danh sách phim...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Device & Browser Distribution -->
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-chart-pie text-cyan"></i>
+                                <span>Phân Bổ Thiết Bị & Trình Duyệt</span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="breakdown-section">
+                                <h5 class="breakdown-heading">Loại thiết bị</h5>
+                                <div class="progress-bar-group" id="devicesBreakdown">
+                                    <div class="loading-state-sm">Đang tính toán...</div>
+                                </div>
+                            </div>
+
+                            <div class="breakdown-divider"></div>
+
+                            <div class="breakdown-section">
+                                <h5 class="breakdown-heading">Trình duyệt phổ biến</h5>
+                                <div class="progress-bar-group" id="browsersBreakdown">
+                                    <div class="loading-state-sm">Đang tính toán...</div>
+                                </div>
+                            </div>
+
+                            <div class="breakdown-divider"></div>
+
+                            <div class="breakdown-section">
+                                <h5 class="breakdown-heading">Hệ điều hành</h5>
+                                <div class="badge-chips-group" id="osBreakdown">
+                                    <div class="loading-state-sm">Đang tính toán...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Visits Real-Time Table -->
+                <div class="panel-card margin-top">
+                    <div class="panel-header header-table-bar">
+                        <div class="panel-title">
+                            <i class="fa-solid fa-clock-rotate-left text-emerald"></i>
+                            <span>Nhật Ký Lượt Truy Cập Mới Nhất</span>
+                        </div>
+                        <div class="table-actions">
+                            <div class="search-input-wrap">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="filterInput" placeholder="Tìm IP, tên phim, trình duyệt..." class="form-input">
+                            </div>
+                            <button class="btn btn-sm btn-outline" id="btnExportJson" title="Xuất dữ liệu JSON">
+                                <i class="fa-solid fa-file-arrow-down"></i> Export JSON
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="panel-body table-responsive">
+                        <table class="data-table" id="visitsTable">
+                            <thead>
+                                <tr>
+                                    <th>Thời Gian</th>
+                                    <th>IP / Khách</th>
+                                    <th>Thiết Bị</th>
+                                    <th>Trình Duyệt & OS</th>
+                                    <th>Nội Dung / Phim Đã Xem</th>
+                                    <th>Nguồn (Provider)</th>
+                                    <th>Trang (Path)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="visitsTableBody">
+                                <tr>
+                                    <td colspan="7" class="text-center py-4">
+                                        <div class="loading-state">
+                                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                                            <span>Đang tải lịch sử truy cập...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-footer">
+                        <span id="tableCountSummary">Đang hiển thị 0 lượt truy cập</span>
+                        <div class="table-hint">
+                            <i class="fa-solid fa-circle-info"></i> Tự động cập nhật mỗi khi có người xem phim mới
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Supabase Connection Details Modal / Section -->
+                <div class="panel-card margin-top" id="supabaseConfigCard">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <i class="fa-solid fa-server text-purple"></i>
+                            <span>Thông Số Kết Nối Supabase PostgreSQL</span>
+                        </div>
+                        <button class="btn btn-sm btn-outline" id="btnTestDbConnection">
+                            <i class="fa-solid fa-plug"></i> Kiểm Tra Kết Nối Lại
+                        </button>
+                    </div>
+                    <div class="panel-body">
+                        <div class="db-config-grid">
+                            <div class="config-item">
+                                <span class="config-label">Host:</span>
+                                <code class="config-value" id="cfgHost">db.dlywumjpdatioiayewmq.supabase.co</code>
+                            </div>
+                            <div class="config-item">
+                                <span class="config-label">Port:</span>
+                                <code class="config-value">5432</code>
+                            </div>
+                            <div class="config-item">
+                                <span class="config-label">Database:</span>
+                                <code class="config-value">postgres</code>
+                            </div>
+                            <div class="config-item">
+                                <span class="config-label">User:</span>
+                                <code class="config-value">postgres</code>
+                            </div>
+                            <div class="config-item">
+                                <span class="config-label">Password:</span>
+                                <span class="config-value" id="cfgPasswordStatus">
+                                    <span class="badge badge-warning">Chưa điền trong .env</span>
+                                </span>
+                            </div>
+                            <div class="config-item">
+                                <span class="config-label">Trạng thái lưu:</span>
+                                <span class="config-value" id="cfgStorageMode">
+                                    <span class="badge badge-info">Bộ nhớ RAM (In-Memory Buffer)</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="sql-guide-box">
+                            <div class="guide-header">
+                                <i class="fa-solid fa-lightbulb text-amber"></i>
+                                <strong>Hướng Dẫn Tạo Bảng Nhanh Trên Supabase SQL Editor</strong>
+                            </div>
+                            <p class="guide-desc">
+                                Bạn có thể dán đoạn mã sau vào <b>SQL Editor</b> trên Supabase Dashboard để chủ động khởi tạo bảng:
+                            </p>
+                            <pre class="code-block"><code>CREATE TABLE IF NOT EXISTS public.user_visits (
+  id BIGSERIAL PRIMARY KEY,
+  visitor_id VARCHAR(64) NOT NULL,
+  ip VARCHAR(64),
+  path VARCHAR(255) DEFAULT '/',
+  drama_title VARCHAR(255),
+  provider VARCHAR(64),
+  device VARCHAR(32) DEFAULT 'desktop',
+  browser VARCHAR(64) DEFAULT 'Unknown',
+  os VARCHAR(64) DEFAULT 'Unknown',
+  screen_resolution VARCHAR(32),
+  referrer TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_visits_created_at ON public.user_visits(created_at DESC);</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
