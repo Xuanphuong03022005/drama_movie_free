@@ -7,3 +7,4 @@ yarn-error.log*
 *.log
 data_episodes_cache.json
 subtitles_cache/
+.agents
