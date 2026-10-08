@@ -142,6 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         statActiveNow.textContent = Number(activeNow).toLocaleString();
 
+        const cfgHostEl = document.getElementById('cfgHost');
+        if (cfgHostEl && data.host) {
+            cfgHostEl.textContent = data.host;
+        }
+
         // Render Top Dramas
         renderTopDramas(data.top_dramas || []);
 
