@@ -119,23 +119,26 @@ async function initDatabase() {
                 id BIGSERIAL PRIMARY KEY,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS book_id VARCHAR(128);
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS title TEXT;
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS description TEXT;
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS poster_url TEXT;
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS watch_url TEXT;
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS provider VARCHAR(64);
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS total_episodes INT DEFAULT 0;
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS is_adult BOOLEAN DEFAULT false;
-            ALTER TABLE drama ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_drama_book_provider ON drama (book_id, provider);
-            CREATE INDEX IF NOT EXISTS idx_drama_title ON drama (title);
-            CREATE INDEX IF NOT EXISTS idx_drama_provider ON drama (provider);
         `);
 
-        console.log('[Supabase DB] Analytics and drama tables schema verified.');
+        // Create table view as requested by user
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS public."view" (
+                id BIGSERIAL PRIMARY KEY,
+                loai_thiet_bi VARCHAR(64),
+                trinh_duyet VARCHAR(64),
+                thoi_gian VARCHAR(64),
+                device VARCHAR(64),
+                browser VARCHAR(64),
+                ip VARCHAR(64),
+                path VARCHAR(255),
+                drama_title TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_view_created_at ON public."view" (created_at DESC);
+        `);
+
+        console.log('[Supabase DB] Analytics, view and drama tables schema verified.');
         return true;
     } catch (err) {
         isConnected = false;
@@ -215,6 +218,29 @@ async function recordVisit(visitData) {
                 visit.page_name
             ];
             await client.query(sql, values);
+
+            // Also record into table view specifically requested by user
+            try {
+                const viewSql = `
+                    INSERT INTO public."view" (
+                        loai_thiet_bi, trinh_duyet, thoi_gian,
+                        device, browser, ip, path, drama_title, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                `;
+                await client.query(viewSql, [
+                    visit.device,
+                    visit.browser,
+                    visit.local_time,
+                    visit.device,
+                    visit.browser,
+                    visit.ip,
+                    visit.path,
+                    visit.drama_title
+                ]);
+            } catch (vErr) {
+                console.error('[Supabase DB] Insert into view table error:', vErr.message);
+            }
+
             isConnected = true;
             return { ok: true, stored: 'database' };
         } catch (err) {
