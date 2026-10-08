@@ -73,9 +73,11 @@ async function initDatabase() {
         connectionError = null;
         console.log(`[Supabase DB] Connected successfully to ${DB_HOST} (${latency}ms latency)`);
 
+        await client.query('SET search_path TO public;');
+
         // Create user_visits table
         await client.query(`
-            CREATE TABLE IF NOT EXISTS user_visits (
+            CREATE TABLE IF NOT EXISTS public.user_visits (
                 id BIGSERIAL PRIMARY KEY,
                 visitor_id VARCHAR(64),
                 ip VARCHAR(64),
@@ -89,12 +91,16 @@ async function initDatabase() {
                 drama_title TEXT,
                 episode_index INT DEFAULT 0,
                 country VARCHAR(64),
+                local_time VARCHAR(40),
+                page_name VARCHAR(255),
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
-            CREATE INDEX IF NOT EXISTS idx_user_visits_created_at ON user_visits (created_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_user_visits_visitor_id ON user_visits (visitor_id);
-            CREATE INDEX IF NOT EXISTS idx_user_visits_ip ON user_visits (ip);
-            CREATE INDEX IF NOT EXISTS idx_user_visits_drama ON user_visits (drama_title);
+            ALTER TABLE public.user_visits ADD COLUMN IF NOT EXISTS local_time VARCHAR(40);
+            ALTER TABLE public.user_visits ADD COLUMN IF NOT EXISTS page_name VARCHAR(255);
+            CREATE INDEX IF NOT EXISTS idx_user_visits_created_at ON public.user_visits (created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_user_visits_visitor_id ON public.user_visits (visitor_id);
+            CREATE INDEX IF NOT EXISTS idx_user_visits_ip ON public.user_visits (ip);
+            CREATE INDEX IF NOT EXISTS idx_user_visits_drama ON public.user_visits (drama_title);
         `);
 
         // Create daily summary cache table
@@ -143,6 +149,21 @@ async function initDatabase() {
  * Record a user visit
  */
 async function recordVisit(visitData) {
+    const now = new Date();
+    const localTimeStr = now.toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+
+    const pageName = visitData.drama_title
+        ? `Xem phim: ${visitData.drama_title}`
+        : (visitData.path === '/' || !visitData.path ? 'Trang chủ' : `Trang: ${visitData.path}`);
+
     const visit = {
         visitor_id: visitData.visitor_id || 'anonymous',
         ip: visitData.ip || '127.0.0.1',
@@ -156,7 +177,9 @@ async function recordVisit(visitData) {
         drama_title: visitData.drama_title || null,
         episode_index: parseInt(visitData.episode_index || 0, 10),
         country: visitData.country || 'VN',
-        created_at: new Date()
+        local_time: localTimeStr,
+        page_name: pageName,
+        created_at: now
     };
 
     // Always maintain in-memory buffer for instant realtime stats
@@ -170,10 +193,10 @@ async function recordVisit(visitData) {
         try {
             const client = getPool();
             const sql = `
-                INSERT INTO user_visits (
+                INSERT INTO public.user_visits (
                     visitor_id, ip, user_agent, device, browser, os,
-                    path, referrer, provider, drama_title, episode_index, country, created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+                    path, referrer, provider, drama_title, episode_index, country, local_time, page_name, created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
             `;
             const values = [
                 visit.visitor_id,
@@ -187,7 +210,9 @@ async function recordVisit(visitData) {
                 visit.provider,
                 visit.drama_title,
                 visit.episode_index,
-                visit.country
+                visit.country,
+                visit.local_time,
+                visit.page_name
             ];
             await client.query(sql, values);
             isConnected = true;
@@ -218,7 +243,7 @@ async function getAnalyticsStats() {
                     COUNT(*)::INT AS total_visits,
                     COUNT(DISTINCT visitor_id)::INT AS total_unique_visitors,
                     COUNT(DISTINCT ip)::INT AS total_unique_ips
-                FROM user_visits
+                FROM public.user_visits
             `);
 
             // Today's stats
@@ -226,21 +251,21 @@ async function getAnalyticsStats() {
                 SELECT 
                     COUNT(*)::INT AS today_visits,
                     COUNT(DISTINCT visitor_id)::INT AS today_unique_visitors
-                FROM user_visits
+                FROM public.user_visits
                 WHERE created_at >= CURRENT_DATE
             `);
 
             // Active in last 15 minutes (Real-time online estimate)
             const onlineRes = await client.query(`
                 SELECT COUNT(DISTINCT visitor_id)::INT AS active_now
-                FROM user_visits
+                FROM public.user_visits
                 WHERE created_at >= NOW() - INTERVAL '15 minutes'
             `);
 
             // Device breakdown
             const deviceRes = await client.query(`
                 SELECT device, COUNT(*)::INT AS count
-                FROM user_visits
+                FROM public.user_visits
                 GROUP BY device
                 ORDER BY count DESC
                 LIMIT 5
@@ -249,7 +274,7 @@ async function getAnalyticsStats() {
             // Top browsers
             const browserRes = await client.query(`
                 SELECT browser, COUNT(*)::INT AS count
-                FROM user_visits
+                FROM public.user_visits
                 GROUP BY browser
                 ORDER BY count DESC
                 LIMIT 5
@@ -258,7 +283,7 @@ async function getAnalyticsStats() {
             // Top operating systems
             const osRes = await client.query(`
                 SELECT os, COUNT(*)::INT AS count
-                FROM user_visits
+                FROM public.user_visits
                 GROUP BY os
                 ORDER BY count DESC
                 LIMIT 5
@@ -267,7 +292,7 @@ async function getAnalyticsStats() {
             // Top viewed dramas
             const topDramasRes = await client.query(`
                 SELECT drama_title, provider, COUNT(*)::INT AS views
-                FROM user_visits
+                FROM public.user_visits
                 WHERE drama_title IS NOT NULL AND drama_title != ''
                 GROUP BY drama_title, provider
                 ORDER BY views DESC
@@ -277,7 +302,7 @@ async function getAnalyticsStats() {
             // Top providers
             const topProvidersRes = await client.query(`
                 SELECT provider, COUNT(*)::INT AS views
-                FROM user_visits
+                FROM public.user_visits
                 WHERE provider IS NOT NULL AND provider != ''
                 GROUP BY provider
                 ORDER BY views DESC
@@ -290,7 +315,7 @@ async function getAnalyticsStats() {
                     TO_CHAR(created_at, 'YYYY-MM-DD') AS date,
                     COUNT(*)::INT AS pageviews,
                     COUNT(DISTINCT visitor_id)::INT AS unique_visitors
-                FROM user_visits
+                FROM public.user_visits
                 WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
                 GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
                 ORDER BY date ASC
@@ -382,8 +407,8 @@ async function getRecentVisits(limit = 50) {
         try {
             const client = getPool();
             const res = await client.query(`
-                SELECT id, visitor_id, ip, device, browser, os, path, provider, drama_title, episode_index, created_at
-                FROM user_visits
+                SELECT id, visitor_id, ip, device, browser, os, path, provider, drama_title, episode_index, local_time, page_name, created_at
+                FROM public.user_visits
                 ORDER BY created_at DESC
                 LIMIT $1
             `, [Math.min(limit, 100)]);
