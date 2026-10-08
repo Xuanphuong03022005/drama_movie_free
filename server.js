@@ -65,7 +65,7 @@ app.post('/api/analytics/track', async (req, res) => {
         const parsed = db.parseUserAgent(userAgent);
 
         const visitData = {
-            visitor_id: req.body.visitor_id || 'anonymous',
+            visitor_id: req.body.visitor_id || req.body.visitorId || 'anonymous',
             ip: clientIp,
             user_agent: userAgent,
             device: req.body.device || parsed.device,
@@ -74,8 +74,8 @@ app.post('/api/analytics/track', async (req, res) => {
             path: req.body.path || '/',
             referrer: req.body.referrer || req.headers['referer'] || '',
             provider: req.body.provider || '',
-            drama_title: req.body.drama_title || null,
-            episode_index: req.body.episode_index || 0,
+            drama_title: req.body.drama_title || req.body.dramaTitle || null,
+            episode_index: req.body.episode_index || req.body.episodeIndex || 0,
             country: req.body.country || 'VN'
         };
 
