@@ -8,11 +8,11 @@
 
 const { Pool } = require('pg');
 
-const DB_HOST = process.env.SUPABASE_DB_HOST || 'db.dlywumjpdatioiayewmq.supabase.co';
-const DB_PORT = parseInt(process.env.SUPABASE_DB_PORT || '5432', 10);
+const DB_HOST = process.env.SUPABASE_DB_HOST || 'aws-0-ap-northeast-2.pooler.supabase.com';
+const DB_PORT = parseInt(process.env.SUPABASE_DB_PORT || '6543', 10);
 const DB_NAME = process.env.SUPABASE_DB_NAME || 'postgres';
-const DB_USER = process.env.SUPABASE_DB_USER || 'postgres';
-const DB_PASSWORD = process.env.SUPABASE_DB_PASSWORD || '';
+const DB_USER = process.env.SUPABASE_DB_USER || 'postgres.dlywumjpdatioiayewmq';
+const DB_PASSWORD = process.env.SUPABASE_DB_PASSWORD || 'Xuanphuong03022005@';
 
 let pool = null;
 let isConnected = false;
