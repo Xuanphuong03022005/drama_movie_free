@@ -39,8 +39,73 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
 }));
 
+const db = require('./db');
+
+// Initialize Supabase PostgreSQL database schema
+db.initDatabase().catch(err => console.error('[Supabase DB] Startup init error:', err.message));
+
 app.get('/api/version', (req, res) => {
     res.json({ ok: true, version: pkg.version, app: pkg.name });
+});
+
+// ==========================================
+// USER VISITS & TRAFFIC ANALYTICS (SUPABASE)
+// ==========================================
+app.post('/api/analytics/track', async (req, res) => {
+    try {
+        const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+                         req.headers['x-real-ip'] ||
+                         req.socket.remoteAddress ||
+                         '127.0.0.1';
+        const userAgent = req.headers['user-agent'] || '';
+        const parsed = db.parseUserAgent(userAgent);
+
+        const visitData = {
+            visitor_id: req.body.visitor_id || 'anonymous',
+            ip: clientIp,
+            user_agent: userAgent,
+            device: req.body.device || parsed.device,
+            browser: req.body.browser || parsed.browser,
+            os: req.body.os || parsed.os,
+            path: req.body.path || '/',
+            referrer: req.body.referrer || req.headers['referer'] || '',
+            provider: req.body.provider || '',
+            drama_title: req.body.drama_title || null,
+            episode_index: req.body.episode_index || 0,
+            country: req.body.country || 'VN'
+        };
+
+        const result = await db.recordVisit(visitData);
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        console.error('[Analytics] Track error:', err.message);
+        res.json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/analytics/stats', async (req, res) => {
+    try {
+        const stats = await db.getAnalyticsStats();
+        res.json(stats);
+    } catch (err) {
+        console.error('[Analytics] Stats error:', err.message);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/analytics/recent', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit || '50', 10);
+        const data = await db.getRecentVisits(limit);
+        res.json(data);
+    } catch (err) {
+        console.error('[Analytics] Recent visits error:', err.message);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/analytics/status', (req, res) => {
+    res.json({ ok: true, status: db.getStatus() });
 });
 
 const BASE_URL = 'https://narto-drama.com';

@@ -314,9 +314,43 @@
     let activeFilterValue = null;
 
     // ==========================================
+    // VISITOR ANALYTICS TRACKING
+    // ==========================================
+    function getVisitorId() {
+        try {
+            let vid = localStorage.getItem('drama_visitor_id');
+            if (!vid) {
+                vid = 'v_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+                localStorage.setItem('drama_visitor_id', vid);
+            }
+            return vid;
+        } catch (e) {
+            return 'anon_' + Date.now();
+        }
+    }
+
+    function trackVisit(extra = {}) {
+        try {
+            const payload = {
+                visitor_id: getVisitorId(),
+                path: window.location.pathname + window.location.search,
+                referrer: document.referrer || '',
+                provider: currentProvider || '',
+                ...extra
+            };
+            fetch('/api/analytics/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(() => {});
+        } catch (e) {}
+    }
+
+    // ==========================================
     // INITIALIZATION
     // ==========================================
     async function init() {
+        trackVisit();
         initLanguageSelector();
         applyTranslations(currentLang);
         syncSubtitleUI();
@@ -4427,6 +4461,7 @@
         if (isMiniplayer) restoreFromMiniplayer();
         playerModal.hidden = false;
         document.body.style.overflow = 'hidden';
+        trackVisit({ drama_title: item ? item.title : '', provider: item ? (item.category_name || currentProvider) : '' });
 
         const pMain = document.querySelector('.player-main-split');
         if (pMain) pMain.scrollTop = 0;
