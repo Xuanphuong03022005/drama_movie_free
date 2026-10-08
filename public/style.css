@@ -2444,22 +2444,31 @@ body {
 
 .card-badge-ep {
     position: absolute;
-    top: 9px;
+    bottom: 9px;
     right: 9px;
-    background: rgba(16, 185, 129, 0.2);
+    top: auto;
+    left: auto;
+    background: rgba(10, 14, 26, 0.85);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     padding: 3.5px 9px;
     border-radius: 6px;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 700;
-    color: #34d399;
-    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #f1f5f9;
+    border: 1px solid rgba(255, 255, 255, 0.16);
     z-index: 3;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    gap: 5px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.card-badge-ep i {
+    color: #38bdf8;
+    font-size: 10px;
 }
 
 .card-info-block {
@@ -7453,32 +7462,7 @@ video::cue {
     padding: 0;
 }
 
-/* Episode count badge on drama card */
-.card-badge-ep {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    z-index: 3;
-    background: rgba(8, 10, 15, 0.85);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #f1f5f9;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-    pointer-events: none;
-}
-
-.card-badge-ep i {
-    color: #38bdf8;
-    font-size: 10px;
-}
+/* Episode count badge on drama card styled at line 2445 */
 
 @media (max-width: 768px) {
     .discovery-modal-card {
