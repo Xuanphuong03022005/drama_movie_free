@@ -232,10 +232,12 @@ app.get('/api/debug-upstream', async (req, res) => {
         diag.dns['edge.narto-drama.com'] = { error: e.message };
     }
 
-    const testTargets = [
-        `https://edge.narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`,
-        `https://edge.narto.in${testPath.startsWith('/') ? '' : '/'}${testPath}`
-    ];
+    const testTargets = testPath.startsWith('http')
+        ? [testPath]
+        : [
+            `https://edge.narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`,
+            `https://narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`
+          ];
 
     for (const targetUrl of testTargets) {
         const start = Date.now();
