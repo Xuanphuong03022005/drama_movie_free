@@ -130,8 +130,23 @@ app.get('/api/drama/supabase-list', async (req, res) => {
     }
 });
 
-const BASE_URL = 'https://narto-drama.com';
+const UPSTREAM_HOSTS = ['https://edge.narto-drama.com', 'https://narto-drama.com'];
+const BASE_URL = 'https://edge.narto-drama.com';
+const ORIGIN_URL = 'https://narto-drama.com';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+const FALLBACK_PROVIDERS = [
+    { key: 'anyreel', label: 'AnyReel' },
+    { key: 'dramabox', label: 'DramaBox' },
+    { key: 'shortmax', label: 'ShortMax' },
+    { key: 'flextv', label: 'FlexTV' },
+    { key: 'reelshort', label: 'ReelShort' },
+    { key: 'melolo', label: 'Melolo' },
+    { key: 'goodshort', label: 'GoodShort' },
+    { key: 'pinedrama', label: 'PineDrama' },
+    { key: 'dotdrama', label: 'DotDrama' },
+    { key: 'vyntage', label: 'Vyntage' }
+];
 
 function getHeaders(extraHeaders = {}) {
     const nd_ck = '18e38f90248' + Math.random().toString(16).slice(2, 10);
@@ -143,17 +158,36 @@ function getHeaders(extraHeaders = {}) {
     };
 }
 
-// 1. Dynamic Providers Synchronization (Live from upstream narto-drama.com)
+// Resilient upstream fetch with multi-host automatic failover
+async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 12000) {
+    let lastErr = null;
+    for (const host of UPSTREAM_HOSTS) {
+        try {
+            const url = pathAndQuery.startsWith('http')
+                ? pathAndQuery.replace(/^https?:\/\/[^\/]+/, host)
+                : `${host}${pathAndQuery.startsWith('/') ? '' : '/'}${pathAndQuery}`;
+            const res = await fetch(url, {
+                ...options,
+                signal: AbortSignal.timeout(timeoutMs)
+            });
+            if (res.ok) return res;
+        } catch (err) {
+            lastErr = err;
+        }
+    }
+    return null;
+}
+
+// 1. Dynamic Providers Synchronization (Live from upstream)
 let cachedProviders = null;
 let lastProvidersFetch = 0;
 
 async function fetchLiveProvidersFromUpstream() {
     try {
-        const url = `${BASE_URL}/home/providers/sections?provider=anyreel&lang=en-US&target_lang=en-US`;
-        const response = await fetch(url, {
+        const response = await fetchFromUpstream('/home/providers/sections?provider=anyreel&lang=en-US&target_lang=en-US', {
             headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-        });
-        if (response.ok) {
+        }, 5000);
+        if (response && response.ok) {
             const data = await response.json();
             if (Array.isArray(data.providers) && data.providers.length > 0) {
                 cachedProviders = data.providers;
@@ -165,11 +199,11 @@ async function fetchLiveProvidersFromUpstream() {
     } catch (err) {
         console.error('Failed to sync live providers from upstream:', err.message);
     }
-    return cachedProviders || [];
+    return cachedProviders || FALLBACK_PROVIDERS;
 }
 
-// Initial sync on server start
-fetchLiveProvidersFromUpstream();
+// Initial sync on server start (non-blocking)
+fetchLiveProvidersFromUpstream().catch(() => {});
 
 // Live Providers List Endpoint
 app.get('/api/providers', async (req, res) => {
@@ -178,12 +212,16 @@ app.get('/api/providers', async (req, res) => {
         if (!cachedProviders || (now - lastProvidersFetch > 5 * 60 * 1000)) {
             await fetchLiveProvidersFromUpstream();
         }
-        res.json({ ok: true, providers: cachedProviders || [] });
+        res.json({ ok: true, providers: cachedProviders || FALLBACK_PROVIDERS });
     } catch (err) {
         console.error('Error serving /api/providers:', err);
-        res.json({ ok: true, providers: cachedProviders || [] });
+        res.json({ ok: true, providers: cachedProviders || FALLBACK_PROVIDERS });
     }
 });
+
+// In-memory sections cache for instant 0ms responses & resilience against upstream network hiccups
+const sectionsCache = new Map();
+const SECTIONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // 2. Provider Sections (Home/Trending/Popular)
 app.get('/api/sections', async (req, res) => {
@@ -192,6 +230,12 @@ app.get('/api/sections', async (req, res) => {
         const page = parseInt(req.query.page || '1', 10);
         const query = req.query.q || '';
         const lang = req.query.lang || 'vi-VN';
+
+        const sectionsCacheKey = `${provider}_${page}_${lang}_${query}`;
+        const cachedSections = sectionsCache.get(sectionsCacheKey);
+        if (cachedSections && (Date.now() - cachedSections.timestamp < SECTIONS_CACHE_TTL)) {
+            return res.json(cachedSections.data);
+        }
 
         async function fetchSectionsFromUpstream(targetLang, useTargetFilter = true) {
             const params = new URLSearchParams();
@@ -209,12 +253,12 @@ app.get('/api/sections', async (req, res) => {
                 commonTabs.forEach(t => params.set(`tab_pages[${t}]`, String(page)));
             }
 
-            const url = `${BASE_URL}/home/providers/sections?${params.toString()}`;
-            const response = await fetch(url, {
+            const pathAndQuery = `/home/providers/sections?${params.toString()}`;
+            const response = await fetchFromUpstream(pathAndQuery, {
                 headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-            });
+            }, 6000);
 
-            if (!response.ok) return null;
+            if (!response || !response.ok) return null;
             return await response.json();
         }
 
@@ -256,6 +300,11 @@ app.get('/api/sections', async (req, res) => {
             }
         }
 
+        // Fallback 4: If upstream failed, use stale cache if available
+        if (!data && cachedSections) {
+            return res.json(cachedSections.data);
+        }
+
         if (!data) {
             return res.status(502).json({ ok: false, error: 'Failed to fetch sections from upstream' });
         }
@@ -274,14 +323,20 @@ app.get('/api/sections', async (req, res) => {
             });
         }
 
-        res.json({
+        const payload = {
             ok: true,
             provider,
             active_provider: data.active_provider || provider,
-            providers: data.providers || cachedProviders || [],
+            providers: data.providers || cachedProviders || FALLBACK_PROVIDERS,
             sections: data.sections || [],
             tab_pages: data.tab_pages || {}
-        });
+        };
+
+        if (payload.sections.length > 0) {
+            sectionsCache.set(sectionsCacheKey, { data: payload, timestamp: Date.now() });
+        }
+
+        res.json(payload);
     } catch (err) {
         console.error('Error fetching sections:', err);
         res.status(500).json({ ok: false, error: err.message });
@@ -337,13 +392,12 @@ app.get('/api/search', async (req, res) => {
             return res.json({ ok: true, items: [] });
         }
 
-        const url = `${BASE_URL}/search?q=${encodeURIComponent(q)}&limit=50&lang=${encodeURIComponent(lang)}`;
-        const response = await fetch(url, {
+        const response = await fetchFromUpstream(`/search?q=${encodeURIComponent(q)}&limit=50&lang=${encodeURIComponent(lang)}`, {
             headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-        });
+        }, 6000);
 
-        if (!response.ok) {
-            return res.status(response.status).json({ ok: false, error: `Upstream error: ${response.status}` });
+        if (!response || !response.ok) {
+            return res.status(502).json({ ok: false, error: 'Upstream search unavailable' });
         }
 
         const data = await response.json();
@@ -407,27 +461,30 @@ app.get('/api/drama', async (req, res) => {
         const executeFetch = async () => {
             // Fetch the drama page (following redirects)
             const headers = getHeaders();
-            let pageRes = await fetch(watchUrl, { headers, redirect: 'follow' });
+            let pageRes = await fetchFromUpstream(watchUrl, { headers, redirect: 'follow' }, 12000);
+            if (!pageRes) {
+                return { ok: false, error: 'Upstream page fetch failed' };
+            }
             let html = await pageRes.text();
-            let finalUrl = pageRes.url;
+            let finalUrl = pageRes.url || watchUrl;
 
             // If direct slug watchUrl returned 404 or missing episodes, try searching upstream by slug keywords
             if ((!pageRes.ok || html.includes('Page Not Found') || !html.includes('episodeItemsRaw')) && slug) {
                 const searchKeywords = slug.replace(/[-_]+/g, ' ').trim();
                 try {
-                    const sRes = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(searchKeywords)}&limit=5&lang=${encodeURIComponent(lang)}`, {
+                    const sRes = await fetchFromUpstream(`/search?q=${encodeURIComponent(searchKeywords)}&limit=5&lang=${encodeURIComponent(lang)}`, {
                         headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-                    });
-                    if (sRes.ok) {
+                    }, 5000);
+                    if (sRes && sRes.ok) {
                         const sData = await sRes.json();
                         const sItems = sData.items || sData || [];
                         if (sItems.length > 0 && sItems[0].url) {
                             const newUrl = sItems[0].url.startsWith('http') ? sItems[0].url : `${BASE_URL}${sItems[0].url}`;
-                            const newRes = await fetch(newUrl, { headers, redirect: 'follow' });
-                            if (newRes.ok) {
+                            const newRes = await fetchFromUpstream(newUrl, { headers, redirect: 'follow' }, 6000);
+                            if (newRes && newRes.ok) {
                                 pageRes = newRes;
                                 html = await newRes.text();
-                                finalUrl = newRes.url;
+                                finalUrl = newRes.url || newUrl;
                             }
                         }
                     }
@@ -475,18 +532,20 @@ app.get('/api/drama', async (req, res) => {
                 const ep1LinkMatch = html.match(ep1Regex);
                 if (ep1LinkMatch) {
                     const ep1Url = (ep1LinkMatch[1].startsWith('http') ? ep1LinkMatch[1] : `${BASE_URL}${ep1LinkMatch[1]}`).replace(/&amp;/g, '&');
-                    const pageRes2 = await fetch(ep1Url, { headers });
-                    const html2 = await pageRes2.text();
-                    const epMatch2 = html2.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                    if (epMatch2) {
-                        try {
-                            episodes = JSON.parse(epMatch2[1]);
-                        } catch (e) {
-                            console.error('Error parsing episodeItemsRaw (step 2):', e);
+                    const pageRes2 = await fetchFromUpstream(ep1Url, { headers }, 5000);
+                    if (pageRes2 && pageRes2.ok) {
+                        const html2 = await pageRes2.text();
+                        const epMatch2 = html2.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                        if (epMatch2) {
+                            try {
+                                episodes = JSON.parse(epMatch2[1]);
+                            } catch (e) {
+                                console.error('Error parsing episodeItemsRaw (step 2):', e);
+                            }
                         }
-                    }
-                    if (html2.includes('class="episode-item"')) {
-                        html = html2;
+                        if (html2.includes('class="episode-item"')) {
+                            html = html2;
+                        }
                     }
                 }
             }
@@ -530,14 +589,16 @@ app.get('/api/drama', async (req, res) => {
                     try {
                         const query = watchUrl.split('?')[1] ? '?' + watchUrl.split('?')[1] : '';
                         const targetUrl = (cleanRaw.startsWith('http') ? cleanRaw : `${BASE_URL}${cleanRaw}`) + `/1${query}`;
-                        const recRes = await fetch(targetUrl, { headers });
-                        const recHtml = await recRes.text();
-                        const recMatch = recHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                        if (recMatch) {
-                            const parsed = JSON.parse(recMatch[1]);
-                            if (parsed.some(e => e.play_url || e.direct_play_url)) {
-                                recoveredEps = parsed;
-                                console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via clean slug!`);
+                        const recRes = await fetchFromUpstream(targetUrl, { headers }, 5000);
+                        if (recRes && recRes.ok) {
+                            const recHtml = await recRes.text();
+                            const recMatch = recHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                            if (recMatch) {
+                                const parsed = JSON.parse(recMatch[1]);
+                                if (parsed.some(e => e.play_url || e.direct_play_url)) {
+                                    recoveredEps = parsed;
+                                    console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via clean slug!`);
+                                }
                             }
                         }
                     } catch (e) {
@@ -549,24 +610,26 @@ app.get('/api/drama', async (req, res) => {
                 if (!recoveredEps && title) {
                     try {
                         const cleanSearchTitle = title.replace(/\s*-\s*.*$/i, '').trim();
-                        const searchRes = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(cleanSearchTitle)}&limit=10&lang=${encodeURIComponent(lang)}`, {
+                        const searchRes = await fetchFromUpstream(`/search?q=${encodeURIComponent(cleanSearchTitle)}&limit=10&lang=${encodeURIComponent(lang)}`, {
                             headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-                        });
-                        if (searchRes.ok) {
+                        }, 5000);
+                        if (searchRes && searchRes.ok) {
                             const sData = await searchRes.json();
                             const sItems = sData.items || sData || [];
                             const altItem = sItems.find(i => i.url && i.url !== watchUrl && !i.url.includes(watchUrl.split('?')[0]) && i.title && i.title.toLowerCase().trim() === cleanSearchTitle.toLowerCase().trim());
                             if (altItem && altItem.url) {
                                 const altPath = altItem.url.split('?')[0];
                                 const altUrl = `${BASE_URL}${altPath}/1`;
-                                const altRes = await fetch(altUrl, { headers });
-                                const altHtml = await altRes.text();
-                                const altMatch = altHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                                if (altMatch) {
-                                    const parsed = JSON.parse(altMatch[1]);
-                                    if (parsed.some(e => e.play_url || e.direct_play_url)) {
-                                        recoveredEps = parsed;
-                                        console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via search title match!`);
+                                const altRes = await fetchFromUpstream(altUrl, { headers }, 5000);
+                                if (altRes && altRes.ok) {
+                                    const altHtml = await altRes.text();
+                                    const altMatch = altHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                                    if (altMatch) {
+                                        const parsed = JSON.parse(altMatch[1]);
+                                        if (parsed.some(e => e.play_url || e.direct_play_url)) {
+                                            recoveredEps = parsed;
+                                            console.log(`[Auto-Recovery] Successfully recovered ${parsed.length} playable episodes via search title match!`);
+                                        }
                                     }
                                 }
                             }
@@ -731,15 +794,11 @@ app.post('/api/drama/batch-episode-counts', async (req, res) => {
                 const chunk = needFetch.slice(i, i + BATCH_CONCURRENCY);
                 await Promise.allSettled(chunk.map(async ({ rawUrl, normalized }) => {
                     try {
-                        const controller = new AbortController();
-                        const timer = setTimeout(() => controller.abort(), 2800);
-                        const resp = await fetch(normalized, {
+                        const resp = await fetchFromUpstream(normalized, {
                             headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' }),
-                            redirect: 'follow',
-                            signal: controller.signal
-                        });
-                        clearTimeout(timer);
-                        if (!resp.ok) return;
+                            redirect: 'follow'
+                        }, 3500);
+                        if (!resp || !resp.ok) return;
                         const html = await resp.text();
 
                         let epCount = 0;
