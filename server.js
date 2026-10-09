@@ -161,7 +161,7 @@ function getHeaders(extraHeaders = {}) {
 }
 
 // High-performance, rock-solid HTTP/HTTPS client with hard total timeout & sync decompression
-function fetchHttp(urlStr, options = {}, timeoutMs = 15000, maxRedirects = 3) {
+function fetchHttp(urlStr, options = {}, timeoutMs = 5000, maxRedirects = 3) {
     return new Promise((resolve, reject) => {
         if (maxRedirects < 0) return reject(new Error('Too many redirects'));
         let u;
@@ -194,7 +194,8 @@ function fetchHttp(urlStr, options = {}, timeoutMs = 15000, maxRedirects = 3) {
 
         const req = client.request(u, {
             method: options.method || 'GET',
-            headers
+            headers,
+            timeout: timeoutMs
         }, (res) => {
             if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
                 cleanup();
@@ -236,6 +237,13 @@ function fetchHttp(urlStr, options = {}, timeoutMs = 15000, maxRedirects = 3) {
                 cleanup();
                 reject(err);
             });
+        });
+
+        req.on('timeout', () => {
+            if (!isDone) {
+                cleanup();
+                req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
+            }
         });
 
         timer = setTimeout(() => {
