@@ -623,7 +623,7 @@ app.get('/api/drama', async (req, res) => {
                     subtitles: cleanSubs,
                     selected_subtitle_language: item.selected_subtitle_language || '',
                     is_playable: !!(playUrl || item.direct_play_url),
-                    is_hls: playUrl.includes('.m3u8') || item.browser_prefetch_mode === 'hls'
+                    is_hls: playUrl.includes('.m3u8') || playUrl.includes('/e/m/') || playUrl.includes('/hls') || item.browser_prefetch_mode === 'hls'
                 };
             });
 
@@ -793,6 +793,17 @@ function isAuthKeyExpired(url) {
             return true;
         }
     }
+    const b64Match = url.match(/\/e\/[ms]\/([A-Za-z0-9_-]+)/);
+    if (b64Match) {
+        try {
+            const jsonStr = Buffer.from(b64Match[1], 'base64').toString('utf8');
+            const data = JSON.parse(jsonStr);
+            if (data && data.exp) {
+                const nowSec = Math.floor(Date.now() / 1000);
+                if (data.exp <= nowSec + 60) return true;
+            }
+        } catch (e) { }
+    }
     return false;
 }
 
@@ -810,7 +821,7 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
     // Tier 1: Query Edge refresh-source (fastest & lowest latency)
     try {
         const edgeRefreshUrl = `https://edge.narto-drama.com/e/rs/detail/watch/${dramaSlug}/${targetEpNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
-        const rRes = await fetch(edgeRefreshUrl, { headers });
+        const rRes = await fetch(edgeRefreshUrl, { headers, signal: AbortSignal.timeout(5000) });
         if (rRes.ok) {
             const j = await rRes.json();
             if (j && (j.play_url || j.direct_play_url)) {
@@ -825,7 +836,7 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
     if (!streamData) {
         try {
             const originRefreshUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${targetEpNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
-            const rRes2 = await fetch(originRefreshUrl, { headers });
+            const rRes2 = await fetch(originRefreshUrl, { headers, signal: AbortSignal.timeout(5000) });
             if (rRes2.ok) {
                 const j2 = await rRes2.json();
                 if (j2 && (j2.play_url || j2.direct_play_url)) {
@@ -851,7 +862,7 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
         return {
             play_url: playUrl,
             direct_play_url: streamData.direct_play_url || '',
-            is_hls: playUrl.includes('.m3u8') || streamData.direct_play_is_hls === true,
+            is_hls: playUrl.includes('.m3u8') || playUrl.includes('/e/m/') || playUrl.includes('/hls') || streamData.direct_play_is_hls === true,
             source_refreshed: streamData.source_refreshed === true,
             subtitle_url: subUrl,
             subtitles: cleanSubs
@@ -861,7 +872,7 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
     // Tier 3: Parse HTML page of that episode for episodeItemsRaw
     try {
         const epPageUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${targetEpNum}?lang=${lang}&from=home`;
-        const pageRes = await fetch(epPageUrl, { headers: getHeaders() });
+        const pageRes = await fetch(epPageUrl, { headers: getHeaders(), signal: AbortSignal.timeout(6000) });
         if (pageRes.ok) {
             const pageHtml = await pageRes.text();
             const epMatch = pageHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
@@ -882,7 +893,7 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
                     return {
                         play_url: pUrl,
                         direct_play_url: matched.direct_play_url || '',
-                        is_hls: pUrl.includes('.m3u8') || matched.browser_prefetch_mode === 'hls',
+                        is_hls: pUrl.includes('.m3u8') || pUrl.includes('/e/m/') || pUrl.includes('/hls') || matched.browser_prefetch_mode === 'hls',
                         subtitle_url: subUrl,
                         subtitles: cleanSubs
                     };
@@ -2129,11 +2140,32 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         let fileName = 'audio.mp4';
 
         // 1. Fetch media stream
-        if (activeStreamUrl.includes('.m3u8')) {
-            const plRes = await fetch(activeStreamUrl, {
-                headers: { 'User-Agent': 'Mozilla/5.0' }
+        const isHls = activeStreamUrl.includes('.m3u8') || activeStreamUrl.includes('/e/m/') || activeStreamUrl.includes('/hls');
+        if (isHls) {
+            let plRes = await fetch(activeStreamUrl, {
+                headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
+                signal: AbortSignal.timeout(8000)
             });
-            const plText = await plRes.text();
+            let plText = await plRes.text();
+
+            // Auto-refresh stale/expired edge links (e.g. ShortMax, GoodShort edge tokens)
+            if (!plText.includes('#EXTM3U') || plText.includes('expired') || plText.includes('error')) {
+                console.log(`[Cloud STT] M3U8 playlist expired or invalid for ${key}, resolving fresh stream...`);
+                try {
+                    const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+                    if (fresh && fresh.play_url) {
+                        activeStreamUrl = fresh.play_url;
+                        plRes = await fetch(activeStreamUrl, {
+                            headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
+                            signal: AbortSignal.timeout(8000)
+                        });
+                        plText = await plRes.text();
+                    }
+                } catch (e) {
+                    console.warn(`[Cloud STT] Stream refresh failed for ${key}:`, e.message);
+                }
+            }
+
             let targetPlUrl = activeStreamUrl;
             let segUrls = [];
 
@@ -2147,7 +2179,8 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
                     }
                 }
                 const varRes = await fetch(targetPlUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0' }
+                    headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
+                    signal: AbortSignal.timeout(8000)
                 });
                 const varText = await varRes.text();
                 for (const line of varText.split('\n')) {
@@ -2169,10 +2202,10 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
             try { muxjs = require('mux.js'); } catch (e) { }
 
             let combinedBuf = null;
-            if (muxjs) {
+            const initSegments = [];
+            const mediaSegments = [];
+            if (muxjs && segUrls.length > 0) {
                 const transmuxer = new muxjs.mp4.Transmuxer();
-                const initSegments = [];
-                const mediaSegments = [];
                 transmuxer.on('data', segment => {
                     if (segment.initSegment && initSegments.length === 0) {
                         initSegments.push(Buffer.from(segment.initSegment));
@@ -2182,11 +2215,12 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
                     }
                 });
 
-                const maxSegments = Math.min(segUrls.length, 8);
+                const maxSegments = Math.min(segUrls.length, 6);
                 for (let i = 0; i < maxSegments; i++) {
                     try {
                         const segRes = await fetch(segUrls[i], {
-                            headers: { 'User-Agent': 'Mozilla/5.0' }
+                            headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
+                            signal: AbortSignal.timeout(8000)
                         });
                         if (segRes.ok) {
                             const buf = await segRes.arrayBuffer();
@@ -2195,36 +2229,52 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
                     } catch (e) { }
                 }
                 transmuxer.flush();
-                combinedBuf = Buffer.concat([...initSegments, ...mediaSegments]);
+                if (initSegments.length > 0) {
+                    combinedBuf = Buffer.concat([...initSegments, ...mediaSegments]);
+                }
+                console.log(`[Cloud STT] ${key} HLS: segUrls=${segUrls.length}, init=${initSegments.length}, media=${mediaSegments.length}, combinedBuf=${combinedBuf ? combinedBuf.length : 0}`);
             }
 
-            if (!combinedBuf || combinedBuf.length === 0) {
-                const chunkPromises = segUrls.slice(0, 6).map(url =>
-                    fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
-                        .then(r => r.ok ? r.arrayBuffer() : null)
-                        .catch(() => null)
-                );
-                const chunks = (await Promise.all(chunkPromises)).filter(Boolean).map(ab => Buffer.from(ab));
-                combinedBuf = Buffer.concat(chunks);
+            const hasFfmpeg = await isFfmpegAvailable();
+            // Fallback to local FFmpeg WAV audio extraction if transmuxer didn't produce valid MP4 with initSegment
+            if ((!combinedBuf || combinedBuf.length === 0 || initSegments.length === 0) && hasFfmpeg) {
+                console.log(`[Cloud STT] Transmuxer output missing initSegment for ${key}, falling back to rapid FFmpeg WAV extraction...`);
+                try {
+                    const tempWav = path.join(SUBTITLES_DIR, `temp_${key}_${Date.now()}.wav`);
+                    await runFfmpeg(`ffmpeg -y -user_agent "Mozilla/5.0" -referer "${BASE_URL}/" -i "${activeStreamUrl}" -t 25 -vn -ar 16000 -ac 1 -c:a pcm_s16le "${tempWav}"`, 20000);
+                    if (fs.existsSync(tempWav) && fs.statSync(tempWav).size > 1000) {
+                        const wavBuf = fs.readFileSync(tempWav);
+                        try { fs.unlinkSync(tempWav); } catch (e) { }
+                        fileBlob = (typeof File !== 'undefined')
+                            ? new File([wavBuf], 'audio.wav', { type: 'audio/wav' })
+                            : new Blob([wavBuf], { type: 'audio/wav' });
+                        fileName = 'audio.wav';
+                    }
+                } catch (e) {
+                    console.warn(`[Cloud STT] FFmpeg audio extraction fallback failed for ${key}:`, e.message);
+                }
             }
 
-            if (!combinedBuf || combinedBuf.length === 0) {
+            if (!fileBlob && (!combinedBuf || combinedBuf.length === 0)) {
                 throw new Error('Failed to download HLS audio segments');
             }
 
-            fileBlob = (typeof File !== 'undefined')
-                ? new File([combinedBuf], 'audio.mp4', { type: 'video/mp4' })
-                : new Blob([combinedBuf], { type: 'video/mp4' });
-            fileName = 'audio.mp4';
+            if (!fileBlob) {
+                fileBlob = (typeof File !== 'undefined')
+                    ? new File([combinedBuf], 'audio.mp4', { type: 'video/mp4' })
+                    : new Blob([combinedBuf], { type: 'video/mp4' });
+                fileName = 'audio.mp4';
+            }
         } else {
             // Direct MP4 (PineDrama, TikTok CDN, Cloudflare CDN)
             // Use Range header for rapid 1-2s download under 16MB limit
             const fetchDirectMedia = async (url) => {
                 let res = await fetch(url, {
-                    headers: { 'User-Agent': 'Mozilla/5.0', 'Range': 'bytes=0-16777215' }
+                    headers: { 'User-Agent': 'Mozilla/5.0', 'Range': 'bytes=0-16777215' },
+                    signal: AbortSignal.timeout(12000)
                 });
                 if (!res.ok && res.status === 416) {
-                    res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+                    res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(12000) });
                 }
                 return res;
             };
@@ -2246,6 +2296,15 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
             }
 
             let buf = await videoRes.arrayBuffer();
+            const headStr = Buffer.from(buf.slice(0, 150)).toString('utf8');
+            if (headStr.includes('#EXTM3U') || headStr.includes('link expired') || headStr.includes('shortmax-edge')) {
+                console.log(`[Cloud STT] Direct media detected as M3U8/playlist for ${key}, re-resolving fresh stream...`);
+                const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+                if (fresh && fresh.play_url && fresh.play_url !== activeStreamUrl) {
+                    return await transcribeViaCloudApi(slug, epNum, fresh.play_url, cleanTarget, apiKey);
+                }
+            }
+
             if (buf.byteLength > 24 * 1024 * 1024) {
                 buf = buf.slice(0, 24 * 1024 * 1024);
             }
@@ -2266,18 +2325,19 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         formData.append('response_format', 'verbose_json');
         // Whisper auto-detects speech language (Chinese, Korean, Vietnamese, English, etc.)
 
-        console.log(`[Cloud STT] Sending ${fileName} to ${isGroq ? 'Groq' : 'OpenAI'} (${model}) for ${key}...`);
-        const cloudRes = await fetch(endpoint, {
+        console.log(`[Cloud STT] Sending ${fileName} (${fileBlob ? fileBlob.size : 0} bytes) to ${isGroq ? 'Groq' : 'OpenAI'} (${model}) for ${key}...`);
+        let cloudRes = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`
             },
-            body: formData
+            body: formData,
+            signal: AbortSignal.timeout(45000)
         });
 
         if (!cloudRes.ok) {
             const errText = await cloudRes.text();
-            console.error(`[Cloud STT] API error (${cloudRes.status}):`, errText);
+            console.error(`[Cloud STT] API error (${cloudRes.status}) for ${key}:`, errText);
             throw new Error(`Cloud STT API error: ${cloudRes.status} - ${errText.slice(0, 100)}`);
         }
 
@@ -2327,11 +2387,10 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
     })();
 
     cloudInFlightPromises.set(cacheKey, taskPromise);
-    try {
-        return await taskPromise;
-    } finally {
+    taskPromise.finally(() => {
         cloudInFlightPromises.delete(cacheKey);
-    }
+    });
+    return await taskPromise;
 }
 
 // Subtitle Generation & Status Check Endpoint
