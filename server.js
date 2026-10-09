@@ -306,14 +306,7 @@ app.get('/api/debug-upstream', async (req, res) => {
     for (const targetUrl of testTargets) {
         const start = Date.now();
         try {
-            const resp = await fetch(targetUrl, {
-                headers: {
-                    'User-Agent': USER_AGENT,
-                    'Accept': '*/*'
-                },
-                redirect: req.query.redirect || 'follow',
-                signal: AbortSignal.timeout(5000)
-            });
+            const resp = await fetchHttp(targetUrl, {}, 8000);
             const text = await resp.text();
             diag.targets.push({
                 targetUrl,
@@ -321,7 +314,8 @@ app.get('/api/debug-upstream', async (req, res) => {
                 ok: resp.ok,
                 duration: Date.now() - start,
                 length: text.length,
-                hasEpisodes: text.includes('episodeItemsRaw')
+                hasEpisodes: text.includes('episodeItemsRaw'),
+                snippet: text.slice(0, 200)
             });
         } catch (e) {
             diag.targets.push({
