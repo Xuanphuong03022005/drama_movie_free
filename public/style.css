@@ -6716,8 +6716,16 @@ video::cue {
 }
 
 #player-modal.reels-mode-active .custom-subtitle-overlay {
-    bottom: 115px;
-    z-index: 60;
+    bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+    z-index: 75;
+    max-width: 86%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#player-modal.reels-mode-active .sub-status-toast {
+    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+    z-index: 80;
 }
 
 /* ==========================================================================

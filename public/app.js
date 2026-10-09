@@ -1069,8 +1069,8 @@
         if (!currentDramaData || !currentDramaData.episodes || !currentDramaData.episodes[currentEpisodeIndex]) return;
         const episode = currentDramaData.episodes[currentEpisodeIndex];
         const epNum = episode.number || (currentEpisodeIndex + 1);
-        const slug = currentDramaData?.slug || '';
-        const streamUrl = episode.play_url || episode.direct_play_url || '';
+        const slug = getDramaSlug(currentDramaData) || currentDramaData?.slug || 'drama';
+        let streamUrl = episode.play_url || episode.direct_play_url || '';
 
         const langName = SUBTITLE_LABELS[subLang] || subLang;
         const reqId = `${slug}_${epNum}_${subLang}_${Date.now()}`;
@@ -1202,12 +1202,30 @@
         }
 
         if (subStatusToast && (!currentSubtitleCues || currentSubtitleCues.length === 0)) {
+            if (subStatusText) subStatusText.textContent = cleanSubLang === 'vi' ? 'Đang dịch phụ đề tiếng Việt...' : 'Đang tải phụ đề...';
             subStatusToast.classList.remove('hidden');
         }
 
         async function checkSubtitle() {
             if (activeSubtitleRequest !== reqId) return;
             try {
+                if (!streamUrl) {
+                    const watchUrl = episode.watch_url || currentDramaData?.watch_url || '';
+                    try {
+                        const rRes = await fetch(`/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`);
+                        const rData = await rRes.json();
+                        if (rData.ok && rData.play_url) {
+                            episode.play_url = rData.play_url;
+                            streamUrl = rData.play_url;
+                        }
+                    } catch (e) { }
+                }
+
+                if (subStatusToast && (!currentSubtitleCues || currentSubtitleCues.length === 0)) {
+                    if (subStatusText) subStatusText.textContent = cleanSubLang === 'vi' ? 'Đang tạo phụ đề tiếng Việt...' : 'Đang tải phụ đề...';
+                    subStatusToast.classList.remove('hidden');
+                }
+
                 const groqKey = localStorage.getItem('df_groq_key') || '';
                 const checkUrl = `/api/subtitles/generate?slug=${encodeURIComponent(slug)}&ep=${epNum}&stream_url=${encodeURIComponent(streamUrl)}&lang=${encodeURIComponent(subLang)}${candidateUpstreamUrl ? '&upstream_sub_url=' + encodeURIComponent(candidateUpstreamUrl) : ''}${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
                 const res = await fetch(checkUrl);
@@ -4894,7 +4912,7 @@
 
         const nextEp = currentDramaData.episodes[nextIndex];
         const epNum = nextEp.number || (nextIndex + 1);
-        const slug = currentDramaData?.slug || '';
+        const slug = getDramaSlug(currentDramaData) || currentDramaData?.slug || 'drama';
         const cleanSubLang = subLang.toLowerCase().split('-')[0];
         const cacheKey = `${slug}_ep${epNum}_${subLang}`;
 
@@ -5012,7 +5030,7 @@
         }
 
         const epNum = nextEp.number || (nextIndex + 1);
-        const slug = currentDramaData?.slug || '';
+        const slug = getDramaSlug(currentDramaData) || currentDramaData?.slug || 'drama';
         const watchUrl = nextEp.watch_url || currentDramaData?.watch_url || '';
         fetch(`/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`)
             .then(res => res.json())
