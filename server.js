@@ -222,33 +222,43 @@ app.get('/api/providers', async (req, res) => {
 
 // Debug endpoint to diagnose upstream connectivity from Vercel / production
 app.get('/api/debug-upstream', async (req, res) => {
-    const testUrl = req.query.url || 'https://edge.narto-drama.com/search/import?provider=anyreel&book_id=6a97e310be6de7bf87416219&title=Forbidden%20Affair';
-    const hosts = ['https://edge.narto-drama.com'];
-    const results = [];
-    for (const host of hosts) {
-        const targetUrl = testUrl.startsWith('http') ? testUrl.replace(/^https?:\/\/[^\/]+/, host) : `${host}${testUrl}`;
+    const dns = require('dns').promises;
+    const testPath = req.query.url || '/home/providers/sections?provider=anyreel&lang=en-US';
+    const diag = { dns: {}, targets: [] };
+    
+    try {
+        diag.dns['edge.narto-drama.com'] = await dns.resolve4('edge.narto-drama.com');
+    } catch(e) {
+        diag.dns['edge.narto-drama.com'] = { error: e.message };
+    }
+
+    const testTargets = [
+        `https://edge.narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`,
+        `https://edge.narto.in${testPath.startsWith('/') ? '' : '/'}${testPath}`
+    ];
+
+    for (const targetUrl of testTargets) {
         const start = Date.now();
         try {
             const resp = await fetch(targetUrl, {
-                headers: getHeaders({ 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }),
+                headers: {
+                    'User-Agent': USER_AGENT,
+                    'Accept': '*/*'
+                },
                 redirect: req.query.redirect || 'follow',
-                signal: AbortSignal.timeout(parseInt(req.query.timeout || '12000', 10))
+                signal: AbortSignal.timeout(5000)
             });
             const text = await resp.text();
-            results.push({
-                host,
+            diag.targets.push({
                 targetUrl,
                 status: resp.status,
                 ok: resp.ok,
-                finalUrl: resp.url,
                 duration: Date.now() - start,
                 length: text.length,
-                hasEpisodes: text.includes('episodeItemsRaw'),
-                snippet: text.slice(0, 300)
+                hasEpisodes: text.includes('episodeItemsRaw')
             });
         } catch (e) {
-            results.push({
-                host,
+            diag.targets.push({
                 targetUrl,
                 error: e.message,
                 code: e.code,
@@ -257,7 +267,7 @@ app.get('/api/debug-upstream', async (req, res) => {
             });
         }
     }
-    res.json({ ok: true, results });
+    res.json({ ok: true, diag });
 });
 
 // In-memory sections cache for instant 0ms responses & resilience against upstream network hiccups
