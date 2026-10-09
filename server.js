@@ -318,8 +318,10 @@ app.get('/api/providers', async (req, res) => {
 // Debug endpoint to diagnose upstream connectivity from Vercel / production
 app.get('/api/debug-upstream', async (req, res) => {
     const dns = require('dns').promises;
+    const net = require('net');
+    const tls = require('tls');
     const testPath = req.query.url || '/home/providers/sections?provider=anyreel&lang=en-US';
-    const diag = { dns: {}, targets: [] };
+    const diag = { dns: {}, tcp: {}, targets: [] };
     
     try {
         diag.dns['edge.narto-drama.com'] = await dns.resolve4('edge.narto-drama.com');
@@ -327,37 +329,50 @@ app.get('/api/debug-upstream', async (req, res) => {
         diag.dns['edge.narto-drama.com'] = { error: e.message };
     }
 
-    const testTargets = testPath.startsWith('http')
-        ? [testPath]
-        : [
-            `https://edge.narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`,
-            `https://narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`
-          ];
-
-    for (const targetUrl of testTargets) {
-        const start = Date.now();
-        try {
-            const resp = await fetchHttp(targetUrl, {}, 8000);
-            const text = await resp.text();
-            diag.targets.push({
-                targetUrl,
-                status: resp.status,
-                ok: resp.ok,
-                duration: Date.now() - start,
-                length: text.length,
-                hasEpisodes: text.includes('episodeItemsRaw'),
-                snippet: text.slice(0, 200)
+    // Fast 3s TCP connect test to edge.narto-drama.com:443
+    const t0 = Date.now();
+    try {
+        await new Promise((resolve, reject) => {
+            const socket = net.createConnection({ host: '5.63.19.247', port: 443, timeout: 3000 }, () => {
+                diag.tcp['5.63.19.247:443'] = { ok: true, duration: Date.now() - t0 };
+                socket.destroy();
+                resolve();
             });
-        } catch (e) {
-            diag.targets.push({
-                targetUrl,
-                error: e.message,
-                code: e.code,
-                name: e.name,
-                duration: Date.now() - start
+            socket.on('timeout', () => {
+                socket.destroy();
+                reject(new Error('TCP connect timeout after 3000ms'));
             });
-        }
+            socket.on('error', (err) => reject(err));
+        });
+    } catch (err) {
+        diag.tcp['5.63.19.247:443'] = { ok: false, error: err.message, duration: Date.now() - t0 };
     }
+
+    const targetUrl = testPath.startsWith('http')
+        ? testPath
+        : `https://edge.narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`;
+
+    const start = Date.now();
+    try {
+        const resp = await fetchHttp(targetUrl, {}, 6000);
+        const text = await resp.text();
+        diag.targets.push({
+            targetUrl,
+            status: resp.status,
+            ok: resp.ok,
+            duration: Date.now() - start,
+            length: text.length,
+            hasEpisodes: text.includes('episodeItemsRaw'),
+            snippet: text.slice(0, 200)
+        });
+    } catch (e) {
+        diag.targets.push({
+            targetUrl,
+            error: e.message,
+            duration: Date.now() - start
+        });
+    }
+
     res.json({ ok: true, diag });
 });
 
