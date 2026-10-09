@@ -219,6 +219,46 @@ app.get('/api/providers', async (req, res) => {
     }
 });
 
+// Debug endpoint to diagnose upstream connectivity from Vercel / production
+app.get('/api/debug-upstream', async (req, res) => {
+    const testUrl = req.query.url || 'https://edge.narto-drama.com/search/import?provider=anyreel&book_id=6a97e310be6de7bf87416219&title=Forbidden%20Affair';
+    const hosts = ['https://edge.narto-drama.com'];
+    const results = [];
+    for (const host of hosts) {
+        const targetUrl = testUrl.startsWith('http') ? testUrl.replace(/^https?:\/\/[^\/]+/, host) : `${host}${testUrl}`;
+        const start = Date.now();
+        try {
+            const resp = await fetch(targetUrl, {
+                headers: getHeaders({ 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }),
+                redirect: req.query.redirect || 'follow',
+                signal: AbortSignal.timeout(6000)
+            });
+            const text = await resp.text();
+            results.push({
+                host,
+                targetUrl,
+                status: resp.status,
+                ok: resp.ok,
+                finalUrl: resp.url,
+                duration: Date.now() - start,
+                length: text.length,
+                hasEpisodes: text.includes('episodeItemsRaw'),
+                snippet: text.slice(0, 300)
+            });
+        } catch (e) {
+            results.push({
+                host,
+                targetUrl,
+                error: e.message,
+                code: e.code,
+                name: e.name,
+                duration: Date.now() - start
+            });
+        }
+    }
+    res.json({ ok: true, results });
+});
+
 // In-memory sections cache for instant 0ms responses & resilience against upstream network hiccups
 const sectionsCache = new Map();
 const SECTIONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
