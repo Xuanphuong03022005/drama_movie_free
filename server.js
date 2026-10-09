@@ -160,8 +160,8 @@ function getHeaders(extraHeaders = {}) {
     };
 }
 
-// High-performance, connection-closed HTTPS client for rock-solid serverless & local streaming
-function fetchHttp(urlStr, options = {}, timeoutMs = 8000, maxRedirects = 3) {
+// High-performance, rock-solid HTTP/HTTPS client with hard total timeout & sync decompression
+function fetchHttp(urlStr, options = {}, timeoutMs = 15000, maxRedirects = 3) {
     return new Promise((resolve, reject) => {
         if (maxRedirects < 0) return reject(new Error('Too many redirects'));
         let u;
@@ -181,29 +181,48 @@ function fetchHttp(urlStr, options = {}, timeoutMs = 8000, maxRedirects = 3) {
             ...(options.headers || {})
         };
 
+        let timer = null;
+        let isDone = false;
+
+        const cleanup = () => {
+            isDone = true;
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+        };
+
         const req = client.request(u, {
             method: options.method || 'GET',
-            headers,
-            timeout: timeoutMs
+            headers
         }, (res) => {
             if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-                const nextUrl = new URL(res.headers.location, urlStr).toString();
+                cleanup();
                 req.destroy();
+                const nextUrl = new URL(res.headers.location, urlStr).toString();
                 return resolve(fetchHttp(nextUrl, options, timeoutMs, maxRedirects - 1));
             }
 
-            let stream = res;
-            const encoding = res.headers['content-encoding'];
-            if (encoding === 'gzip') {
-                stream = res.pipe(zlib.createGunzip());
-            } else if (encoding === 'deflate') {
-                stream = res.pipe(zlib.createInflate());
-            }
-
             const chunks = [];
-            stream.on('data', chunk => chunks.push(chunk));
-            stream.on('end', () => {
-                const body = Buffer.concat(chunks).toString('utf8');
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                cleanup();
+                const raw = Buffer.concat(chunks);
+                const encoding = (res.headers['content-encoding'] || '').toLowerCase();
+                let body;
+                try {
+                    if (encoding === 'gzip') {
+                        body = zlib.gunzipSync(raw).toString('utf8');
+                    } else if (encoding === 'deflate') {
+                        body = zlib.inflateSync(raw).toString('utf8');
+                    } else if (encoding === 'br') {
+                        body = zlib.brotliDecompressSync(raw).toString('utf8');
+                    } else {
+                        body = raw.toString('utf8');
+                    }
+                } catch (zlibErr) {
+                    body = raw.toString('utf8');
+                }
                 resolve({
                     status: res.statusCode,
                     ok: res.statusCode >= 200 && res.statusCode < 300,
@@ -213,13 +232,26 @@ function fetchHttp(urlStr, options = {}, timeoutMs = 8000, maxRedirects = 3) {
                     json: async () => JSON.parse(body)
                 });
             });
-            stream.on('error', err => reject(err));
+            res.on('error', err => {
+                cleanup();
+                reject(err);
+            });
         });
 
-        req.on('timeout', () => {
-            req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
+        timer = setTimeout(() => {
+            if (!isDone) {
+                cleanup();
+                req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
+            }
+        }, timeoutMs);
+
+        req.on('error', err => {
+            if (!isDone) {
+                cleanup();
+                reject(err);
+            }
         });
-        req.on('error', err => reject(err));
+
         if (options.body) req.write(options.body);
         req.end();
     });
@@ -227,13 +259,12 @@ function fetchHttp(urlStr, options = {}, timeoutMs = 8000, maxRedirects = 3) {
 
 // Resilient upstream fetch with multi-host automatic failover
 async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 8000) {
-    let normalized = pathAndQuery.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
+    let normalized = pathAndQuery.replace(/^https?:\/\/(edge\.)?narto-drama\.com/, '');
+    if (!normalized.startsWith('/')) normalized = '/' + normalized;
     let lastErr = null;
     for (const host of UPSTREAM_HOSTS) {
         try {
-            const url = normalized.startsWith('http')
-                ? normalized.replace(/^https?:\/\/[^\/]+/, host)
-                : `${host}${normalized.startsWith('/') ? '' : '/'}${normalized}`;
+            const url = `${host}${normalized}`;
             const res = await fetchHttp(url, options, timeoutMs);
             if (res.ok) return res;
         } catch (err) {
@@ -603,17 +634,19 @@ app.get('/api/drama', async (req, res) => {
                 if (sm) dramaSlug = sm[1];
             }
 
-            // Helper to fetch direct watch episode page
+            // Helper to fetch direct watch episode page directly
             const tryFetchWatchPage = async (targetSlug, epNum = 1) => {
                 if (!targetSlug) return null;
                 const pageUrl = `${BASE_URL}/detail/watch/${targetSlug}/${epNum}?lang=${encodeURIComponent(lang)}&from=home`;
-                const pRes = await fetchFromUpstream(pageUrl, { headers, redirect: 'follow' }, 10000);
-                if (pRes && pRes.ok) {
-                    const pText = await pRes.text();
-                    if (pText.includes('episodeItemsRaw')) {
-                        return { pageRes: pRes, html: pText, finalUrl: pRes.url || pageUrl, slug: targetSlug };
+                try {
+                    const pRes = await fetchHttp(pageUrl, { headers }, 8000);
+                    if (pRes && pRes.ok) {
+                        const pText = await pRes.text();
+                        if (pText.includes('episodeItemsRaw')) {
+                            return { pageRes: pRes, html: pText, finalUrl: pageUrl, slug: targetSlug };
+                        }
                     }
-                }
+                } catch (e) {}
                 return null;
             };
 
