@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
+const https = require('https');
+const zlib = require('zlib');
 const fs = require('fs');
 const { exec } = require('child_process');
 const util = require('util');
@@ -158,8 +160,73 @@ function getHeaders(extraHeaders = {}) {
     };
 }
 
+// High-performance, connection-closed HTTPS client for rock-solid serverless & local streaming
+function fetchHttp(urlStr, options = {}, timeoutMs = 8000, maxRedirects = 3) {
+    return new Promise((resolve, reject) => {
+        if (maxRedirects < 0) return reject(new Error('Too many redirects'));
+        let u;
+        try {
+            u = new URL(urlStr);
+        } catch (e) {
+            return reject(e);
+        }
+        const isHttps = u.protocol === 'https:';
+        const client = isHttps ? https : http;
+
+        const headers = {
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'close',
+            ...(options.headers || {})
+        };
+
+        const req = client.request(u, {
+            method: options.method || 'GET',
+            headers,
+            timeout: timeoutMs
+        }, (res) => {
+            if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+                const nextUrl = new URL(res.headers.location, urlStr).toString();
+                req.destroy();
+                return resolve(fetchHttp(nextUrl, options, timeoutMs, maxRedirects - 1));
+            }
+
+            let stream = res;
+            const encoding = res.headers['content-encoding'];
+            if (encoding === 'gzip') {
+                stream = res.pipe(zlib.createGunzip());
+            } else if (encoding === 'deflate') {
+                stream = res.pipe(zlib.createInflate());
+            }
+
+            const chunks = [];
+            stream.on('data', chunk => chunks.push(chunk));
+            stream.on('end', () => {
+                const body = Buffer.concat(chunks).toString('utf8');
+                resolve({
+                    status: res.statusCode,
+                    ok: res.statusCode >= 200 && res.statusCode < 300,
+                    headers: res.headers,
+                    url: urlStr,
+                    text: async () => body,
+                    json: async () => JSON.parse(body)
+                });
+            });
+            stream.on('error', err => reject(err));
+        });
+
+        req.on('timeout', () => {
+            req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
+        });
+        req.on('error', err => reject(err));
+        if (options.body) req.write(options.body);
+        req.end();
+    });
+}
+
 // Resilient upstream fetch with multi-host automatic failover
-async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 12000) {
+async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 8000) {
     let normalized = pathAndQuery.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
     let lastErr = null;
     for (const host of UPSTREAM_HOSTS) {
@@ -167,10 +234,7 @@ async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 12000) 
             const url = normalized.startsWith('http')
                 ? normalized.replace(/^https?:\/\/[^\/]+/, host)
                 : `${host}${normalized.startsWith('/') ? '' : '/'}${normalized}`;
-            const res = await fetch(url, {
-                ...options,
-                signal: AbortSignal.timeout(timeoutMs)
-            });
+            const res = await fetchHttp(url, options, timeoutMs);
             if (res.ok) return res;
         } catch (err) {
             lastErr = err;
