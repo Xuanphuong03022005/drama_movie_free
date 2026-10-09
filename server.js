@@ -159,7 +159,7 @@ function getHeaders(extraHeaders = {}) {
 }
 
 // Resilient upstream fetch with multi-host automatic failover
-async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 6000) {
+async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 12000) {
     let normalized = pathAndQuery.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
     let lastErr = null;
     for (const host of UPSTREAM_HOSTS) {
@@ -232,7 +232,7 @@ app.get('/api/debug-upstream', async (req, res) => {
             const resp = await fetch(targetUrl, {
                 headers: getHeaders({ 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }),
                 redirect: req.query.redirect || 'follow',
-                signal: AbortSignal.timeout(6000)
+                signal: AbortSignal.timeout(parseInt(req.query.timeout || '12000', 10))
             });
             const text = await resp.text();
             results.push({
@@ -537,7 +537,7 @@ app.get('/api/drama', async (req, res) => {
             const tryFetchWatchPage = async (targetSlug, epNum = 1) => {
                 if (!targetSlug) return null;
                 const pageUrl = `${BASE_URL}/detail/watch/${targetSlug}/${epNum}?lang=${encodeURIComponent(lang)}&from=home`;
-                const pRes = await fetchFromUpstream(pageUrl, { headers, redirect: 'follow' }, 5000);
+                const pRes = await fetchFromUpstream(pageUrl, { headers, redirect: 'follow' }, 10000);
                 if (pRes && pRes.ok) {
                     const pText = await pRes.text();
                     if (pText.includes('episodeItemsRaw')) {
