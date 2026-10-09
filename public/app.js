@@ -4544,7 +4544,7 @@
             if (!data) {
                 let fetchUrl = '';
                 if (watchUrl) {
-                    fetchUrl = `/api/drama?watch_url=${encodeURIComponent(watchUrl)}&lang=${encodeURIComponent(currentLang)}`;
+                    fetchUrl = `/api/drama?watch_url=${encodeURIComponent(watchUrl)}&slug=${encodeURIComponent(item.slug || '')}&ep=${initialEpNum || 1}&lang=${encodeURIComponent(currentLang)}`;
                 } else if (item.slug) {
                     fetchUrl = `/api/drama?slug=${encodeURIComponent(item.slug)}&ep=${initialEpNum || 1}&lang=${encodeURIComponent(currentLang)}`;
                 }

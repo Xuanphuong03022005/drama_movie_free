@@ -130,9 +130,9 @@ app.get('/api/drama/supabase-list', async (req, res) => {
     }
 });
 
-const UPSTREAM_HOSTS = ['https://edge.narto-drama.com', 'https://narto-drama.com'];
+const UPSTREAM_HOSTS = ['https://edge.narto-drama.com'];
 const BASE_URL = 'https://edge.narto-drama.com';
-const ORIGIN_URL = 'https://narto-drama.com';
+const ORIGIN_URL = 'https://edge.narto-drama.com';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const FALLBACK_PROVIDERS = [
@@ -159,13 +159,14 @@ function getHeaders(extraHeaders = {}) {
 }
 
 // Resilient upstream fetch with multi-host automatic failover
-async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 12000) {
+async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 6000) {
+    let normalized = pathAndQuery.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
     let lastErr = null;
     for (const host of UPSTREAM_HOSTS) {
         try {
-            const url = pathAndQuery.startsWith('http')
-                ? pathAndQuery.replace(/^https?:\/\/[^\/]+/, host)
-                : `${host}${pathAndQuery.startsWith('/') ? '' : '/'}${pathAndQuery}`;
+            const url = normalized.startsWith('http')
+                ? normalized.replace(/^https?:\/\/[^\/]+/, host)
+                : `${host}${normalized.startsWith('/') ? '' : '/'}${normalized}`;
             const res = await fetch(url, {
                 ...options,
                 signal: AbortSignal.timeout(timeoutMs)
@@ -398,9 +399,24 @@ function normalizeItem(item) {
     if (item.cover_url) item.cover_url = normalizePosterUrl(item.cover_url);
     if (item.cover) item.cover = normalizePosterUrl(item.cover);
     if (item.poster) item.poster = normalizePosterUrl(item.poster);
+    if (item.watch_url) {
+        item.watch_url = item.watch_url.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
+    }
+    if (item.url) {
+        item.url = item.url.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
+    }
     if (!item.slug && (item.watch_url || item.url)) {
         const sm = (item.watch_url || item.url).match(/\/detail\/watch\/([^\/?#]+)/);
         if (sm) item.slug = sm[1];
+    }
+    if (!item.slug && item.watch_url && item.watch_url.includes('/search/import')) {
+        try {
+            const u = new URL(item.watch_url.startsWith('http') ? item.watch_url : `${BASE_URL}${item.watch_url}`);
+            const titleParam = u.searchParams.get('title');
+            if (titleParam) {
+                item.slug = titleParam.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            }
+        } catch (e) {}
     }
     return item;
 }
@@ -499,43 +515,116 @@ app.get('/api/drama', async (req, res) => {
         }
 
         const executeFetch = async () => {
-            // Fetch the drama page (following redirects)
             const headers = getHeaders();
-            let pageRes = await fetchFromUpstream(watchUrl, { headers, redirect: 'follow' }, 12000);
-            if (!pageRes) {
-                return { ok: false, error: 'Upstream page fetch failed' };
-            }
-            let html = await pageRes.text();
-            let finalUrl = pageRes.url || watchUrl;
+            let watchUrlClean = (watchUrl || '').replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
+            let dramaSlug = slug || '';
+            let importTitle = '';
 
-            // If direct slug watchUrl returned 404 or missing episodes, try searching upstream by slug keywords
-            if ((!pageRes.ok || html.includes('Page Not Found') || !html.includes('episodeItemsRaw')) && slug) {
-                const searchKeywords = slug.replace(/[-_]+/g, ' ').trim();
+            if (watchUrlClean.includes('/search/import')) {
                 try {
-                    const sRes = await fetchFromUpstream(`/search?q=${encodeURIComponent(searchKeywords)}&limit=5&lang=${encodeURIComponent(lang)}`, {
-                        headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-                    }, 5000);
+                    const parsed = new URL(watchUrlClean.startsWith('http') ? watchUrlClean : `${BASE_URL}${watchUrlClean}`);
+                    importTitle = parsed.searchParams.get('title') || '';
+                    if (!dramaSlug && importTitle) {
+                        dramaSlug = importTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                    }
+                } catch (e) {}
+            } else if (!dramaSlug && watchUrlClean) {
+                const sm = watchUrlClean.match(/\/detail\/watch\/([^\/?#]+)/);
+                if (sm) dramaSlug = sm[1];
+            }
+
+            // Helper to fetch direct watch episode page
+            const tryFetchWatchPage = async (targetSlug, epNum = 1) => {
+                if (!targetSlug) return null;
+                const pageUrl = `${BASE_URL}/detail/watch/${targetSlug}/${epNum}?lang=${encodeURIComponent(lang)}&from=home`;
+                const pRes = await fetchFromUpstream(pageUrl, { headers, redirect: 'follow' }, 5000);
+                if (pRes && pRes.ok) {
+                    const pText = await pRes.text();
+                    if (pText.includes('episodeItemsRaw')) {
+                        return { pageRes: pRes, html: pText, finalUrl: pRes.url || pageUrl, slug: targetSlug };
+                    }
+                }
+                return null;
+            };
+
+            let pageRes = null;
+            let html = '';
+            let finalUrl = watchUrlClean;
+
+            // Strategy 1: Instant direct slug /1 fetch (takes ~400ms - 1s)
+            if (dramaSlug) {
+                const direct = await tryFetchWatchPage(dramaSlug, ep || 1);
+                if (direct) {
+                    pageRes = direct.pageRes;
+                    html = direct.html;
+                    finalUrl = direct.finalUrl;
+                    dramaSlug = direct.slug;
+                }
+            }
+
+            // Strategy 2: Upstream search by title keywords (takes ~0.5s)
+            if (!pageRes && (importTitle || dramaSlug)) {
+                const searchKeyword = (importTitle || dramaSlug.replace(/[-_]+/g, ' ')).replace(/\s*-\s*.*$/i, '').trim();
+                try {
+                    const sRes = await fetchFromUpstream(`/search?q=${encodeURIComponent(searchKeyword)}&limit=5&lang=${encodeURIComponent(lang)}`, {
+                        headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' })
+                    }, 4000);
                     if (sRes && sRes.ok) {
                         const sData = await sRes.json();
-                        const sItems = sData.items || sData || [];
-                        if (sItems.length > 0 && sItems[0].url) {
-                            const newUrl = sItems[0].url.startsWith('http') ? sItems[0].url : `${BASE_URL}${sItems[0].url}`;
-                            const newRes = await fetchFromUpstream(newUrl, { headers, redirect: 'follow' }, 6000);
-                            if (newRes && newRes.ok) {
-                                pageRes = newRes;
-                                html = await newRes.text();
-                                finalUrl = newRes.url || newUrl;
+                        const items = sData.items || sData || [];
+                        for (const item of items) {
+                            if (item.url && item.url.includes('/detail/watch/')) {
+                                const m = item.url.match(/\/detail\/watch\/([^\/?#]+)/);
+                                if (m && m[1]) {
+                                    const searchMatch = await tryFetchWatchPage(m[1], ep || 1);
+                                    if (searchMatch) {
+                                        pageRes = searchMatch.pageRes;
+                                        html = searchMatch.html;
+                                        finalUrl = searchMatch.finalUrl;
+                                        dramaSlug = searchMatch.slug;
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
-                } catch (err) { }
+                } catch (e) {}
+            }
+
+            // Strategy 3: Standard watchUrl fetch (following redirects)
+            if (!pageRes && watchUrlClean) {
+                let fetchTarget = watchUrlClean;
+                if (fetchTarget.includes('/detail/watch/') && !fetchTarget.match(/\/detail\/watch\/[^\/?#]+\/\d+/)) {
+                    fetchTarget = fetchTarget.replace(/\/detail\/watch\/([^\/?#]+)/, `/detail/watch/$1/${ep || 1}`);
+                }
+                pageRes = await fetchFromUpstream(fetchTarget, { headers, redirect: 'follow' }, 6000);
+                if (pageRes && pageRes.ok) {
+                    html = await pageRes.text();
+                    finalUrl = pageRes.url || fetchTarget;
+                    const sm = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/);
+                    if (sm && sm[1]) dramaSlug = sm[1];
+
+                    // If landing page lacks episodeItemsRaw, fetch /1
+                    if (!html.includes('episodeItemsRaw') && dramaSlug) {
+                        const ep1Res = await tryFetchWatchPage(dramaSlug, ep || 1);
+                        if (ep1Res) {
+                            pageRes = ep1Res.pageRes;
+                            html = ep1Res.html;
+                            finalUrl = ep1Res.finalUrl;
+                        }
+                    }
+                }
+            }
+
+            if (!pageRes || !html) {
+                return { ok: false, error: 'Upstream page fetch failed' };
             }
 
             // Extract metadata
             let title = '';
             const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i) || html.match(/<title>([^<]+)<\/title>/i);
             if (titleMatch) {
-                title = titleMatch[1].replace(/ - Streaming Gratis.*$/i, '').replace(/^"|"$/g, '').trim();
+                title = titleMatch[1].replace(/ - Streaming Gratis.*$/i, '').replace(/ - Free Streaming.*$/i, '').replace(/^"|"$/g, '').trim();
             }
 
             let description = '';
@@ -551,8 +640,8 @@ app.get('/api/drama', async (req, res) => {
             }
 
             // Extract drama slug early for scoped episode matching and on-demand stream resolution
-            const slugMatch = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/) || watchUrl.match(/\/detail\/watch\/([^\/?#]+)/);
-            const dramaSlug = slugMatch ? slugMatch[1] : (slug || '');
+            const slugMatch = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/) || watchUrlClean.match(/\/detail\/watch\/([^\/?#]+)/);
+            if (slugMatch) dramaSlug = slugMatch[1];
 
             // Extract episodeItemsRaw
             let episodes = [];
@@ -567,25 +656,18 @@ app.get('/api/drama', async (req, res) => {
 
             // If not found in current page, check for /detail/watch/{dramaSlug}/1 specifically
             if (episodes.length === 0 && dramaSlug) {
-                const escapedSlug = dramaSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const ep1Regex = new RegExp(`href="([^"]*\\/detail\\/watch\\/${escapedSlug}\\/1[^"]*)"`, 'i');
-                const ep1LinkMatch = html.match(ep1Regex);
-                if (ep1LinkMatch) {
-                    const ep1Url = (ep1LinkMatch[1].startsWith('http') ? ep1LinkMatch[1] : `${BASE_URL}${ep1LinkMatch[1]}`).replace(/&amp;/g, '&');
-                    const pageRes2 = await fetchFromUpstream(ep1Url, { headers }, 5000);
-                    if (pageRes2 && pageRes2.ok) {
-                        const html2 = await pageRes2.text();
-                        const epMatch2 = html2.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                        if (epMatch2) {
-                            try {
-                                episodes = JSON.parse(epMatch2[1]);
-                            } catch (e) {
-                                console.error('Error parsing episodeItemsRaw (step 2):', e);
-                            }
+                const ep1Res = await tryFetchWatchPage(dramaSlug, ep || 1);
+                if (ep1Res) {
+                    const epMatch2 = ep1Res.html.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                    if (epMatch2) {
+                        try {
+                            episodes = JSON.parse(epMatch2[1]);
+                        } catch (e) {
+                            console.error('Error parsing episodeItemsRaw (step 2):', e);
                         }
-                        if (html2.includes('class="episode-item"')) {
-                            html = html2;
-                        }
+                    }
+                    if (ep1Res.html.includes('class="episode-item"')) {
+                        html = ep1Res.html;
                     }
                 }
             }
