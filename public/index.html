@@ -16,7 +16,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=2.5.1">
+    <link rel="stylesheet" href="/style.css?v=2.5.2">
     <script>
         (function() {
             try {
@@ -658,7 +658,7 @@
                                 <button type="button" class="ctrl-dropdown-btn" id="quality-btn"
                                     title="Switch Stream Quality">
                                     <i class="fa-solid fa-sliders"></i>
-                                    <span id="quality-label">Auto</span>
+                                    <span id="quality-label">1080p HD</span>
                                     <i class="fa-solid fa-chevron-up" style="font-size:10px"></i>
                                 </button>
                                 <div class="ctrl-dropdown-menu" id="quality-menu" hidden>
@@ -668,7 +668,7 @@
                                     <button class="ctrl-dropdown-menu-item active" data-quality="auto" id="q-auto"><span
                                             id="q-auto-text">Auto (HLS Adaptive)</span> <span class="item-check"><i
                                                 class="fa-solid fa-check"></i></span></button>
-                                    <button class="ctrl-dropdown-menu-item" data-quality="1080">1080p HD</button>
+                                    <button class="ctrl-dropdown-menu-item active" data-quality="1080">1080p HD <span class="item-check"><i class="fa-solid fa-check"></i></span></button>
                                     <button class="ctrl-dropdown-menu-item" data-quality="720">720p</button>
                                     <button class="ctrl-dropdown-menu-item" data-quality="480">480p</button>
                                 </div>
@@ -1025,7 +1025,7 @@
         </div>
     </div>
 
-    <script src="/app.js?v=2.5.1"></script>
+    <script src="/app.js?v=2.6.0"></script>
 </body>
 
 </html>

@@ -33,7 +33,7 @@
     let lastTapX = 0;
 
     // Quality / subtitle state
-    let selectedQuality = 'auto';
+    let selectedQuality = localStorage.getItem('df_quality') || '1080';
     let selectedSubtitle = localStorage.getItem('df_selected_sub') || 'vi';
     let selectedSubtitleSize = localStorage.getItem('df_sub_size') || 'large';
     let _pendingResumeTime = 0;
@@ -388,6 +388,7 @@
         applyTranslations(currentLang);
         syncSubtitleUI();
         applySubtitleSize(selectedSubtitleSize);
+        selectQuality(selectedQuality, false);
         bindEvents();
         bindPlayerEvents();
         setupDiscoveryFilters();
@@ -1042,22 +1043,43 @@
     // ==========================================
     // QUALITY SWITCHER
     // ==========================================
-    function selectQuality(q) {
+    function selectQuality(q, isUserAction = false) {
         selectedQuality = q;
+        try { localStorage.setItem('df_quality', q); } catch(e) {}
         const labels = { auto: 'Auto', '1080': '1080p HD', '720': '720p', '480': '480p' };
         if (qualityLabel) qualityLabel.textContent = labels[q] || q;
-        qualityMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => {
-            const isA = item.getAttribute('data-quality') === q;
-            item.classList.toggle('active', isA);
-            const ch = item.querySelector('.item-check');
-            if (isA && !ch) item.innerHTML += ' <span class="item-check"><i class="fa-solid fa-check"></i></span>';
-            else if (!isA && ch) ch.remove();
-        });
-        if (hls && window.Hls) {
-            if (q === 'auto') { hls.currentLevel = -1; }
-            else { const th = parseInt(q, 10); let best = -1; (hls.levels || []).forEach((l, i) => { if (l.height && l.height <= th) best = i; }); hls.currentLevel = best; }
+        if (qualityMenu) {
+            qualityMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => {
+                const isA = item.getAttribute('data-quality') === q;
+                item.classList.toggle('active', isA);
+                const ch = item.querySelector('.item-check');
+                if (isA && !ch) item.innerHTML += ' <span class="item-check"><i class="fa-solid fa-check"></i></span>';
+                else if (!isA && ch) ch.remove();
+            });
         }
-        showToast(`Độ phân giải: ${labels[q] || q}`, 'fa-sliders');
+        if (hls && window.Hls) {
+            if (q === 'auto') { 
+                hls.currentLevel = -1; 
+            } else { 
+                const th = parseInt(q, 10); 
+                let best = -1; 
+                let bestHeight = 0;
+                (hls.levels || []).forEach((l, i) => { 
+                    const h = l.height || 0;
+                    if (h <= th && h >= bestHeight) {
+                        bestHeight = h;
+                        best = i;
+                    }
+                }); 
+                if (best === -1 && hls.levels && hls.levels.length > 0) {
+                    best = hls.levels.length - 1; // Highest available
+                }
+                if (best !== -1) hls.currentLevel = best; 
+            }
+        }
+        if (isUserAction) {
+            showToast(`Độ phân giải: ${labels[q] || q}`, 'fa-sliders');
+        }
     }
 
     // ==========================================
@@ -1679,7 +1701,7 @@
                 if (!qualityMenu.hidden) alignDropdownMenu(qualityMenu, qualityBtn);
                 if (subtitleMenu) subtitleMenu.hidden = true;
             });
-            qualityMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => item.addEventListener('click', () => { selectQuality(item.getAttribute('data-quality')); qualityMenu.hidden = true; }));
+            qualityMenu.querySelectorAll('.ctrl-dropdown-menu-item').forEach(item => item.addEventListener('click', () => { selectQuality(item.getAttribute('data-quality'), true); qualityMenu.hidden = true; }));
         }
         if (subtitleBtn && subtitleMenu) {
             subtitleBtn.addEventListener('click', e => {
@@ -3341,14 +3363,58 @@
     // ==========================================
     const FALLBACK_PROVIDERS = [
         { key: 'anyreel', label: 'AnyReel' },
-        { key: 'dramabox', label: 'DramaBox' },
-        { key: 'shortmax', label: 'ShortMax' },
-        { key: 'flextv', label: 'FlexTV' },
-        { key: 'reelshort', label: 'ReelShort' },
-        { key: 'melolo', label: 'Melolo' },
-        { key: 'goodshort', label: 'GoodShort' },
-        { key: 'pinedrama', label: 'PineDrama' },
+        { key: 'bibishort', label: 'BibiShort' },
+        { key: 'candyjar', label: 'CandyJar' },
+        { key: 'cubetv', label: 'CubeTV' },
         { key: 'dotdrama', label: 'DotDrama' },
+        { key: 'dotdrama2', label: 'DotDrama II' },
+        { key: 'dramabite', label: 'Dramabite' },
+        { key: 'dramabox', label: 'DramaBox' },
+        { key: 'dramanova', label: 'DramaNova' },
+        { key: 'dramashorts', label: 'DramaShorts' },
+        { key: 'dramatv', label: 'DramaTV' },
+        { key: 'dramawave', label: 'DramaWave' },
+        { key: 'dreameshort', label: 'DreameShort' },
+        { key: 'flareflow', label: 'FlareFlow' },
+        { key: 'flextv', label: 'FlexTV' },
+        { key: 'flickreels', label: 'FlickReels' },
+        { key: 'freedrama', label: 'FreeDrama' },
+        { key: 'freereels', label: 'FreeReels' },
+        { key: 'fundrama', label: 'Fun Drama' },
+        { key: 'goodshort', label: 'GoodShort' },
+        { key: 'happyshort', label: 'HappyShort' },
+        { key: 'idrama', label: 'iDrama' },
+        { key: 'joyreels', label: 'JoyReels' },
+        { key: 'kalostv', label: 'KalosTV' },
+        { key: 'melolo', label: 'Melolo' },
+        { key: 'microdrama', label: 'MicroDrama' },
+        { key: 'minishorts', label: 'MiniShorts' },
+        { key: 'minutedrama', label: 'MinuteDrama' },
+        { key: 'moboreels', label: 'MoboReels' },
+        { key: 'mydrama', label: 'My Drama' },
+        { key: 'myrelle', label: 'MyRelle' },
+        { key: 'netshort', label: 'NetShort' },
+        { key: 'ohmytv', label: 'OhMyTV' },
+        { key: 'pinedrama', label: 'PineDrama' },
+        { key: 'playlet', label: 'Playlet' },
+        { key: 'rapidtv', label: 'RapidTV' },
+        { key: 'rapidtv2', label: 'RapidTV II' },
+        { key: 'raptdrama', label: 'RaptDrama' },
+        { key: 'reelala', label: 'Reelala' },
+        { key: 'reelbuzz', label: 'ReelBuzz' },
+        { key: 'reelife', label: 'Reelife' },
+        { key: 'reelshort', label: 'ReelShort' },
+        { key: 'sarostv', label: 'SAROS TV' },
+        { key: 'serealplus', label: 'Sereal+' },
+        { key: 'shortical', label: 'Shortical' },
+        { key: 'shortmax', label: 'ShortMax' },
+        { key: 'sixthshort', label: 'SixthShort' },
+        { key: 'stardusttv', label: 'StardustTV' },
+        { key: 'starshort', label: 'StarShort' },
+        { key: 'storeel', label: 'Storeel' },
+        { key: 'topdrama', label: 'TopDrama' },
+        { key: 'velolo', label: 'Velolo' },
+        { key: 'vigloo', label: 'Vigloo' },
         { key: 'vyntage', label: 'Vyntage' }
     ];
 
@@ -3356,11 +3422,14 @@
         try {
             const res = await fetch('/api/providers');
             const data = await res.json();
-            if (data.ok && data.providers) {
+            if (data.ok && Array.isArray(data.providers) && data.providers.length > 0) {
                 renderProviders(data.providers);
+            } else {
+                renderProviders(FALLBACK_PROVIDERS);
             }
         } catch (e) {
-            console.error('Failed to load providers:', e);
+            console.error('Failed to load providers, rendering all fallback providers:', e);
+            renderProviders(FALLBACK_PROVIDERS);
         }
     }
 
@@ -3430,7 +3499,8 @@
         if (!data || !data.sections || data.sections.length === 0) return false;
 
         if (Array.isArray(data.providers) && data.providers.length > 0) {
-            if (providersContainer.children.length !== data.providers.length) {
+            const currentPillCount = providersContainer.querySelectorAll('[data-provider]').length;
+            if (data.providers.length >= currentPillCount && currentPillCount !== data.providers.length) {
                 renderProviders(data.providers);
             }
         }
@@ -4692,10 +4762,11 @@
 
             if (!data) {
                 let fetchUrl = '';
+                const itemTitle = item.title || '';
                 if (watchUrl) {
-                    fetchUrl = `/api/drama?watch_url=${encodeURIComponent(watchUrl)}&lang=${encodeURIComponent(currentLang)}`;
+                    fetchUrl = `/api/drama?watch_url=${encodeURIComponent(watchUrl)}&slug=${encodeURIComponent(item.slug || '')}&title=${encodeURIComponent(itemTitle)}&lang=${encodeURIComponent(currentLang)}`;
                 } else if (item.slug) {
-                    fetchUrl = `/api/drama?slug=${encodeURIComponent(item.slug)}&ep=${initialEpNum || 1}&lang=${encodeURIComponent(currentLang)}`;
+                    fetchUrl = `/api/drama?slug=${encodeURIComponent(item.slug)}&title=${encodeURIComponent(itemTitle)}&ep=${initialEpNum || 1}&lang=${encodeURIComponent(currentLang)}`;
                 }
                 if (fetchUrl) {
                     const res = await fetch(fetchUrl);
@@ -5089,14 +5160,33 @@
             hls.attachMedia(mainVideo);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 videoOverlayLoader.hidden = true;
-                // Apply quality level if not auto
+                // Apply default quality level (1080p HD / highest available) without freezing ABR
                 if (selectedQuality !== 'auto') {
                     const th = parseInt(selectedQuality, 10);
                     let best = -1;
-                    (hls.levels || []).forEach((l, i) => { if (l.height && l.height <= th) best = i; });
-                    if (best !== -1) hls.currentLevel = best;
+                    let bestHeight = 0;
+                    (hls.levels || []).forEach((l, i) => { 
+                        const h = l.height || 0;
+                        if (h <= th && h >= bestHeight) {
+                            bestHeight = h;
+                            best = i;
+                        }
+                    });
+                    if (best === -1 && hls.levels && hls.levels.length > 0) {
+                        best = hls.levels.length - 1; // Highest quality available
+                    }
+                    if (best !== -1) {
+                        hls.startLevel = best;
+                        try { hls.nextLevel = best; } catch(e) {}
+                    }
                 }
-                mainVideo.play().catch(() => { });
+                const playPromise = mainVideo.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(() => {
+                        mainVideo.muted = true;
+                        mainVideo.play().catch(e => console.warn('[Player] Autoplay prevented:', e));
+                    });
+                }
                 startAmbientGlow();
                 if (resumeTime > 3) setTimeout(() => showResumeBanner(resumeTime), 1200);
             });
@@ -5122,7 +5212,13 @@
                 if (hasMarkedReady) return;
                 hasMarkedReady = true;
                 videoOverlayLoader.hidden = true;
-                mainVideo.play().catch(() => { });
+                const p = mainVideo.play();
+                if (p !== undefined) {
+                    p.catch(() => {
+                        mainVideo.muted = true;
+                        mainVideo.play().catch(e => console.warn('[Player] Autoplay prevented:', e));
+                    });
+                }
                 startAmbientGlow();
                 if (resumeTime > 3) setTimeout(() => showResumeBanner(resumeTime), 1200);
             };
