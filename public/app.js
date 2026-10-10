@@ -1139,35 +1139,16 @@
             }
         }
 
-        // Fast path 2: Direct upstream official subtitle (ONLY if confirmed matching target subLang)
+        // ==========================================
+        // SUBTITLE RESOLVER: 2-CASE ARCHITECTURE
+        // Case 1: Upstream Subtitles (0s - 1s, ZERO STT!)
+        // Case 2: Groq Whisper STT Fallback (Only if no subtitles exist)
+        // ==========================================
         let directSubTrack = null;
         if (Array.isArray(episode.subtitles) && episode.subtitles.length > 0) {
             directSubTrack = episode.subtitles.find(s => isTrackMatchingLanguage(s, subLang));
         }
 
-        if (directSubTrack && directSubTrack.subtitle_url) {
-            try {
-                let fetchUrl = directSubTrack.subtitle_url;
-                if (!fetchUrl.startsWith('http')) fetchUrl = `${window.location.origin}${fetchUrl.startsWith('/') ? '' : '/'}${fetchUrl}`;
-                fetch(fetchUrl).then(subRes => {
-                    if (subRes.ok) {
-                        return subRes.text().then(text => {
-                            if (text && text.includes('-->') && activeSubtitleRequest === reqId) {
-                                if (subStatusToast) subStatusToast.classList.add('hidden');
-                                clientSubtitleCache.set(cacheKey, { vttText: text, url: fetchUrl });
-                                attachVtt(fetchUrl, text);
-                                setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
-                            }
-                        });
-                    }
-                }).catch(() => { });
-                return;
-            } catch (e) {
-                console.warn('[Subtitle] Direct upstream fetch failed:', e.message);
-            }
-        }
-
-        // Fast path 3: Upstream subtitle in another language -> Translate via fast text translator (~0.5s)
         let candidateUpstreamUrl = '';
         if (Array.isArray(episode.subtitles) && episode.subtitles.length > 0) {
             const enTrack = episode.subtitles.find(s => isTrackMatchingLanguage(s, 'en'));
@@ -1179,32 +1160,88 @@
             candidateUpstreamUrl = episode.subtitle_url || episode.direct_subtitle_url || '';
         }
 
-        if (candidateUpstreamUrl && cleanSubLang === 'vi') {
-            if (subStatusToast) subStatusToast.classList.remove('hidden');
-            try {
-                const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
-                fetch(transUrl).then(r => r.json()).then(transData => {
+        async function resolveAndLoadSubtitles() {
+            // If local episode doesn't have subtitle tracks yet, proactively check upstream refresh
+            if (!candidateUpstreamUrl && !directSubTrack) {
+                try {
+                    const watchUrl = episode.watch_url || currentDramaData?.watch_url || '';
+                    const rRes = await fetch(`/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`);
+                    const rData = await rRes.json();
+                    if (rData && rData.ok) {
+                        if (rData.subtitle_url) {
+                            episode.subtitle_url = rData.subtitle_url;
+                            candidateUpstreamUrl = rData.subtitle_url;
+                        }
+                        if (Array.isArray(rData.subtitles) && rData.subtitles.length > 0) {
+                            episode.subtitles = rData.subtitles;
+                            directSubTrack = rData.subtitles.find(s => isTrackMatchingLanguage(s, subLang));
+                            if (!candidateUpstreamUrl) {
+                                const enTrack = rData.subtitles.find(s => isTrackMatchingLanguage(s, 'en'));
+                                candidateUpstreamUrl = (enTrack && enTrack.subtitle_url) || rData.subtitles[0].subtitle_url;
+                            }
+                        }
+                    }
+                } catch (e) { }
+            }
+
+            if (activeSubtitleRequest !== reqId) return;
+
+            // ----------------------------------------------------
+            // CASE 1: UPSTREAM SUBTITLE AVAILABLE (FAST-PATH <1s)
+            // ----------------------------------------------------
+            if (directSubTrack && directSubTrack.subtitle_url) {
+                try {
+                    let fetchUrl = directSubTrack.subtitle_url;
+                    if (!fetchUrl.startsWith('http')) fetchUrl = `${window.location.origin}${fetchUrl.startsWith('/') ? '' : '/'}${fetchUrl}`;
+                    const subRes = await fetch(fetchUrl);
+                    if (subRes.ok) {
+                        const text = await subRes.text();
+                        if (text && text.includes('-->') && activeSubtitleRequest === reqId) {
+                            if (subStatusToast) subStatusToast.classList.add('hidden');
+                            clientSubtitleCache.set(cacheKey, { vttText: text, url: fetchUrl });
+                            attachVtt(fetchUrl, text);
+                            setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
+                            return; // INSTANT DISPLAY - NO STT!
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Subtitle] Direct upstream fetch failed:', e.message);
+                }
+            }
+
+            if (candidateUpstreamUrl && cleanSubLang === 'vi') {
+                if (subStatusToast) {
+                    if (subStatusText) subStatusText.textContent = '⚡ Đang nạp phụ đề gốc...';
+                    subStatusToast.classList.remove('hidden');
+                }
+                try {
+                    const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
+                    const transRes = await fetch(transUrl);
+                    const transData = await transRes.json();
                     if (transData.ok && transData.vttText && isVttContentVietnamese(transData.vttText) && activeSubtitleRequest === reqId) {
                         if (subStatusToast) subStatusToast.classList.add('hidden');
                         clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
                         attachVtt(transData.url, transData.vttText);
                         setTimeout(() => prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1), 300);
-                    } else if (activeSubtitleRequest === reqId) {
-                        checkSubtitle();
+                        return; // FAST TRANSLATION FINISHED - NO STT!
                     }
-                }).catch(() => {
-                    if (activeSubtitleRequest === reqId) checkSubtitle();
-                });
-                return;
-            } catch (e) {
-                console.warn('[Subtitle] Upstream VTT translation failed:', e.message);
+                } catch (e) {
+                    console.warn('[Subtitle] Upstream VTT translation failed:', e.message);
+                }
             }
+
+            // ----------------------------------------------------
+            // CASE 2: NO UPSTREAM SUBTITLE -> GROQ WHISPER STT FALLBACK
+            // ----------------------------------------------------
+            if (subStatusToast && (!currentSubtitleCues || currentSubtitleCues.length === 0)) {
+                if (subStatusText) subStatusText.textContent = cleanSubLang === 'vi' ? '🎬 Phim không có phụ đề sẵn, AI Whisper đang nghe âm thanh...' : 'Đang tải phụ đề...';
+                subStatusToast.classList.remove('hidden');
+            }
+
+            checkSubtitle();
         }
 
-        if (subStatusToast && (!currentSubtitleCues || currentSubtitleCues.length === 0)) {
-            if (subStatusText) subStatusText.textContent = cleanSubLang === 'vi' ? 'Đang dịch phụ đề tiếng Việt...' : 'Đang tải phụ đề...';
-            subStatusToast.classList.remove('hidden');
-        }
+        resolveAndLoadSubtitles();
 
         async function checkSubtitle() {
             if (activeSubtitleRequest !== reqId) return;
@@ -4773,7 +4810,8 @@
         videoOverlayLoader.hidden = false;
         let streamUrl = episode.play_url || episode.direct_play_url;
 
-        if (!streamUrl || isAuthKeyExpired(streamUrl)) {
+        const needsStreamRefresh = !streamUrl || isAuthKeyExpired(streamUrl) || (!episode.subtitle_url && (!episode.subtitles || episode.subtitles.length === 0));
+        if (needsStreamRefresh) {
             try {
                 const epNum = episode.number || (currentEpisodeIndex + 1);
                 const slug = currentDramaData?.slug || '';
@@ -4785,6 +4823,7 @@
                     episode.play_url = epData.play_url;
                     episode.direct_play_url = epData.direct_play_url || '';
                     episode.is_hls = epData.is_hls;
+                    if (epData.play_url_cors !== undefined) episode.play_url_cors = epData.play_url_cors;
                     if (epData.subtitle_url) episode.subtitle_url = epData.subtitle_url;
                     if (epData.subtitles && epData.subtitles.length > 0) episode.subtitles = epData.subtitles;
                     streamUrl = epData.play_url;
@@ -4804,6 +4843,20 @@
 
         if (hls) { hls.destroy(); hls = null; }
 
+        // Proactive Non-CORS Direct MP4 routing (e.g. cdn.playsverse.com)
+        const isNonCorsDomain = !isHls && (
+            streamUrl.includes('cdn.playsverse.com') ||
+            streamUrl.includes('yfeitrade.com') ||
+            episode.play_url_cors === false
+        );
+
+        let playbackUrl = streamUrl;
+        if (isNonCorsDomain && !playbackUrl.includes('/api/proxy-stream')) {
+            const epNum = episode.number || (currentEpisodeIndex + 1);
+            const slug = currentDramaData?.slug || '';
+            playbackUrl = `/api/proxy-stream?url=${encodeURIComponent(streamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}`;
+        }
+
         // Get resume timestamp for this episode
         const resumeTime = currentDramaData ? getTimestamp(currentDramaData.title, currentEpisodeIndex) : 0;
 
@@ -4812,11 +4865,12 @@
 
         async function handleStreamError(errDesc) {
             console.warn(`[StreamRecovery] Playback error: ${errDesc}. Attempting recovery...`);
+            mainVideo.onerror = null; // Guard against recursive error loops
+
             if (!hasAttemptedRefresh) {
                 hasAttemptedRefresh = true;
                 try {
                     videoOverlayLoader.hidden = false;
-                    // videoOverlayLoader.innerHTML = '<div class="stream-spinner"></div><span class="loading-status-text">Đang cập nhật luồng phát mới...</span>';
                     const epNum = episode.number || (currentEpisodeIndex + 1);
                     const slug = currentDramaData?.slug || '';
                     const watchUrl = episode.watch_url || currentDramaData?.watch_url || '';
@@ -4828,6 +4882,7 @@
                         episode.play_url = epData.play_url;
                         episode.direct_play_url = epData.direct_play_url || '';
                         episode.is_hls = epData.is_hls;
+                        if (epData.play_url_cors !== undefined) episode.play_url_cors = epData.play_url_cors;
                         if (epData.subtitle_url) episode.subtitle_url = epData.subtitle_url;
                         if (epData.subtitles && epData.subtitles.length > 0) episode.subtitles = epData.subtitles;
                         loadVideoStream(episode);
@@ -4838,7 +4893,7 @@
                 }
             }
 
-            if (!hasRetriedWithProxy && !streamUrl.includes('/api/proxy-stream')) {
+            if (!hasRetriedWithProxy && !playbackUrl.includes('/api/proxy-stream')) {
                 hasRetriedWithProxy = true;
                 const slug = currentDramaData?.slug || '';
                 const epNum = episode.number || (currentEpisodeIndex + 1);
@@ -4847,6 +4902,15 @@
                     hls.loadSource(proxyUrl);
                 } else {
                     mainVideo.src = proxyUrl;
+                    mainVideo.onloadeddata = () => {
+                        videoOverlayLoader.hidden = true;
+                        mainVideo.play().catch(() => { });
+                        startAmbientGlow();
+                        if (resumeTime > 3) setTimeout(() => showResumeBanner(resumeTime), 1200);
+                    };
+                    mainVideo.onerror = () => {
+                        showStreamErrorUI(episode);
+                    };
                     mainVideo.play().catch(() => { });
                 }
                 return;
@@ -4861,7 +4925,7 @@
 
         if (isHls && window.Hls && Hls.isSupported()) {
             hls = new Hls({ enableWorker: true, lowLatencyMode: false, backBufferLength: 90 });
-            hls.loadSource(streamUrl);
+            hls.loadSource(playbackUrl);
             hls.attachMedia(mainVideo);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 videoOverlayLoader.hidden = true;
@@ -4892,7 +4956,7 @@
                 }
             });
         } else {
-            mainVideo.src = streamUrl;
+            mainVideo.src = playbackUrl;
             mainVideo.onloadeddata = () => {
                 videoOverlayLoader.hidden = true;
                 mainVideo.play().catch(() => { });
@@ -4981,7 +5045,7 @@
                 }
 
                 let streamUrl = nextEp.play_url || nextEp.direct_play_url || '';
-                if (!streamUrl || isAuthKeyExpired(streamUrl)) {
+                if (!streamUrl || isAuthKeyExpired(streamUrl) || !candidateUpstreamUrl) {
                     const watchUrl = nextEp.watch_url || currentDramaData?.watch_url || '';
                     const rRes = await fetch(`/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`);
                     const rData = await rRes.json();
@@ -4994,6 +5058,20 @@
                         streamUrl = rData.play_url;
                         if (!candidateUpstreamUrl && rData.subtitle_url) candidateUpstreamUrl = rData.subtitle_url;
                     }
+                }
+
+                if (candidateUpstreamUrl && cleanSubLang === 'vi') {
+                    try {
+                        const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
+                        const transRes = await fetch(transUrl);
+                        const transData = await transRes.json();
+                        if (transData.ok && transData.vttText && isVttContentVietnamese(transData.vttText)) {
+                            clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
+                            console.log(`[Subtitle Prefetch] ⚡ Phụ đề Tập ${epNum} đã dịch xong từ trước!`);
+                            inFlightPrefetches.delete(cacheKey);
+                            return;
+                        }
+                    } catch (e) { }
                 }
 
                 if (!streamUrl && !candidateUpstreamUrl) {

@@ -176,6 +176,17 @@ function getHeaders(extraHeaders = {}) {
     };
 }
 
+// Helper: fetch with timeout to prevent socket hangs
+function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => { controller.abort(); reject(new Error('Request timed out')); }, timeoutMs);
+        fetch(url, { ...options, signal: controller.signal })
+            .then(r => { clearTimeout(timer); resolve(r); })
+            .catch(e => { clearTimeout(timer); reject(e); });
+    });
+}
+
 // Resilient upstream fetch with multi-host automatic failover
 async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 12000) {
     let lastErr = null;
@@ -718,7 +729,8 @@ app.get('/api/drama', async (req, res) => {
                     subtitles: cleanSubs,
                     selected_subtitle_language: item.selected_subtitle_language || '',
                     is_playable: !!(playUrl || item.direct_play_url),
-                    is_hls: playUrl.includes('.m3u8') || playUrl.includes('/e/m/') || playUrl.includes('/hls') || item.browser_prefetch_mode === 'hls'
+                    is_hls: playUrl.includes('.m3u8') || playUrl.includes('/e/m/') || playUrl.includes('/hls') || item.browser_prefetch_mode === 'hls',
+                    play_url_cors: item.play_url_cors !== false && !playUrl.includes('cdn.playsverse.com')
                 };
             });
 
@@ -916,8 +928,8 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
     // Tier 1: Query Edge refresh-source (fastest & lowest latency)
     try {
         const edgeRefreshUrl = `https://edge.narto-drama.com/e/rs/detail/watch/${dramaSlug}/${targetEpNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
-        const rRes = await fetch(edgeRefreshUrl, { headers, signal: AbortSignal.timeout(5000) });
-        if (rRes.ok) {
+        const rRes = await fetchWithTimeout(edgeRefreshUrl, { headers }, 5000);
+        if (rRes && rRes.ok) {
             const j = await rRes.json();
             if (j && (j.play_url || j.direct_play_url)) {
                 streamData = j;
@@ -931,8 +943,8 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
     if (!streamData) {
         try {
             const originRefreshUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${targetEpNum}/refresh-source?force=1&force_edge=1&lang=${lang}`;
-            const rRes2 = await fetch(originRefreshUrl, { headers, signal: AbortSignal.timeout(5000) });
-            if (rRes2.ok) {
+            const rRes2 = await fetchWithTimeout(originRefreshUrl, { headers }, 5000);
+            if (rRes2 && rRes2.ok) {
                 const j2 = await rRes2.json();
                 if (j2 && (j2.play_url || j2.direct_play_url)) {
                     streamData = j2;
@@ -958,6 +970,7 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
             play_url: playUrl,
             direct_play_url: streamData.direct_play_url || '',
             is_hls: playUrl.includes('.m3u8') || playUrl.includes('/e/m/') || playUrl.includes('/hls') || streamData.direct_play_is_hls === true,
+            play_url_cors: streamData.play_url_cors !== false && !playUrl.includes('cdn.playsverse.com'),
             source_refreshed: streamData.source_refreshed === true,
             subtitle_url: subUrl,
             subtitles: cleanSubs
@@ -967,8 +980,8 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
     // Tier 3: Parse HTML page of that episode for episodeItemsRaw
     try {
         const epPageUrl = `${BASE_URL}/detail/watch/${dramaSlug}/${targetEpNum}?lang=${lang}&from=home`;
-        const pageRes = await fetch(epPageUrl, { headers: getHeaders(), signal: AbortSignal.timeout(6000) });
-        if (pageRes.ok) {
+        const pageRes = await fetchWithTimeout(epPageUrl, { headers: getHeaders() }, 6000);
+        if (pageRes && pageRes.ok) {
             const pageHtml = await pageRes.text();
             const epMatch = pageHtml.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
             if (epMatch) {
@@ -989,6 +1002,7 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
                         play_url: pUrl,
                         direct_play_url: matched.direct_play_url || '',
                         is_hls: pUrl.includes('.m3u8') || pUrl.includes('/e/m/') || pUrl.includes('/hls') || matched.browser_prefetch_mode === 'hls',
+                        play_url_cors: matched.play_url_cors !== false && !pUrl.includes('cdn.playsverse.com'),
                         subtitle_url: subUrl,
                         subtitles: cleanSubs
                     };
@@ -1557,7 +1571,7 @@ app.get('/api/translate', async (req, res) => {
     }
 });
 
-// Helper: Parse WebVTT raw text into clean cues and timing lines
+// Helper: Parse WebVTT / SRT raw text into clean cues and timing lines
 function parseVttContent(vttText) {
     if (!vttText || typeof vttText !== 'string') return [];
     const cues = [];
@@ -1566,7 +1580,8 @@ function parseVttContent(vttText) {
     while (i < lines.length) {
         const line = lines[i].trim();
         if (line.includes('-->')) {
-            const timeLine = line;
+            // Normalize SRT commas (00:00:23,280 --> 00:00:25,736) to VTT periods (00:00:23.280 --> 00:00:25.736)
+            const timeLine = line.replace(/(\d{2}),(\d{3})/g, '$1.$2');
             i++;
             let textLines = [];
             while (i < lines.length && lines[i].trim() !== '') {
@@ -1625,6 +1640,18 @@ app.get('/api/subtitles/translate-vtt', async (req, res) => {
         const cues = parseVttContent(rawVtt);
         if (cues.length === 0) {
             return res.json({ ok: true, ready: true, vttText: rawVtt, url: fullUrl });
+        }
+
+        // Fast return if already in Vietnamese (0ms instant)
+        if (cleanTarget === 'vi' && isVttContentVietnamese(rawVtt)) {
+            vttMemoryCache.set(cacheKey, rawVtt);
+            return res.json({
+                ok: true,
+                ready: true,
+                lang: 'vi',
+                vttText: rawVtt,
+                url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=vi`
+            });
         }
 
         const sl = source_lang || 'auto';
@@ -2514,10 +2541,30 @@ app.get('/api/subtitles/generate', async (req, res) => {
             vttMemoryCache.delete(cacheKey);
         }
 
-        // Fast path: Upstream official subtitle provided
-        if (upstream_sub_url) {
+        // ==========================================
+        // CASE 1: UPSTREAM SUBTITLE FAST-PATH (<1s)
+        // If upstream returns a subtitle, use it directly / translate text in <1s.
+        // Groq Whisper STT is completely bypassed for Case 1!
+        // ==========================================
+        let resolvedUpstreamSubUrl = upstream_sub_url;
+        if (!resolvedUpstreamSubUrl && slug && slug !== 'unknown') {
             try {
-                let fullUrl = upstream_sub_url;
+                const freshStream = await resolveFreshEpisodeStream(slug, parseInt(ep, 10));
+                if (freshStream) {
+                    if (freshStream.subtitle_url) {
+                        resolvedUpstreamSubUrl = freshStream.subtitle_url;
+                    } else if (Array.isArray(freshStream.subtitles) && freshStream.subtitles.length > 0) {
+                        const directVi = freshStream.subtitles.find(s => (s.language_code || '').toLowerCase().startsWith(cleanTarget));
+                        const enSub = freshStream.subtitles.find(s => (s.language_code || '').toLowerCase().startsWith('en'));
+                        resolvedUpstreamSubUrl = (directVi && directVi.subtitle_url) || (enSub && enSub.subtitle_url) || freshStream.subtitles[0].subtitle_url;
+                    }
+                }
+            } catch (e) { }
+        }
+
+        if (resolvedUpstreamSubUrl) {
+            try {
+                let fullUrl = resolvedUpstreamSubUrl;
                 if (!fullUrl.startsWith('http')) fullUrl = `${BASE_URL}${fullUrl}`;
                 const subRes = await fetch(fullUrl, {
                     headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': BASE_URL }
@@ -2546,6 +2593,7 @@ app.get('/api/subtitles/generate', async (req, res) => {
                             ok: true,
                             ready: true,
                             isComplete: true,
+                            case: 'case1_upstream',
                             lang: cleanTarget,
                             url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${encodeURIComponent(ep)}&lang=${encodeURIComponent(cleanTarget)}`,
                             vttText: finalVtt
@@ -2556,6 +2604,11 @@ app.get('/api/subtitles/generate', async (req, res) => {
                 console.warn('[Generate] Upstream subtitle fetch/translation failed, falling back to STT:', err.message);
             }
         }
+
+        // ==========================================
+        // CASE 2: FALLBACK TO GROQ WHISPER STT
+        // Only executed when upstream DOES NOT have any subtitles!
+        // ==========================================
 
         const vttFile = `${key}_${cleanTarget}.vtt`;
         const existingVtt = findSubtitleFile(vttFile);
