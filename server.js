@@ -1883,6 +1883,23 @@ try {
     console.warn('[STT] Could not create SUBTITLES_DIR:', e.message);
 }
 
+function isVttValidAndComplete(vttContent, minDuration = 45) {
+    if (!vttContent || typeof vttContent !== 'string') return false;
+    const cuesCount = (vttContent.match(/-->/g) || []).length;
+    if (cuesCount < 10) return false;
+    const lines = vttContent.trim().split('\n');
+    const lastArrow = lines.filter(l => l.includes('-->')).pop() || '';
+    const lastSecMatch = lastArrow.match(/-->\s*(?:(\d+):)?(\d+):(\d+)/);
+    let maxSec = 0;
+    if (lastSecMatch) {
+        const h = lastSecMatch[1] ? parseInt(lastSecMatch[1], 10) : 0;
+        const m = parseInt(lastSecMatch[2], 10);
+        const s = parseInt(lastSecMatch[3], 10);
+        maxSec = h * 3600 + m * 60 + s;
+    }
+    return maxSec >= minDuration;
+}
+
 function findSubtitleFile(filename) {
     if (!filename) return null;
     const tmpPath = path.join(SUBTITLES_DIR, filename);
@@ -1890,33 +1907,14 @@ function findSubtitleFile(filename) {
         if (filename.endsWith('.vtt')) {
             try {
                 const content = fs.readFileSync(tmpPath, 'utf8');
-                const cuesCount = (content.match(/-->/g) || []).length;
-
-                // Parse last timestamp to verify it's a full episode and not a 20s truncated snippet
-                const lines = content.trim().split('\n');
-                const lastArrow = lines.filter(l => l.includes('-->')).pop() || '';
-                const lastSecMatch = lastArrow.match(/-->\s*(?:(\d+):)?(\d+):(\d+)/);
-                let maxSec = 0;
-                if (lastSecMatch) {
-                    const h = lastSecMatch[1] ? parseInt(lastSecMatch[1], 10) : 0;
-                    const m = parseInt(lastSecMatch[2], 10);
-                    const s = parseInt(lastSecMatch[3], 10);
-                    maxSec = h * 3600 + m * 60 + s;
-                }
-
-                // If fewer than 10 cues AND timestamp < 40s, it's an aborted/truncated snippet
-                if (!filename.includes('_chunk') && cuesCount < 10 && maxSec < 40) {
+                // If not chunk VTT and content is truncated (cues < 10 or ends < 45s), purge it
+                if (!filename.includes('_chunk') && !isVttValidAndComplete(content, 45)) {
                     try { fs.unlinkSync(tmpPath); } catch (e) { }
                     return null;
                 }
 
                 if (filename.endsWith('_vi.vtt') && !filename.includes('_chunk')) {
                     if (!isVttContentVietnamese(content)) {
-                        try { fs.unlinkSync(tmpPath); } catch (e) { }
-                        return null;
-                    }
-                } else if (!filename.includes('_chunk')) {
-                    if (cuesCount < 3) {
                         try { fs.unlinkSync(tmpPath); } catch (e) { }
                         return null;
                     }
@@ -2343,7 +2341,7 @@ app.get('/api/subtitles/prefetch', async (req, res) => {
         // 1. Check in-memory VTT cache first
         if (vttMemoryCache.has(cacheKey)) {
             const cachedVtt = vttMemoryCache.get(cacheKey);
-            if (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt)) {
+            if (isVttValidAndComplete(cachedVtt, 45) && (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt))) {
                 return res.json({
                     ok: true,
                     ready: true,
@@ -2796,9 +2794,9 @@ app.get('/api/subtitles/generate', async (req, res) => {
         const key = `${dramaSlug}_ep${ep}`;
         const cacheKey = `${key}_${cleanTarget}`;
 
-        if (vttMemoryCache.has(cacheKey)) {
+        if (vttMemoryCache.has(cacheKey) && req.query.force !== '1') {
             const cachedVtt = vttMemoryCache.get(cacheKey);
-            if (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt)) {
+            if (isVttValidAndComplete(cachedVtt, 45) && (cleanTarget !== 'vi' || isVttContentVietnamese(cachedVtt))) {
                 return res.json({
                     ok: true,
                     ready: true,
@@ -2882,10 +2880,10 @@ app.get('/api/subtitles/generate', async (req, res) => {
 
         const vttFile = `${key}_${cleanTarget}.vtt`;
         const existingVtt = findSubtitleFile(vttFile);
-        if (existingVtt) {
+        if (existingVtt && req.query.force !== '1') {
             let vttText = '';
             try { vttText = fs.readFileSync(existingVtt, 'utf8'); } catch (e) { }
-            if (cleanTarget !== 'vi' || isVttContentVietnamese(vttText)) {
+            if (isVttValidAndComplete(vttText, 45) && (cleanTarget !== 'vi' || isVttContentVietnamese(vttText))) {
                 return res.json({
                     ok: true,
                     ready: true,
