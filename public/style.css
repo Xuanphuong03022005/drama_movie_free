@@ -4013,21 +4013,17 @@ body {
         display: flex !important;
         align-items: center;
         justify-content: center;
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        color: #ffffff;
-        font-size: 16px;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border-radius: 50%;
         cursor: pointer;
         z-index: 130;
         transition: all 0.2s ease;
     }
 
     .mobile-nav-toggle:active {
-        transform: scale(0.94);
-        background: rgba(255, 255, 255, 0.16);
+        transform: scale(0.92);
     }
 
     .nav-links:not(.mobile-open) {
@@ -8409,22 +8405,22 @@ body.theme-dark .nav-icon-action-btn#theme-toggle-btn:hover {
    MOBILE OPTIONS, RICH BACKGROUND, HERO CONTRAST & SECTION HEADERS POLISH
    ========================================================================== */
 
-/* 1. Mobile Menu Toggle Button (High Visibility Capsule) */
+/* 1. Mobile Menu Toggle Button (Sleek Circle Icon Button) */
 .mobile-nav-toggle {
     display: none;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    height: 36px;
-    padding: 0 12px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 750;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    font-size: 15px !important;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     white-space: nowrap;
     flex-shrink: 0;
     z-index: 130;
+    box-sizing: border-box !important;
 }
 
 body.theme-light .mobile-nav-toggle,
@@ -8439,7 +8435,7 @@ body.theme-light .mobile-nav-toggle:active {
     background: #f5f3ff !important;
     border-color: #7c3aed !important;
     color: #7c3aed !important;
-    transform: scale(1.02);
+    transform: scale(1.05);
 }
 
 body.theme-dark .mobile-nav-toggle,
@@ -8477,9 +8473,11 @@ body.theme-dark .mobile-nav-toggle:hover {
         display: inline-flex !important;
         order: 2 !important;
         margin-left: auto !important;
-        height: 34px !important;
-        padding: 0 12px !important;
-        font-size: 12px !important;
+        width: 36px !important;
+        height: 36px !important;
+        padding: 0 !important;
+        border-radius: 50% !important;
+        font-size: 14.5px !important;
     }
 
     .nav-actions-cluster {
