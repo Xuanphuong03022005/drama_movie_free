@@ -7907,13 +7907,18 @@ body.theme-light {
     --shadow-glow-rose: 0 0 24px rgba(236, 72, 153, 0.2);
 }
 
-body.theme-light {
-    background-color: #f6f8fb !important;
-    background-image: 
-        radial-gradient(circle at 12% 8%, rgba(139, 92, 246, 0.06) 0%, transparent 45%),
-        radial-gradient(circle at 88% 12%, rgba(236, 72, 153, 0.05) 0%, transparent 45%),
-        radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.03) 0%, transparent 60%) !important;
-    color: var(--text-primary) !important;
+body.theme-light,
+:root[data-theme="light"] body {
+    background-color: #f1f5f9 !important;
+    background-image:
+        radial-gradient(ellipse 90% 60% at 15% -10%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 50% at 85% -5%, rgba(236, 72, 153, 0.10) 0%, transparent 55%),
+        radial-gradient(ellipse 70% 60% at 50% 40%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 90% 70% at 80% 95%, rgba(16, 185, 129, 0.08) 0%, transparent 60%),
+        linear-gradient(180deg, #f8faff 0%, #f1f4fb 30%, #ecf2fa 65%, #f4f6fc 100%) !important;
+    background-attachment: fixed !important;
+    background-size: 100% 100% !important;
+    color: #1e293b !important;
 }
 
 /* Top Announcement Ribbon */
@@ -8398,4 +8403,219 @@ body.theme-dark .nav-icon-action-btn#theme-toggle-btn {
 body.theme-dark .nav-icon-action-btn#theme-toggle-btn:hover {
     background: rgba(255, 255, 255, 0.16) !important;
     transform: scale(1.05);
+}
+
+/* ==========================================================================
+   MOBILE OPTIONS, RICH BACKGROUND, HERO CONTRAST & SECTION HEADERS POLISH
+   ========================================================================== */
+
+/* 1. Mobile Menu Toggle Button (High Visibility Capsule) */
+.mobile-nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 750;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    flex-shrink: 0;
+    z-index: 130;
+}
+
+body.theme-light .mobile-nav-toggle,
+:root[data-theme="light"] .mobile-nav-toggle {
+    background: #ffffff !important;
+    border: 1.5px solid #cbd5e1 !important;
+    color: #0f172a !important;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08) !important;
+}
+body.theme-light .mobile-nav-toggle:hover,
+body.theme-light .mobile-nav-toggle:active {
+    background: #f5f3ff !important;
+    border-color: #7c3aed !important;
+    color: #7c3aed !important;
+    transform: scale(1.02);
+}
+
+body.theme-dark .mobile-nav-toggle,
+:root[data-theme="dark"] .mobile-nav-toggle {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+}
+body.theme-dark .mobile-nav-toggle:hover {
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+@media (max-width: 1220px) {
+    .mobile-nav-toggle {
+        display: inline-flex !important;
+    }
+}
+
+@media (max-width: 820px) {
+    .nav-container {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 8px 14px 10px !important;
+        gap: 8px !important;
+    }
+
+    .brand-logo {
+        order: 1 !important;
+    }
+
+    .mobile-nav-toggle {
+        display: inline-flex !important;
+        order: 2 !important;
+        margin-left: auto !important;
+        height: 34px !important;
+        padding: 0 12px !important;
+        font-size: 12px !important;
+    }
+
+    .nav-actions-cluster {
+        order: 3 !important;
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 4px !important;
+        margin-top: 2px !important;
+        margin-bottom: 2px !important;
+        padding: 0 !important;
+    }
+
+    .search-container {
+        order: 4 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-top: 4px !important;
+    }
+}
+
+/* 2. Permanent Quick Discovery Pill in Providers Rail */
+.provider-discovery-pill {
+    background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%) !important;
+    color: #ffffff !important;
+    border: none !important;
+    font-weight: 750 !important;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 7px 15px !important;
+    border-radius: 999px !important;
+    flex-shrink: 0 !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.provider-discovery-pill i {
+    font-size: 12px !important;
+}
+.provider-discovery-pill:hover {
+    transform: translateY(-2px) scale(1.04) !important;
+    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45) !important;
+    filter: brightness(1.08) !important;
+}
+.provider-discovery-pill:active {
+    transform: scale(0.96) !important;
+}
+
+/* 3. Hero Showcase Light Mode Overrides (Eliminates Pitch Black Overlay & Fixes Dark Text) */
+body.theme-light .hero-showcase,
+:root[data-theme="light"] .hero-showcase {
+    background: linear-gradient(150deg, #ffffff 0%, #f4f6fc 50%, #edf2fc 100%) !important;
+    border: 1px solid #dbe2f4 !important;
+    box-shadow: 0 16px 42px -10px rgba(99, 102, 241, 0.16), 0 4px 16px rgba(15, 23, 42, 0.05) !important;
+}
+
+body.theme-light .hero-gradient-overlay,
+:root[data-theme="light"] .hero-gradient-overlay {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.8) 45%, rgba(255, 255, 255, 0.2) 100%),
+                linear-gradient(0deg, rgba(255, 255, 255, 0.9) 0%, transparent 55%) !important;
+}
+
+@media (max-width: 820px) {
+    body.theme-light .hero-gradient-overlay,
+    :root[data-theme="light"] .hero-gradient-overlay {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.85) 45%, rgba(255, 255, 255, 0.98) 100%) !important;
+    }
+}
+
+body.theme-light .hero-title,
+:root[data-theme="light"] .hero-title {
+    color: #0f172a !important;
+    font-weight: 850 !important;
+    text-shadow: none !important;
+}
+
+body.theme-light .hero-synopsis,
+:root[data-theme="light"] .hero-synopsis,
+body.theme-light .hero-desc,
+:root[data-theme="light"] .hero-desc {
+    color: #334155 !important;
+    font-weight: 500 !important;
+    text-shadow: none !important;
+}
+
+body.theme-light .hero-slide-nav,
+:root[data-theme="light"] .hero-slide-nav {
+    background: rgba(255, 255, 255, 0.92) !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #1e293b !important;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+}
+body.theme-light .hero-slide-nav:hover,
+:root[data-theme="light"] .hero-slide-nav:hover {
+    background: #ffffff !important;
+    border-color: #7c3aed !important;
+    color: #7c3aed !important;
+}
+
+body.theme-light .hero-slide-counter,
+:root[data-theme="light"] .hero-slide-counter {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+}
+
+/* 4. Section Titles (Tiếp tục xem, Phim nổi bật...) High Contrast */
+body.theme-light .row-title-group h2,
+:root[data-theme="light"] .row-title-group h2,
+body.theme-light .catalog-header h2,
+:root[data-theme="light"] .catalog-header h2 {
+    color: #0f172a !important;
+    font-weight: 800 !important;
+}
+
+body.theme-light .row-subtitle,
+:root[data-theme="light"] .row-subtitle,
+body.theme-light .catalog-header p,
+:root[data-theme="light"] .catalog-header p {
+    color: #475569 !important;
+}
+
+body.theme-light .section-icon-badge,
+:root[data-theme="light"] .section-icon-badge {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
+}
+
+body.theme-light .clear-history-btn,
+:root[data-theme="light"] .clear-history-btn {
+    color: #64748b !important;
+}
+body.theme-light .clear-history-btn:hover,
+:root[data-theme="light"] .clear-history-btn:hover {
+    color: #ef4444 !important;
 }

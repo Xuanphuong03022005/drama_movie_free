@@ -3367,6 +3367,18 @@
     function renderProviders(providers) {
         if (!Array.isArray(providers) || providers.length === 0) return;
         providersContainer.innerHTML = '';
+
+        // Permanent quick discovery / filter options button for mobile & desktop
+        const discoveryPill = document.createElement('button');
+        discoveryPill.type = 'button';
+        discoveryPill.className = 'provider-pill provider-discovery-pill';
+        discoveryPill.id = 'quick-discovery-pill';
+        discoveryPill.setAttribute('title', 'Lọc & Khám phá thể loại phim');
+        discoveryPill.innerHTML = '<i class="fa-solid fa-sliders"></i> <span>Khám phá</span>';
+        discoveryPill.addEventListener('click', () => {
+            openDiscoveryModal();
+        });
+        providersContainer.appendChild(discoveryPill);
         providers.forEach(p => {
             const pill = document.createElement('button');
             pill.type = 'button';
