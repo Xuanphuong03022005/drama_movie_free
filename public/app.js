@@ -348,9 +348,41 @@
     }
 
     // ==========================================
-    // INITIALIZATION
+    // INITIALIZATION & THEME MANAGEMENT
     // ==========================================
+    function initTheme() {
+        const savedTheme = localStorage.getItem('df_theme') || 'light';
+        applyTheme(savedTheme);
+
+        const toggleBtn = document.getElementById('theme-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const isCurrentlyDark = document.body.classList.contains('theme-dark');
+                const nextTheme = isCurrentlyDark ? 'light' : 'dark';
+                applyTheme(nextTheme);
+                localStorage.setItem('df_theme', nextTheme);
+                showToast(nextTheme === 'light' ? 'Đã bật giao diện Sáng chuyên nghiệp' : 'Đã bật giao diện Tối rạp phim', 'fa-circle-half-stroke');
+            });
+        }
+    }
+
+    function applyTheme(theme) {
+        const icon = document.getElementById('theme-toggle-icon');
+        if (theme === 'dark') {
+            document.body.classList.remove('theme-light');
+            document.body.classList.add('theme-dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            if (icon) icon.className = 'fa-solid fa-sun';
+        } else {
+            document.body.classList.remove('theme-dark');
+            document.body.classList.add('theme-light');
+            document.documentElement.setAttribute('data-theme', 'light');
+            if (icon) icon.className = 'fa-solid fa-moon';
+        }
+    }
+
     async function init() {
+        initTheme();
         trackVisit();
         initLanguageSelector();
         applyTranslations(currentLang);

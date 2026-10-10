@@ -17,9 +17,17 @@
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
     <link rel="stylesheet" href="/style.css?v=2.3.1">
+    <script>
+        (function() {
+            try {
+                var theme = localStorage.getItem('df_theme') || 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch(e) {}
+        })();
+    </script>
 </head>
 
-<body class="theme-dark">
+<body class="theme-light">
     <!-- Commercial Header Navbar -->
     <header class="navbar" id="site-header">
         <div class="nav-container">
@@ -172,6 +180,10 @@
 
             <!-- Utility Action Cluster -->
             <div class="nav-actions-cluster">
+                <!-- Theme Toggle Button -->
+                <button type="button" class="nav-icon-action-btn" id="theme-toggle-btn" title="Chuyển chế độ Sáng / Tối (Theme Mode)">
+                    <i class="fa-solid fa-moon" id="theme-toggle-icon"></i>
+                </button>
                 <button type="button" class="nav-icon-action-btn" id="nav-history-icon-btn" title="Watch History">
                     <i class="fa-solid fa-clock-rotate-left"></i>
                 </button>
