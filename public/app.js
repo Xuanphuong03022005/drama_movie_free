@@ -343,8 +343,8 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
                 keepalive: true
-            }).catch(() => {});
-        } catch (e) {}
+            }).catch(() => { });
+        } catch (e) { }
     }
 
     // ==========================================
@@ -1038,11 +1038,11 @@
 
         if (cleanTarget === 'vi') {
             return code.startsWith('vi') || label.includes('việt') || label.includes('viet') ||
-                   url.includes('/vi.') || url.includes('/vi-') || url.includes('_vi.') || url.includes('lang=vi');
+                url.includes('/vi.') || url.includes('/vi-') || url.includes('_vi.') || url.includes('lang=vi');
         }
         if (cleanTarget === 'en') {
             return code.startsWith('en') || label.includes('eng') ||
-                   url.includes('/en.') || url.includes('/en-') || url.includes('_en.') || url.includes('lang=en');
+                url.includes('/en.') || url.includes('/en-') || url.includes('_en.') || url.includes('lang=en');
         }
         return code === cleanTarget || code.startsWith(cleanTarget) || label.includes(cleanTarget);
     }
@@ -4544,7 +4544,7 @@
             if (!data) {
                 let fetchUrl = '';
                 if (watchUrl) {
-                    fetchUrl = `/api/drama?watch_url=${encodeURIComponent(watchUrl)}&slug=${encodeURIComponent(item.slug || '')}&ep=${initialEpNum || 1}&lang=${encodeURIComponent(currentLang)}`;
+                    fetchUrl = `/api/drama?watch_url=${encodeURIComponent(watchUrl)}&lang=${encodeURIComponent(currentLang)}`;
                 } else if (item.slug) {
                     fetchUrl = `/api/drama?slug=${encodeURIComponent(item.slug)}&ep=${initialEpNum || 1}&lang=${encodeURIComponent(currentLang)}`;
                 }

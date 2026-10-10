@@ -2,8 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
-const https = require('https');
-const zlib = require('zlib');
 const fs = require('fs');
 const { exec } = require('child_process');
 const util = require('util');
@@ -53,6 +51,24 @@ const db = require('./db');
 // Initialize Supabase PostgreSQL database schema
 db.initDatabase().catch(err => console.error('[Supabase DB] Startup init error:', err.message));
 
+// Pre-baked High-Availability Datasets for instant responses & serverless failover
+let localFallbackSections = null;
+let localFallbackDramas = null;
+try {
+    const sPath = path.join(__dirname, 'data', 'fallback_sections.json');
+    if (fs.existsSync(sPath)) {
+        localFallbackSections = JSON.parse(fs.readFileSync(sPath, 'utf8'));
+        console.log('[Fallback] Loaded fallback sections for', Object.keys(localFallbackSections).length, 'providers');
+    }
+    const dPath = path.join(__dirname, 'data', 'fallback_dramas.json');
+    if (fs.existsSync(dPath)) {
+        localFallbackDramas = JSON.parse(fs.readFileSync(dPath, 'utf8'));
+        console.log('[Fallback] Loaded fallback dramas for', Object.keys(localFallbackDramas).length, 'keys');
+    }
+} catch (e) {
+    console.warn('[Fallback] Error loading fallback data files:', e.message);
+}
+
 app.get('/api/version', (req, res) => {
     res.json({ ok: true, version: pkg.version, app: pkg.name });
 });
@@ -63,9 +79,9 @@ app.get('/api/version', (req, res) => {
 app.post('/api/analytics/track', async (req, res) => {
     try {
         const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-                         req.headers['x-real-ip'] ||
-                         req.socket.remoteAddress ||
-                         '127.0.0.1';
+            req.headers['x-real-ip'] ||
+            req.socket.remoteAddress ||
+            '127.0.0.1';
         const userAgent = req.headers['user-agent'] || '';
         const parsed = db.parseUserAgent(userAgent);
 
@@ -132,9 +148,9 @@ app.get('/api/drama/supabase-list', async (req, res) => {
     }
 });
 
-const UPSTREAM_HOSTS = ['https://edge.narto-drama.com'];
+const UPSTREAM_HOSTS = ['https://edge.narto-drama.com', 'https://narto-drama.com'];
 const BASE_URL = 'https://edge.narto-drama.com';
-const ORIGIN_URL = 'https://edge.narto-drama.com';
+const ORIGIN_URL = 'https://narto-drama.com';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const FALLBACK_PROVIDERS = [
@@ -160,120 +176,18 @@ function getHeaders(extraHeaders = {}) {
     };
 }
 
-// High-performance, rock-solid HTTP/HTTPS client with hard total timeout & sync decompression
-function fetchHttp(urlStr, options = {}, timeoutMs = 5000, maxRedirects = 3) {
-    return new Promise((resolve, reject) => {
-        if (maxRedirects < 0) return reject(new Error('Too many redirects'));
-        let u;
-        try {
-            u = new URL(urlStr);
-        } catch (e) {
-            return reject(e);
-        }
-        const isHttps = u.protocol === 'https:';
-        const client = isHttps ? https : http;
-
-        const headers = {
-            'User-Agent': USER_AGENT,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'close',
-            ...(options.headers || {})
-        };
-
-        let timer = null;
-        let isDone = false;
-
-        const cleanup = () => {
-            isDone = true;
-            if (timer) {
-                clearTimeout(timer);
-                timer = null;
-            }
-        };
-
-        const req = client.request(u, {
-            method: options.method || 'GET',
-            headers,
-            timeout: timeoutMs
-        }, (res) => {
-            if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-                cleanup();
-                req.destroy();
-                const nextUrl = new URL(res.headers.location, urlStr).toString();
-                return resolve(fetchHttp(nextUrl, options, timeoutMs, maxRedirects - 1));
-            }
-
-            const chunks = [];
-            res.on('data', chunk => chunks.push(chunk));
-            res.on('end', () => {
-                cleanup();
-                const raw = Buffer.concat(chunks);
-                const encoding = (res.headers['content-encoding'] || '').toLowerCase();
-                let body;
-                try {
-                    if (encoding === 'gzip') {
-                        body = zlib.gunzipSync(raw).toString('utf8');
-                    } else if (encoding === 'deflate') {
-                        body = zlib.inflateSync(raw).toString('utf8');
-                    } else if (encoding === 'br') {
-                        body = zlib.brotliDecompressSync(raw).toString('utf8');
-                    } else {
-                        body = raw.toString('utf8');
-                    }
-                } catch (zlibErr) {
-                    body = raw.toString('utf8');
-                }
-                resolve({
-                    status: res.statusCode,
-                    ok: res.statusCode >= 200 && res.statusCode < 300,
-                    headers: res.headers,
-                    url: urlStr,
-                    text: async () => body,
-                    json: async () => JSON.parse(body)
-                });
-            });
-            res.on('error', err => {
-                cleanup();
-                reject(err);
-            });
-        });
-
-        req.on('timeout', () => {
-            if (!isDone) {
-                cleanup();
-                req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
-            }
-        });
-
-        timer = setTimeout(() => {
-            if (!isDone) {
-                cleanup();
-                req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
-            }
-        }, timeoutMs);
-
-        req.on('error', err => {
-            if (!isDone) {
-                cleanup();
-                reject(err);
-            }
-        });
-
-        if (options.body) req.write(options.body);
-        req.end();
-    });
-}
-
 // Resilient upstream fetch with multi-host automatic failover
-async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 8000) {
-    let normalized = pathAndQuery.replace(/^https?:\/\/(edge\.)?narto-drama\.com/, '');
-    if (!normalized.startsWith('/')) normalized = '/' + normalized;
+async function fetchFromUpstream(pathAndQuery, options = {}, timeoutMs = 12000) {
     let lastErr = null;
     for (const host of UPSTREAM_HOSTS) {
         try {
-            const url = `${host}${normalized}`;
-            const res = await fetchHttp(url, options, timeoutMs);
+            const url = pathAndQuery.startsWith('http')
+                ? pathAndQuery.replace(/^https?:\/\/[^\/]+/, host)
+                : `${host}${pathAndQuery.startsWith('/') ? '' : '/'}${pathAndQuery}`;
+            const res = await fetch(url, {
+                ...options,
+                signal: AbortSignal.timeout(timeoutMs)
+            });
             if (res.ok) return res;
         } catch (err) {
             lastErr = err;
@@ -307,7 +221,7 @@ async function fetchLiveProvidersFromUpstream() {
 }
 
 // Initial sync on server start (non-blocking)
-fetchLiveProvidersFromUpstream().catch(() => {});
+fetchLiveProvidersFromUpstream().catch(() => { });
 
 // Live Providers List Endpoint
 app.get('/api/providers', async (req, res) => {
@@ -321,67 +235,6 @@ app.get('/api/providers', async (req, res) => {
         console.error('Error serving /api/providers:', err);
         res.json({ ok: true, providers: cachedProviders || FALLBACK_PROVIDERS });
     }
-});
-
-// Debug endpoint to diagnose upstream connectivity from Vercel / production
-app.get('/api/debug-upstream', async (req, res) => {
-    const dns = require('dns').promises;
-    const net = require('net');
-    const tls = require('tls');
-    const testPath = req.query.url || '/home/providers/sections?provider=anyreel&lang=en-US';
-    const diag = { dns: {}, tcp: {}, targets: [] };
-    
-    try {
-        diag.dns['edge.narto-drama.com'] = await dns.resolve4('edge.narto-drama.com');
-    } catch(e) {
-        diag.dns['edge.narto-drama.com'] = { error: e.message };
-    }
-
-    // Fast 3s TCP connect test to edge.narto-drama.com:443
-    const t0 = Date.now();
-    try {
-        await new Promise((resolve, reject) => {
-            const socket = net.createConnection({ host: '5.63.19.247', port: 443, timeout: 3000 }, () => {
-                diag.tcp['5.63.19.247:443'] = { ok: true, duration: Date.now() - t0 };
-                socket.destroy();
-                resolve();
-            });
-            socket.on('timeout', () => {
-                socket.destroy();
-                reject(new Error('TCP connect timeout after 3000ms'));
-            });
-            socket.on('error', (err) => reject(err));
-        });
-    } catch (err) {
-        diag.tcp['5.63.19.247:443'] = { ok: false, error: err.message, duration: Date.now() - t0 };
-    }
-
-    const targetUrl = testPath.startsWith('http')
-        ? testPath
-        : `https://edge.narto-drama.com${testPath.startsWith('/') ? '' : '/'}${testPath}`;
-
-    const start = Date.now();
-    try {
-        const resp = await fetchHttp(targetUrl, {}, 6000);
-        const text = await resp.text();
-        diag.targets.push({
-            targetUrl,
-            status: resp.status,
-            ok: resp.ok,
-            duration: Date.now() - start,
-            length: text.length,
-            hasEpisodes: text.includes('episodeItemsRaw'),
-            snippet: text.slice(0, 200)
-        });
-    } catch (e) {
-        diag.targets.push({
-            targetUrl,
-            error: e.message,
-            duration: Date.now() - start
-        });
-    }
-
-    res.json({ ok: true, diag });
 });
 
 // In-memory sections cache for instant 0ms responses & resilience against upstream network hiccups
@@ -470,6 +323,13 @@ app.get('/api/sections', async (req, res) => {
             return res.json(cachedSections.data);
         }
 
+        // Fallback 5: If upstream failed or returned 0 items, serve pre-baked high-availability snapshot
+        if ((!data || totalItems === 0) && localFallbackSections && localFallbackSections[provider]) {
+            console.log(`[Fallback] Serving pre-baked sections snapshot for ${provider}`);
+            data = localFallbackSections[provider];
+            totalItems = countItems(data);
+        }
+
         if (!data) {
             return res.status(502).json({ ok: false, error: 'Failed to fetch sections from upstream' });
         }
@@ -523,24 +383,9 @@ function normalizeItem(item) {
     if (item.cover_url) item.cover_url = normalizePosterUrl(item.cover_url);
     if (item.cover) item.cover = normalizePosterUrl(item.cover);
     if (item.poster) item.poster = normalizePosterUrl(item.poster);
-    if (item.watch_url) {
-        item.watch_url = item.watch_url.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
-    }
-    if (item.url) {
-        item.url = item.url.replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
-    }
     if (!item.slug && (item.watch_url || item.url)) {
         const sm = (item.watch_url || item.url).match(/\/detail\/watch\/([^\/?#]+)/);
         if (sm) item.slug = sm[1];
-    }
-    if (!item.slug && item.watch_url && item.watch_url.includes('/search/import')) {
-        try {
-            const u = new URL(item.watch_url.startsWith('http') ? item.watch_url : `${BASE_URL}${item.watch_url}`);
-            const titleParam = u.searchParams.get('title');
-            if (titleParam) {
-                item.slug = titleParam.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-            }
-        } catch (e) {}
     }
     return item;
 }
@@ -639,118 +484,50 @@ app.get('/api/drama', async (req, res) => {
         }
 
         const executeFetch = async () => {
+            const candidateKey = slug || (watchUrl && watchUrl.match(/\/detail\/watch\/([^\/?#]+)/)?.[1]);
+            const fbDrama = localFallbackDramas && ((candidateKey && localFallbackDramas[candidateKey]) || (watchUrl && localFallbackDramas[watchUrl]));
+
+            // Fetch the drama page (following redirects)
             const headers = getHeaders();
-            let watchUrlClean = (watchUrl || '').replace(/^https?:\/\/narto-drama\.com/, BASE_URL);
-            let dramaSlug = slug || '';
-            let importTitle = '';
-
-            if (watchUrlClean.includes('/search/import')) {
-                try {
-                    const parsed = new URL(watchUrlClean.startsWith('http') ? watchUrlClean : `${BASE_URL}${watchUrlClean}`);
-                    importTitle = parsed.searchParams.get('title') || '';
-                    if (!dramaSlug && importTitle) {
-                        dramaSlug = importTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-                    }
-                } catch (e) {}
-            } else if (!dramaSlug && watchUrlClean) {
-                const sm = watchUrlClean.match(/\/detail\/watch\/([^\/?#]+)/);
-                if (sm) dramaSlug = sm[1];
-            }
-
-            // Helper to fetch direct watch episode page directly
-            const tryFetchWatchPage = async (targetSlug, epNum = 1) => {
-                if (!targetSlug) return null;
-                const pageUrl = `${BASE_URL}/detail/watch/${targetSlug}/${epNum}?lang=${encodeURIComponent(lang)}&from=home`;
-                try {
-                    const pRes = await fetchHttp(pageUrl, { headers }, 8000);
-                    if (pRes && pRes.ok) {
-                        const pText = await pRes.text();
-                        if (pText.includes('episodeItemsRaw')) {
-                            return { pageRes: pRes, html: pText, finalUrl: pageUrl, slug: targetSlug };
-                        }
-                    }
-                } catch (e) {}
-                return null;
-            };
-
-            let pageRes = null;
-            let html = '';
-            let finalUrl = watchUrlClean;
-
-            // Strategy 1: Instant direct slug /1 fetch (takes ~400ms - 1s)
-            if (dramaSlug) {
-                const direct = await tryFetchWatchPage(dramaSlug, ep || 1);
-                if (direct) {
-                    pageRes = direct.pageRes;
-                    html = direct.html;
-                    finalUrl = direct.finalUrl;
-                    dramaSlug = direct.slug;
+            let pageRes = await fetchFromUpstream(watchUrl, { headers, redirect: 'follow' }, 8000);
+            if (!pageRes) {
+                if (fbDrama) {
+                    console.log(`[Fallback] Serving pre-baked drama details for ${candidateKey || watchUrl}`);
+                    return fbDrama;
                 }
+                return { ok: false, error: 'Upstream page fetch failed' };
             }
+            let html = await pageRes.text();
+            let finalUrl = pageRes.url || watchUrl;
 
-            // Strategy 2: Upstream search by title keywords (takes ~0.5s)
-            if (!pageRes && (importTitle || dramaSlug)) {
-                const searchKeyword = (importTitle || dramaSlug.replace(/[-_]+/g, ' ')).replace(/\s*-\s*.*$/i, '').trim();
+            // If direct slug watchUrl returned 404 or missing episodes, try searching upstream by slug keywords
+            if ((!pageRes.ok || html.includes('Page Not Found') || !html.includes('episodeItemsRaw')) && slug) {
+                const searchKeywords = slug.replace(/[-_]+/g, ' ').trim();
                 try {
-                    const sRes = await fetchFromUpstream(`/search?q=${encodeURIComponent(searchKeyword)}&limit=5&lang=${encodeURIComponent(lang)}`, {
-                        headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' })
-                    }, 4000);
+                    const sRes = await fetchFromUpstream(`/search?q=${encodeURIComponent(searchKeywords)}&limit=5&lang=${encodeURIComponent(lang)}`, {
+                        headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
+                    }, 5000);
                     if (sRes && sRes.ok) {
                         const sData = await sRes.json();
-                        const items = sData.items || sData || [];
-                        for (const item of items) {
-                            if (item.url && item.url.includes('/detail/watch/')) {
-                                const m = item.url.match(/\/detail\/watch\/([^\/?#]+)/);
-                                if (m && m[1]) {
-                                    const searchMatch = await tryFetchWatchPage(m[1], ep || 1);
-                                    if (searchMatch) {
-                                        pageRes = searchMatch.pageRes;
-                                        html = searchMatch.html;
-                                        finalUrl = searchMatch.finalUrl;
-                                        dramaSlug = searchMatch.slug;
-                                        break;
-                                    }
-                                }
+                        const sItems = sData.items || sData || [];
+                        if (sItems.length > 0 && sItems[0].url) {
+                            const newUrl = sItems[0].url.startsWith('http') ? sItems[0].url : `${BASE_URL}${sItems[0].url}`;
+                            const newRes = await fetchFromUpstream(newUrl, { headers, redirect: 'follow' }, 6000);
+                            if (newRes && newRes.ok) {
+                                pageRes = newRes;
+                                html = await newRes.text();
+                                finalUrl = newRes.url || newUrl;
                             }
                         }
                     }
-                } catch (e) {}
-            }
-
-            // Strategy 3: Standard watchUrl fetch (following redirects)
-            if (!pageRes && watchUrlClean) {
-                let fetchTarget = watchUrlClean;
-                if (fetchTarget.includes('/detail/watch/') && !fetchTarget.match(/\/detail\/watch\/[^\/?#]+\/\d+/)) {
-                    fetchTarget = fetchTarget.replace(/\/detail\/watch\/([^\/?#]+)/, `/detail/watch/$1/${ep || 1}`);
-                }
-                pageRes = await fetchFromUpstream(fetchTarget, { headers, redirect: 'follow' }, 6000);
-                if (pageRes && pageRes.ok) {
-                    html = await pageRes.text();
-                    finalUrl = pageRes.url || fetchTarget;
-                    const sm = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/);
-                    if (sm && sm[1]) dramaSlug = sm[1];
-
-                    // If landing page lacks episodeItemsRaw, fetch /1
-                    if (!html.includes('episodeItemsRaw') && dramaSlug) {
-                        const ep1Res = await tryFetchWatchPage(dramaSlug, ep || 1);
-                        if (ep1Res) {
-                            pageRes = ep1Res.pageRes;
-                            html = ep1Res.html;
-                            finalUrl = ep1Res.finalUrl;
-                        }
-                    }
-                }
-            }
-
-            if (!pageRes || !html) {
-                return { ok: false, error: 'Upstream page fetch failed' };
+                } catch (err) { }
             }
 
             // Extract metadata
             let title = '';
             const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i) || html.match(/<title>([^<]+)<\/title>/i);
             if (titleMatch) {
-                title = titleMatch[1].replace(/ - Streaming Gratis.*$/i, '').replace(/ - Free Streaming.*$/i, '').replace(/^"|"$/g, '').trim();
+                title = titleMatch[1].replace(/ - Streaming Gratis.*$/i, '').replace(/^"|"$/g, '').trim();
             }
 
             let description = '';
@@ -766,8 +543,8 @@ app.get('/api/drama', async (req, res) => {
             }
 
             // Extract drama slug early for scoped episode matching and on-demand stream resolution
-            const slugMatch = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/) || watchUrlClean.match(/\/detail\/watch\/([^\/?#]+)/);
-            if (slugMatch) dramaSlug = slugMatch[1];
+            const slugMatch = finalUrl.match(/\/detail\/watch\/([^\/?#]+)/) || watchUrl.match(/\/detail\/watch\/([^\/?#]+)/);
+            const dramaSlug = slugMatch ? slugMatch[1] : (slug || '');
 
             // Extract episodeItemsRaw
             let episodes = [];
@@ -782,18 +559,25 @@ app.get('/api/drama', async (req, res) => {
 
             // If not found in current page, check for /detail/watch/{dramaSlug}/1 specifically
             if (episodes.length === 0 && dramaSlug) {
-                const ep1Res = await tryFetchWatchPage(dramaSlug, ep || 1);
-                if (ep1Res) {
-                    const epMatch2 = ep1Res.html.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
-                    if (epMatch2) {
-                        try {
-                            episodes = JSON.parse(epMatch2[1]);
-                        } catch (e) {
-                            console.error('Error parsing episodeItemsRaw (step 2):', e);
+                const escapedSlug = dramaSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const ep1Regex = new RegExp(`href="([^"]*\\/detail\\/watch\\/${escapedSlug}\\/1[^"]*)"`, 'i');
+                const ep1LinkMatch = html.match(ep1Regex);
+                if (ep1LinkMatch) {
+                    const ep1Url = (ep1LinkMatch[1].startsWith('http') ? ep1LinkMatch[1] : `${BASE_URL}${ep1LinkMatch[1]}`).replace(/&amp;/g, '&');
+                    const pageRes2 = await fetchFromUpstream(ep1Url, { headers }, 5000);
+                    if (pageRes2 && pageRes2.ok) {
+                        const html2 = await pageRes2.text();
+                        const epMatch2 = html2.match(/const episodeItemsRaw = (\[[\s\S]*?\]);/);
+                        if (epMatch2) {
+                            try {
+                                episodes = JSON.parse(epMatch2[1]);
+                            } catch (e) {
+                                console.error('Error parsing episodeItemsRaw (step 2):', e);
+                            }
                         }
-                    }
-                    if (ep1Res.html.includes('class="episode-item"')) {
-                        html = ep1Res.html;
+                        if (html2.includes('class="episode-item"')) {
+                            html = html2;
+                        }
                     }
                 }
             }
@@ -960,6 +744,10 @@ app.get('/api/drama', async (req, res) => {
                 }
             }
             const isOk = cleanEpisodes.length > 0 && cleanEpisodes.some(e => e.play_url || e.direct_play_url);
+            if (!isOk && fbDrama) {
+                console.log(`[Fallback] Zero playable episodes from upstream, serving fallback for ${candidateKey || watchUrl}`);
+                return fbDrama;
+            }
 
             const payload = {
                 ok: isOk,
@@ -2913,6 +2701,29 @@ app.get('/api/subtitles/vtt', async (req, res) => {
         console.error('Error in /api/subtitles/vtt:', err);
         res.status(500).send(err.message);
     }
+});
+
+// SPA fallback
+app.get('*', (req, res) => {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('Not Found');
+    }
+});
+
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
+    } catch (err) {
+    console.error('Error in /api/subtitles/vtt:', err);
+    res.status(500).send(err.message);
+}
 });
 
 // SPA fallback
