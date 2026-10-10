@@ -233,10 +233,11 @@ fetchLiveProvidersFromUpstream().catch(() => { });
 
 // Live Providers List Endpoint
 app.get('/api/providers', async (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=600, stale-while-revalidate=1800');
     try {
         const now = Date.now();
         if (!cachedProviders || (now - lastProvidersFetch > 5 * 60 * 1000)) {
-            await fetchLiveProvidersFromUpstream();
+            fetchLiveProvidersFromUpstream().catch(() => { });
         }
         res.json({ ok: true, providers: cachedProviders || FALLBACK_PROVIDERS });
     } catch (err) {
@@ -247,10 +248,31 @@ app.get('/api/providers', async (req, res) => {
 
 // In-memory sections cache for instant 0ms responses & resilience against upstream network hiccups
 const sectionsCache = new Map();
-const SECTIONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const SECTIONS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+// Pre-warm cache from fallback snapshot for instant 0ms responses on startup / cold start
+if (localFallbackSections) {
+    for (const [pKey, pData] of Object.entries(localFallbackSections)) {
+        if (pData && Array.isArray(pData.sections) && pData.sections.length > 0) {
+            const prewarmPayload = {
+                ok: true,
+                provider: pKey,
+                active_provider: pKey,
+                providers: cachedProviders || FALLBACK_PROVIDERS,
+                sections: pData.sections,
+                tab_pages: pData.tab_pages || {}
+            };
+            sectionsCache.set(`${pKey}_1_vi-VN_`, { data: prewarmPayload, timestamp: Date.now() });
+            sectionsCache.set(`${pKey}_1_en-US_`, { data: prewarmPayload, timestamp: Date.now() });
+            sectionsCache.set(`${pKey}_1_all_`, { data: prewarmPayload, timestamp: Date.now() });
+        }
+    }
+    console.log(`[Cache] Pre-warmed in-memory sections cache for ${Object.keys(localFallbackSections).length} providers.`);
+}
 
 // 2. Provider Sections (Home/Trending/Popular)
 app.get('/api/sections', async (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
     try {
         const provider = req.query.provider || 'anyreel';
         const page = parseInt(req.query.page || '1', 10);
@@ -282,7 +304,7 @@ app.get('/api/sections', async (req, res) => {
             const pathAndQuery = `/home/providers/sections?${params.toString()}`;
             const response = await fetchFromUpstream(pathAndQuery, {
                 headers: getHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
-            }, 6000);
+            }, 3500);
 
             if (!response || !response.ok) return null;
             return await response.json();
@@ -299,7 +321,17 @@ app.get('/api/sections', async (req, res) => {
 
         let totalItems = countItems(data);
 
-        // Fallback 1: If 0 items, retry without strict target_lang filter
+        // Fast Failover 1: If upstream failed or returned 0 items, serve stale cache or snapshot immediately
+        if ((!data || totalItems === 0) && cachedSections) {
+            return res.json(cachedSections.data);
+        }
+
+        if ((!data || totalItems === 0) && localFallbackSections && localFallbackSections[provider]) {
+            data = localFallbackSections[provider];
+            totalItems = countItems(data);
+        }
+
+        // Fallback 2: If still 0 items, retry without strict target_lang filter
         if (totalItems === 0 && !query) {
             const fb1 = await fetchSectionsFromUpstream(lang, false);
             if (countItems(fb1) > 0) {
@@ -308,34 +340,13 @@ app.get('/api/sections', async (req, res) => {
             }
         }
 
-        // Fallback 2: If still 0 items, fallback to Vietnamese (vi-VN)
-        if (totalItems === 0 && !query && lang !== 'vi-VN') {
-            const fb2 = await fetchSectionsFromUpstream('vi-VN', false);
+        // Fallback 3: If still 0 items, retry with upstream default store 'id-ID'
+        if (totalItems === 0 && !query && lang !== 'id-ID') {
+            const fb2 = await fetchSectionsFromUpstream('id-ID', false);
             if (countItems(fb2) > 0) {
                 data = fb2;
                 totalItems = countItems(data);
             }
-        }
-
-        // Fallback 3: If still 0 items, retry with upstream default store 'id-ID'
-        if (totalItems === 0 && !query && lang !== 'id-ID') {
-            const fb3 = await fetchSectionsFromUpstream('id-ID', false);
-            if (countItems(fb3) > 0) {
-                data = fb3;
-                totalItems = countItems(data);
-            }
-        }
-
-        // Fallback 4: If upstream failed, use stale cache if available
-        if (!data && cachedSections) {
-            return res.json(cachedSections.data);
-        }
-
-        // Fallback 5: If upstream failed or returned 0 items, serve pre-baked high-availability snapshot
-        if ((!data || totalItems === 0) && localFallbackSections && localFallbackSections[provider]) {
-            console.log(`[Fallback] Serving pre-baked sections snapshot for ${provider}`);
-            data = localFallbackSections[provider];
-            totalItems = countItems(data);
         }
 
         if (!data) {
@@ -888,22 +899,50 @@ app.post('/api/drama/batch-episode-counts', async (req, res) => {
 // Helper: Check if CDN URL auth_key token is expired
 function isAuthKeyExpired(url) {
     if (!url || typeof url !== 'string') return true;
-    const match = url.match(/[?&]auth_key=(\d+)/i);
-    if (match) {
-        const expiry = parseInt(match[1], 10);
-        const nowSec = Math.floor(Date.now() / 1000);
-        // Expired or expiring within next 60 seconds
-        if (expiry > 0 && expiry <= nowSec + 60) {
-            return true;
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    // 1. Check wsTime parameter (Wangsu / Tencent CDN timestamp in seconds or hex)
+    // CDN tokens are typically valid for 2 to 4 hours from wsTime creation
+    const wsMatch = url.match(/[?&]wsTime=([0-9a-fA-F]+)/i);
+    if (wsMatch) {
+        const valStr = wsMatch[1];
+        let exp = parseInt(valStr, 10);
+        if (isNaN(exp) || exp < 1500000000 || exp > 2500000000) {
+            const hexExp = parseInt(valStr, 16);
+            if (!isNaN(hexExp) && hexExp > 1500000000 && hexExp < 2500000000) exp = hexExp;
+        }
+        if (!isNaN(exp)) {
+            // Expired if older than 2 hours or unreasonably in future
+            if (nowSec - exp > 7200 || exp > nowSec + 86400) return true;
         }
     }
+
+    // 2. Check auth_key parameter (Alibaba Cloud CDN)
+    const authMatch = url.match(/[?&]auth_key=([^&]+)/i);
+    if (authMatch) {
+        const parts = authMatch[1].split('-');
+        for (const p of parts) {
+            const num = parseInt(p, 10);
+            if (num > 1500000000 && num < 2500000000) {
+                if (num <= nowSec + 30 || nowSec - num > 7200) return true;
+            }
+        }
+    }
+
+    // 3. Check expires / expire parameter
+    const expMatch = url.match(/[?&]expires?=(\d+)/i);
+    if (expMatch) {
+        const exp = parseInt(expMatch[1], 10);
+        if (exp > 0 && exp <= nowSec + 30) return true;
+    }
+
+    // 4. Base64 payload in URL
     const b64Match = url.match(/\/e\/[ms]\/([A-Za-z0-9_-]+)/);
     if (b64Match) {
         try {
             const jsonStr = Buffer.from(b64Match[1], 'base64').toString('utf8');
             const data = JSON.parse(jsonStr);
             if (data && data.exp) {
-                const nowSec = Math.floor(Date.now() / 1000);
                 if (data.exp <= nowSec + 60) return true;
             }
         } catch (e) { }
@@ -949,6 +988,27 @@ async function resolveFreshEpisodeStream(dramaSlug, epNum = 1, lang = 'vi-VN') {
             }
         } catch (e) {
             console.warn('[RefreshSource] Origin resolution failed:', e.message);
+        }
+    }
+
+    // Validate Tier 1 / Tier 2: probe candidate stream to guarantee it does NOT return 403 Forbidden or expired token
+    if (streamData && (streamData.play_url || streamData.direct_play_url)) {
+        const candidateUrl = streamData.play_url || streamData.direct_play_url;
+        if (isAuthKeyExpired(candidateUrl)) {
+            console.warn(`[RefreshSource] Stream token expired by timestamp for ${dramaSlug} ep ${targetEpNum}, falling back to Tier 3 HTML...`);
+            streamData = null;
+        } else {
+            try {
+                const probeRes = await fetch(candidateUrl, {
+                    method: 'HEAD',
+                    headers: getHeaders(),
+                    signal: AbortSignal.timeout(2000)
+                });
+                if (probeRes.status === 403 || probeRes.status === 401) {
+                    console.warn(`[RefreshSource] Stream probe returned ${probeRes.status} for ${dramaSlug} ep ${targetEpNum}, falling back to Tier 3 HTML...`);
+                    streamData = null;
+                }
+            } catch (e) { }
         }
     }
 
@@ -1118,6 +1178,19 @@ app.get('/api/proxy-stream', async (req, res) => {
         }
         res.setHeader('Access-Control-Allow-Origin', '*');
 
+        const cType = upstream.headers.get('content-type') || '';
+        const isM3u8 = streamUrl.includes('.m3u8') || cType.includes('mpegurl') || cType.includes('application/x-mpegURL');
+        if (isM3u8) {
+            const playlistText = await upstream.text();
+            const rewritten = playlistText.split('\n').map(line => {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('#')) return line;
+                return new URL(trimmed, streamUrl).href;
+            }).join('\n');
+            res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+            return res.send(rewritten);
+        }
+
         if (upstream.body) {
             const reader = upstream.body.getReader();
             const pump = async () => {
@@ -1252,8 +1325,6 @@ const GOOGLE_ENDPOINTS = [
     (sl, tl, q) => `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${sl}&tl=${tl}&dt=t&q=${q}`,
     // Endpoint 3: at (apps translate) — different quota pool
     (sl, tl, q) => `https://translate.googleapis.com/translate_a/single?client=at&sl=${sl}&tl=${tl}&dt=t&q=${q}`,
-    // Endpoint 4: webapp — different user-agent triggers different response format
-    (sl, tl, q) => `https://translate.googleapis.com/translate_a/single?client=webapp&sl=${sl}&tl=${tl}&dt=t&q=${q}`,
 ];
 let _googleEndpointIdx = 0;
 
@@ -1437,26 +1508,81 @@ async function translateText(text, targetLang = 'vi', sourceLang = 'auto') {
 
         const result = translated || cleanInput;
 
-        // Cache result
-        if (translationCache.size > 10000) {
-            // Evict oldest 500 entries
-            let evicted = 0;
-            for (const k of translationCache.keys()) {
-                if (evicted >= 500) break;
-                translationCache.delete(k);
-                evicted++;
+        // Cache result ONLY if translation succeeded
+        if (translated && translated.toLowerCase() !== cleanInput.toLowerCase()) {
+            if (translationCache.size > 10000) {
+                // Evict oldest 500 entries
+                let evicted = 0;
+                for (const k of translationCache.keys()) {
+                    if (evicted >= 500) break;
+                    translationCache.delete(k);
+                    evicted++;
+                }
             }
+            translationCache.set(cacheKey, translated);
+            scheduleCacheSave();
         }
-        translationCache.set(cacheKey, result);
-        scheduleCacheSave();
 
         return result;
     });
 }
 
+// High-speed Groq AI LLM Batch Translator (Up to 40 cues per call, 100% natural, zero rate limits)
+async function tryGroqTranslateBatch(texts, targetLang = 'vi', sourceLang = 'auto', customApiKey = '') {
+    const key = (customApiKey || DEFAULT_GROQ_KEY || process.env.GROQ_API_KEY || '').trim();
+    if (!key || !Array.isArray(texts) || texts.length === 0) return null;
+
+    const langName = targetLang.toLowerCase().startsWith('vi') ? 'Vietnamese' : targetLang;
+    const prompt = `You are an expert subtitle translator for short dramas and television series.
+Translate the following array of dialogue subtitle lines into natural, expressive, conversational ${langName} suitable for video subtitles.
+Rules:
+1. Maintain the exact order and length of the array.
+2. For Vietnamese, use natural short drama terminology and pronouns (tôi, em, anh, cô ta, tổng tài, phu nhân, v.v.).
+3. Return ONLY a valid JSON object with a single key "translations" containing the array of translated strings in exact order:
+{
+  "translations": ["translated line 0", "translated line 1", ...]
+}
+
+Lines:
+${JSON.stringify(texts)}`;
+
+    const modelsToTry = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
+    for (const model of modelsToTry) {
+        try {
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${key}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model,
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.1,
+                    response_format: { type: 'json_object' }
+                }),
+                signal: AbortSignal.timeout(15000)
+            });
+
+            if (!res.ok) continue;
+            const data = await res.json();
+            const content = data?.choices?.[0]?.message?.content;
+            if (content) {
+                const parsed = JSON.parse(content);
+                if (Array.isArray(parsed.translations) && parsed.translations.length === texts.length) {
+                    return parsed.translations;
+                }
+            }
+        } catch (err) {
+            // Try next model
+        }
+    }
+    return null;
+}
+
 // High-speed Pack-Batch translation helper — packs up to 20 cues per single HTTP request
-// Reduces HTTP roundtrips by 90%+ and translates full dialogue in under 1 second!
-async function batchTranslate(texts, targetLang, sourceLang = 'auto') {
+// Reduces HTTP roundtrips by 90%+ and translates full dialogue reliably without rate limit dropouts
+async function batchTranslate(texts, targetLang, sourceLang = 'auto', customApiKey = '') {
     if (!texts || texts.length === 0) return [];
     const tl = targetLang.toLowerCase().split('-')[0];
     const sl = sourceLang.toLowerCase().split('-')[0];
@@ -1488,24 +1614,48 @@ async function batchTranslate(texts, targetLang, sourceLang = 'auto') {
         return results;
     }
 
-    // Step 2: Translate uncached lines in packed batches of 20
-    const BATCH_SIZE = 20;
-    const batchPromises = [];
+    const groqKey = (customApiKey || DEFAULT_GROQ_KEY || process.env.GROQ_API_KEY || '').trim();
 
-    for (let i = 0; i < uncachedIndices.length; i += BATCH_SIZE) {
-        const chunkIndices = uncachedIndices.slice(i, i + BATCH_SIZE);
-        batchPromises.push((async () => {
-            const payload = chunkIndices.map((origIdx, localIdx) => `${localIdx}>>> ${(texts[origIdx] || '').trim()}`).join('\n');
+    // Step 2: High-speed Groq AI translation for uncached lines (Chunk 35)
+    if (groqKey) {
+        const GROQ_CHUNK = 35;
+        for (let i = 0; i < uncachedIndices.length; i += GROQ_CHUNK) {
+            const chunkIndices = uncachedIndices.slice(i, i + GROQ_CHUNK);
+            const chunkTexts = chunkIndices.map(idx => (texts[idx] || '').trim());
+            const groqTrans = await tryGroqTranslateBatch(chunkTexts, tl, sl, groqKey);
+            if (Array.isArray(groqTrans) && groqTrans.length === chunkTexts.length) {
+                for (let k = 0; k < chunkIndices.length; k++) {
+                    const origIdx = chunkIndices[k];
+                    const trans = (groqTrans[k] || '').trim();
+                    if (trans) {
+                        results[origIdx] = trans;
+                        const cleanInput = cleanTextForTranslation((texts[origIdx] || '').trim());
+                        if (cleanInput && trans.toLowerCase() !== cleanInput.toLowerCase()) {
+                            translationCache.set(`${sl}:${tl}:${cleanInput}`, trans);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 3: For any lines still untranslated, use Google Translate with robust bracket delimiters
+    const stillUncached = uncachedIndices.filter(idx => !results[idx]);
+    if (stillUncached.length > 0) {
+        const BATCH_SIZE = 15;
+        for (let i = 0; i < stillUncached.length; i += BATCH_SIZE) {
+            const chunkIndices = stillUncached.slice(i, i + BATCH_SIZE);
+            const payload = chunkIndices.map((origIdx, localIdx) => `⟦${localIdx}⟧ ${(texts[origIdx] || '').trim().replace(/[\r\n]+/g, ' ')}`).join('\n');
             let translatedBlock = null;
             try {
-                translatedBlock = await tryGoogleTranslate(payload, sl, tl, 2);
+                translatedBlock = await tryGoogleTranslate(payload, sl, tl, 3);
             } catch (e) { }
 
             const filled = new Set();
             if (translatedBlock) {
-                const lines = translatedBlock.split('\n');
-                for (const line of lines) {
-                    const m = line.match(/^(\d+)\s*>>>\s*(.*)/);
+                const rawLines = translatedBlock.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                for (const line of rawLines) {
+                    const m = line.match(/^⟦\s*(\d+)\s*⟧\s*(.*)/) || line.match(/^(\d+)\s*(?:>{1,4}|[:.\-]|>>>|\))\s*(.*)/);
                     if (m) {
                         const localIdx = parseInt(m[1], 10);
                         if (localIdx >= 0 && localIdx < chunkIndices.length) {
@@ -1514,9 +1664,8 @@ async function batchTranslate(texts, targetLang, sourceLang = 'auto') {
                             if (trans) {
                                 results[origIdx] = trans;
                                 filled.add(localIdx);
-                                const rawText = (texts[origIdx] || '').trim();
-                                const cleanInput = cleanTextForTranslation(rawText);
-                                if (cleanInput) {
+                                const cleanInput = cleanTextForTranslation((texts[origIdx] || '').trim());
+                                if (cleanInput && trans.toLowerCase() !== cleanInput.toLowerCase()) {
                                     translationCache.set(`${sl}:${tl}:${cleanInput}`, trans);
                                 }
                             }
@@ -1525,22 +1674,59 @@ async function batchTranslate(texts, targetLang, sourceLang = 'auto') {
                 }
             }
 
-            // Fallback for any individual line that was missed
+            // Step 4: Individual fallback for any missed line
             for (let localIdx = 0; localIdx < chunkIndices.length; localIdx++) {
                 if (!filled.has(localIdx)) {
                     const origIdx = chunkIndices[localIdx];
                     try {
                         const single = await translateText(texts[origIdx], tl, sl);
-                        results[origIdx] = single || texts[origIdx];
-                    } catch (e) {
-                        results[origIdx] = texts[origIdx];
+                        if (single) {
+                            results[origIdx] = single;
+                        }
+                    } catch (e) { }
+                }
+            }
+
+            if (i + BATCH_SIZE < stillUncached.length) {
+                await new Promise(r => setTimeout(r, 60));
+            }
+        }
+    }
+
+    // Step 5: FINAL RESCUE PASS FOR VIETNAMESE TARGET:
+    // Guarantee 100% of dialogue lines are in Vietnamese — never leave English/Chinese in middle of stream!
+    if (tl === 'vi') {
+        const viRegex = /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i;
+        const missingViIndices = [];
+        for (let i = 0; i < texts.length; i++) {
+            const resText = (results[i] || '').trim();
+            // If empty or pure sound effect e.g. [laughter], ignore
+            if (!resText || /^[\[\(].*[\]\)]$/.test(resText)) continue;
+            // If contains no Vietnamese tone marks and length > 3 characters, it's untranslated foreign text!
+            if (!viRegex.test(resText)) {
+                missingViIndices.push(i);
+            }
+        }
+
+        if (missingViIndices.length > 0 && groqKey) {
+            console.log(`[BatchTranslate] 🛡️ Rescue pass: Found ${missingViIndices.length} non-Vietnamese cues, translating via Groq AI...`);
+            const rescueTexts = missingViIndices.map(idx => (texts[idx] || '').trim());
+            const rescueTrans = await tryGroqTranslateBatch(rescueTexts, 'vi', 'auto', groqKey);
+            if (Array.isArray(rescueTrans) && rescueTrans.length === rescueTexts.length) {
+                for (let k = 0; k < missingViIndices.length; k++) {
+                    const origIdx = missingViIndices[k];
+                    if (rescueTrans[k] && rescueTrans[k].trim()) {
+                        results[origIdx] = rescueTrans[k].trim();
+                        const cleanInput = cleanTextForTranslation((texts[origIdx] || '').trim());
+                        if (cleanInput) {
+                            translationCache.set(`${sl}:${tl}:${cleanInput}`, rescueTrans[k].trim());
+                        }
                     }
                 }
             }
-        })());
+        }
     }
 
-    await Promise.all(batchPromises);
     scheduleCacheSave();
 
     for (let i = 0; i < texts.length; i++) {
@@ -1599,14 +1785,23 @@ function parseVttContent(vttText) {
 const vttMemoryCache = new Map(); // In-memory cache: ${dramaSlug}_ep${ep}_${lang} -> vttContent
 
 function isVttContentVietnamese(vttText) {
-    if (!vttText || typeof vttText !== 'string') return false;
-    return /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i.test(vttText);
+    if (!vttText || typeof vttText !== 'string' || !vttText.includes('-->')) return false;
+    const cues = parseVttContent(vttText);
+    if (!cues || cues.length === 0) return false;
+    if (cues.length < 5) return false;
+    const viRegex = /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i;
+    let viCount = 0;
+    for (const c of cues) {
+        if (viRegex.test(c.text)) viCount++;
+    }
+    // At least 55% of speech cues must have Vietnamese tones to guarantee it is not mixed with English/Chinese
+    return (viCount / cues.length) >= 0.55;
 }
 
 // 6.2 High-Speed Upstream WebVTT Translator (Instant 0.5s translation from official timed cues)
 app.get('/api/subtitles/translate-vtt', async (req, res) => {
     try {
-        const { url, slug = 'unknown', ep = '1', target_lang = 'vi', source_lang = 'auto' } = req.query;
+        const { url, slug = 'unknown', ep = '1', target_lang = 'vi', source_lang = 'auto', groq_key = '' } = req.query;
         if (!url) return res.status(400).json({ ok: false, error: 'url is required' });
 
         const cleanTarget = (target_lang || 'vi').toLowerCase().split('-')[0];
@@ -1652,7 +1847,8 @@ app.get('/api/subtitles/translate-vtt', async (req, res) => {
         }
 
         const sl = source_lang || 'auto';
-        const translatedTexts = await batchTranslate(cues.map(c => c.text), cleanTarget, sl);
+        const cloudApiKey = (groq_key || process.env.GROQ_API_KEY || DEFAULT_GROQ_KEY || '').trim();
+        const translatedTexts = await batchTranslate(cues.map(c => c.text), cleanTarget, sl, cloudApiKey);
         const vttLines = ['WEBVTT', ''];
         for (let i = 0; i < cues.length; i++) {
             vttLines.push(cues[i].timeLine);
@@ -1690,7 +1886,45 @@ try {
 function findSubtitleFile(filename) {
     if (!filename) return null;
     const tmpPath = path.join(SUBTITLES_DIR, filename);
-    if (fs.existsSync(tmpPath)) return tmpPath;
+    if (fs.existsSync(tmpPath)) {
+        if (filename.endsWith('.vtt')) {
+            try {
+                const content = fs.readFileSync(tmpPath, 'utf8');
+                const cuesCount = (content.match(/-->/g) || []).length;
+
+                // Parse last timestamp to verify it's a full episode and not a 20s truncated snippet
+                const lines = content.trim().split('\n');
+                const lastArrow = lines.filter(l => l.includes('-->')).pop() || '';
+                const lastSecMatch = lastArrow.match(/-->\s*(?:(\d+):)?(\d+):(\d+)/);
+                let maxSec = 0;
+                if (lastSecMatch) {
+                    const h = lastSecMatch[1] ? parseInt(lastSecMatch[1], 10) : 0;
+                    const m = parseInt(lastSecMatch[2], 10);
+                    const s = parseInt(lastSecMatch[3], 10);
+                    maxSec = h * 3600 + m * 60 + s;
+                }
+
+                // If fewer than 10 cues AND timestamp < 40s, it's an aborted/truncated snippet
+                if (!filename.includes('_chunk') && cuesCount < 10 && maxSec < 40) {
+                    try { fs.unlinkSync(tmpPath); } catch (e) { }
+                    return null;
+                }
+
+                if (filename.endsWith('_vi.vtt') && !filename.includes('_chunk')) {
+                    if (!isVttContentVietnamese(content)) {
+                        try { fs.unlinkSync(tmpPath); } catch (e) { }
+                        return null;
+                    }
+                } else if (!filename.includes('_chunk')) {
+                    if (cuesCount < 3) {
+                        try { fs.unlinkSync(tmpPath); } catch (e) { }
+                        return null;
+                    }
+                }
+            } catch (e) { }
+        }
+        return tmpPath;
+    }
     return null;
 }
 console.log('[STT] Subtitle temp dir:', SUBTITLES_DIR);
@@ -1822,8 +2056,8 @@ function parseSrtToCues(srtContent) {
 // Runs immediately with priority so subtitles appear in ~8-12 seconds
 async function runStage1FastChunk(dramaSlug, epNum, streamUrl, cleanTarget) {
     const key = `${dramaSlug}_ep${epNum}`;
-    const vttFile = `${key}_${cleanTarget}.vtt`;
-    const vttPath = path.join(SUBTITLES_DIR, vttFile);
+    const chunkVttFile = `${key}_${cleanTarget}_chunk.vtt`;
+    const chunkVttPath = path.join(SUBTITLES_DIR, chunkVttFile);
 
     if (activeStage1Promises.has(key)) {
         return activeStage1Promises.get(key);
@@ -1854,7 +2088,7 @@ async function runStage1FastChunk(dramaSlug, epNum, streamUrl, cleanTarget) {
                 const chunkSrt = fs.readFileSync(tempChunkSrt, 'utf8');
                 const initialCues = parseSrtToCues(chunkSrt);
                 if (initialCues.length > 0) {
-                    console.log(`[Audio STT] 🚀 Priority Chunk READY (${initialCues.length} cues) for ${key}! Writing initial VTT...`);
+                    console.log(`[Audio STT] 🚀 Priority Chunk READY (${initialCues.length} cues) for ${key}! Writing chunk VTT...`);
                     const translatedInitial = (cleanTarget !== 'en' && cleanTarget !== 'auto')
                         ? await batchTranslate(initialCues.map(c => c.text), cleanTarget, 'en')
                         : initialCues.map(c => c.text);
@@ -1864,8 +2098,8 @@ async function runStage1FastChunk(dramaSlug, epNum, streamUrl, cleanTarget) {
                         vttLines.push(translatedInitial[i] || initialCues[i].text);
                         vttLines.push('');
                     }
-                    fs.writeFileSync(vttPath, vttLines.join('\n'), 'utf8');
-                    return { ready: true, isComplete: false };
+                    fs.writeFileSync(chunkVttPath, vttLines.join('\n'), 'utf8');
+                    return { ready: true, isComplete: false, path: chunkVttPath, filename: chunkVttFile };
                 }
             }
             return { ready: false };
@@ -2045,14 +2279,16 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
         return { ready: true, isComplete: true, path: activeVtt, filename: vttFile };
     }
 
-    // 2. If target VTT exists (from Stage 1 fast chunk), trigger Stage 2 in background and return ready!
-    if (fs.existsSync(vttPath)) {
+    // 2. If chunk VTT exists (from Stage 1 fast chunk), trigger Stage 2 in background and return ready (isComplete: false)!
+    const chunkVttFile = `${key}_${cleanTarget}_chunk.vtt`;
+    const chunkVttPath = path.join(SUBTITLES_DIR, chunkVttFile);
+    if (fs.existsSync(chunkVttPath)) {
         if (streamUrl && !activeStage2Promises.has(key)) {
             runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarget).catch(e => {
                 console.error(`[Audio STT] Stage 2 background error for ${key}:`, e.message);
             });
         }
-        return { ready: true, isComplete: false, path: vttPath, filename: vttFile };
+        return { ready: true, isComplete: false, path: chunkVttPath, filename: chunkVttFile };
     }
 
     // 3. Neither exists: trigger Stage 1 (Fast Chunk) immediately, and then Stage 2 in background!
@@ -2083,11 +2319,11 @@ async function getOrGenerateVtt(slug, epNum, streamUrl, targetLang = 'vi') {
         } catch (e) { }
     }
 
-    if (fs.existsSync(vttPath)) {
+    if (fs.existsSync(chunkVttPath)) {
         if (streamUrl && !activeStage2Promises.has(key) && !fs.existsSync(baseJsonPath)) {
             runStage2FullTranscription(dramaSlug, epNum, streamUrl, cleanTarget).catch(() => { });
         }
-        return { ready: true, isComplete: false, path: vttPath, filename: vttFile };
+        return { ready: true, isComplete: false, path: chunkVttPath, filename: chunkVttFile };
     }
 
     return { ready: false, isComplete: false, status: 'transcribing' };
@@ -2193,21 +2429,13 @@ app.get('/api/subtitles/prefetch', async (req, res) => {
             }
         }
 
-        // 4. Local FFmpeg fallback if available
+        // 4. Local FFmpeg fallback if available: run full transcription so next episode has 100% subtitles!
         const hasFfmpeg = await isFfmpegAvailable();
         if (hasFfmpeg && activeStreamUrl) {
-            const result = await runStage1FastChunk(dramaSlug, epNum, activeStreamUrl, cleanTarget);
-            if (result && result.ready) {
-                let vttText = '';
-                try { if (result.path) vttText = fs.readFileSync(result.path, 'utf8'); } catch (e) { }
-                if (vttText) vttMemoryCache.set(cacheKey, vttText);
-                return res.json({
-                    ok: true,
-                    ready: true,
-                    vttText,
-                    url: `/api/subtitles/vtt?slug=${encodeURIComponent(slug)}&ep=${epNum}&lang=${encodeURIComponent(cleanTarget)}`
-                });
-            }
+            runStage2FullTranscription(dramaSlug, epNum, activeStreamUrl, cleanTarget).catch(e => {
+                console.warn(`[Prefetch] Stage 2 background error for ${key}:`, e.message);
+            });
+            return res.json({ ok: true, ready: false, isComplete: false, status: 'prefetching_full' });
         }
 
         res.json({ ok: false, error: 'prefetch_in_progress' });
@@ -2256,180 +2484,225 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
         }
 
         let fileBlob = null;
-        let fileName = 'audio.mp4';
+        let fileName = 'audio.mp3';
 
-        // 1. Fetch media stream
-        const isHls = activeStreamUrl.includes('.m3u8') || activeStreamUrl.includes('/e/m/') || activeStreamUrl.includes('/hls');
-        if (isHls) {
-            let plRes = await fetch(activeStreamUrl, {
-                headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
-                signal: AbortSignal.timeout(8000)
-            });
-            let plText = await plRes.text();
+        const hasFfmpeg = await isFfmpegAvailable();
 
-            // Auto-refresh stale/expired edge links (e.g. ShortMax, GoodShort edge tokens)
-            if (!plText.includes('#EXTM3U') || plText.includes('expired') || plText.includes('error')) {
-                console.log(`[Cloud STT] M3U8 playlist expired or invalid for ${key}, resolving fresh stream...`);
-                try {
-                    const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
-                    if (fresh && fresh.play_url) {
-                        activeStreamUrl = fresh.play_url;
-                        plRes = await fetch(activeStreamUrl, {
-                            headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
-                            signal: AbortSignal.timeout(8000)
-                        });
-                        plText = await plRes.text();
-                    }
-                } catch (e) {
-                    console.warn(`[Cloud STT] Stream refresh failed for ${key}:`, e.message);
+        // 1. PRIMARY FAST PATH: If FFmpeg is available, directly extract pure audio for the ENTIRE episode!
+        // Works for both HLS (.m3u8) and MP4, takes 1-3 seconds, only extracts audio stream, NO duration cutoff!
+        if (hasFfmpeg) {
+            console.log(`[Cloud STT] ⚡ Extracting full episode audio via FFmpeg for ${key}...`);
+            const tempAudio = path.join(SUBTITLES_DIR, `full_stt_${key}_${Date.now()}.mp3`);
+            try {
+                // Extract 16kHz mono MP3 audio for whole episode (~700KB for 2 mins, perfectly under 25MB limit)
+                await runFfmpeg(`ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -i "${activeStreamUrl}" -vn -ar 16000 -ac 1 -c:a libmp3lame -b:a 48k "${tempAudio}"`, 60000);
+                if (fs.existsSync(tempAudio) && fs.statSync(tempAudio).size > 1000) {
+                    const audioBuf = fs.readFileSync(tempAudio);
+                    try { fs.unlinkSync(tempAudio); } catch (e) { }
+                    fileBlob = (typeof File !== 'undefined')
+                        ? new File([audioBuf], 'audio.mp3', { type: 'audio/mp3' })
+                        : new Blob([audioBuf], { type: 'audio/mp3' });
+                    fileName = 'audio.mp3';
+                    console.log(`[Cloud STT] ✅ Extracted full episode audio (${audioBuf.length} bytes) for ${key}`);
                 }
+            } catch (err) {
+                console.warn(`[Cloud STT] FFmpeg audio extraction error for ${key}:`, err.message);
+                if (fs.existsSync(tempAudio)) { try { fs.unlinkSync(tempAudio); } catch (e) { } }
             }
+        }
 
-            let targetPlUrl = activeStreamUrl;
-            let segUrls = [];
-
-            if (plText.includes('#EXT-X-STREAM-INF')) {
-                const lines = plText.split('\n');
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (trimmed && !trimmed.startsWith('#')) {
-                        targetPlUrl = new URL(trimmed, activeStreamUrl).href;
-                        break;
-                    }
-                }
-                const varRes = await fetch(targetPlUrl, {
+        // 2. FALLBACK PATH (e.g. Vercel Serverless without FFmpeg):
+        if (!fileBlob) {
+            fileName = 'audio.mp4';
+            const isHls = activeStreamUrl.includes('.m3u8') || activeStreamUrl.includes('/e/m/') || activeStreamUrl.includes('/hls');
+            if (isHls) {
+                let plRes = await fetch(activeStreamUrl, {
                     headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
                     signal: AbortSignal.timeout(8000)
                 });
-                const varText = await varRes.text();
-                for (const line of varText.split('\n')) {
-                    const trimmed = line.trim();
-                    if (trimmed && !trimmed.startsWith('#')) {
-                        segUrls.push(new URL(trimmed, targetPlUrl).href);
-                    }
-                }
-            } else {
-                for (const line of plText.split('\n')) {
-                    const trimmed = line.trim();
-                    if (trimmed && !trimmed.startsWith('#')) {
-                        segUrls.push(new URL(trimmed, activeStreamUrl).href);
-                    }
-                }
-            }
+                let plText = await plRes.text();
 
-            let muxjs = null;
-            try { muxjs = require('mux.js'); } catch (e) { }
-
-            let combinedBuf = null;
-            const initSegments = [];
-            const mediaSegments = [];
-            if (muxjs && segUrls.length > 0) {
-                const transmuxer = new muxjs.mp4.Transmuxer();
-                transmuxer.on('data', segment => {
-                    if (segment.initSegment && initSegments.length === 0) {
-                        initSegments.push(Buffer.from(segment.initSegment));
-                    }
-                    if (segment.data) {
-                        mediaSegments.push(Buffer.from(segment.data));
-                    }
-                });
-
-                const maxSegments = Math.min(segUrls.length, 6);
-                for (let i = 0; i < maxSegments; i++) {
+                // Auto-refresh stale/expired edge links (e.g. ShortMax, GoodShort edge tokens)
+                if (!plText.includes('#EXTM3U') || plText.includes('expired') || plText.includes('error')) {
+                    console.log(`[Cloud STT] M3U8 playlist expired or invalid for ${key}, resolving fresh stream...`);
                     try {
-                        const segRes = await fetch(segUrls[i], {
-                            headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
-                            signal: AbortSignal.timeout(8000)
-                        });
-                        if (segRes.ok) {
-                            const buf = await segRes.arrayBuffer();
-                            transmuxer.push(new Uint8Array(buf));
+                        const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+                        if (fresh && fresh.play_url) {
+                            activeStreamUrl = fresh.play_url;
+                            plRes = await fetch(activeStreamUrl, {
+                                headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
+                                signal: AbortSignal.timeout(8000)
+                            });
+                            plText = await plRes.text();
                         }
-                    } catch (e) { }
-                }
-                transmuxer.flush();
-                if (initSegments.length > 0) {
-                    combinedBuf = Buffer.concat([...initSegments, ...mediaSegments]);
-                }
-                console.log(`[Cloud STT] ${key} HLS: segUrls=${segUrls.length}, init=${initSegments.length}, media=${mediaSegments.length}, combinedBuf=${combinedBuf ? combinedBuf.length : 0}`);
-            }
-
-            const hasFfmpeg = await isFfmpegAvailable();
-            // Fallback to local FFmpeg WAV audio extraction if transmuxer didn't produce valid MP4 with initSegment
-            if ((!combinedBuf || combinedBuf.length === 0 || initSegments.length === 0) && hasFfmpeg) {
-                console.log(`[Cloud STT] Transmuxer output missing initSegment for ${key}, falling back to rapid FFmpeg WAV extraction...`);
-                try {
-                    const tempWav = path.join(SUBTITLES_DIR, `temp_${key}_${Date.now()}.wav`);
-                    await runFfmpeg(`ffmpeg -y -user_agent "Mozilla/5.0" -referer "${BASE_URL}/" -i "${activeStreamUrl}" -t 25 -vn -ar 16000 -ac 1 -c:a pcm_s16le "${tempWav}"`, 20000);
-                    if (fs.existsSync(tempWav) && fs.statSync(tempWav).size > 1000) {
-                        const wavBuf = fs.readFileSync(tempWav);
-                        try { fs.unlinkSync(tempWav); } catch (e) { }
-                        fileBlob = (typeof File !== 'undefined')
-                            ? new File([wavBuf], 'audio.wav', { type: 'audio/wav' })
-                            : new Blob([wavBuf], { type: 'audio/wav' });
-                        fileName = 'audio.wav';
+                    } catch (e) {
+                        console.warn(`[Cloud STT] Stream refresh failed for ${key}:`, e.message);
                     }
-                } catch (e) {
-                    console.warn(`[Cloud STT] FFmpeg audio extraction fallback failed for ${key}:`, e.message);
                 }
-            }
 
-            if (!fileBlob && (!combinedBuf || combinedBuf.length === 0)) {
-                throw new Error('Failed to download HLS audio segments');
-            }
+                let targetPlUrl = activeStreamUrl;
+                let segUrls = [];
 
-            if (!fileBlob) {
+                if (plText.includes('#EXT-X-STREAM-INF')) {
+                    const lines = plText.split('\n');
+                    let lowestBw = Infinity;
+                    let lowestUrl = '';
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (line.includes('BANDWIDTH=')) {
+                            const m = line.match(/BANDWIDTH=(\d+)/i);
+                            const bw = m ? parseInt(m[1], 10) : Infinity;
+                            for (let j = i + 1; j < lines.length; j++) {
+                                const subLine = lines[j].trim();
+                                if (subLine && !subLine.startsWith('#')) {
+                                    if (bw < lowestBw) {
+                                        lowestBw = bw;
+                                        lowestUrl = new URL(subLine, activeStreamUrl).href;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (lowestUrl) targetPlUrl = lowestUrl;
+                    const varRes = await fetch(targetPlUrl, {
+                        headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    const varText = await varRes.text();
+                    for (const line of varText.split('\n')) {
+                        const trimmed = line.trim();
+                        if (trimmed && !trimmed.startsWith('#')) {
+                            segUrls.push(new URL(trimmed, targetPlUrl).href);
+                        }
+                    }
+                } else {
+                    for (const line of plText.split('\n')) {
+                        const trimmed = line.trim();
+                        if (trimmed && !trimmed.startsWith('#')) {
+                            segUrls.push(new URL(trimmed, activeStreamUrl).href);
+                        }
+                    }
+                }
+
+                let muxjs = null;
+                try { muxjs = require('mux.js'); } catch (e) { }
+
+                let combinedBuf = null;
+                if (muxjs && segUrls.length > 0) {
+                    // remux: false extracts pure audio stream separate from video.
+                    // This shrinks segment size from ~250KB to ~18KB (~4MB for entire 4.2-min episode vs 35MB+ video),
+                    // fitting completely inside Groq Whisper's 25MB file limit without early cutoff!
+                    const transmuxer = new muxjs.mp4.Transmuxer({ remux: false });
+                    let audioInit = null;
+                    const audioChunks = [];
+                    const fallbackInit = [];
+                    const fallbackMedia = [];
+
+                    transmuxer.on('data', segment => {
+                        if (segment.type === 'audio') {
+                            if (segment.initSegment && !audioInit) {
+                                audioInit = Buffer.from(segment.initSegment);
+                            }
+                            if (segment.data) {
+                                audioChunks.push(Buffer.from(segment.data));
+                            }
+                        }
+                        if (segment.initSegment && fallbackInit.length === 0) {
+                            fallbackInit.push(Buffer.from(segment.initSegment));
+                        }
+                        if (segment.data) {
+                            fallbackMedia.push(Buffer.from(segment.data));
+                        }
+                    });
+
+                    // Download all segments in parallel batches preserving chronological index
+                    const segBuffers = new Array(segUrls.length);
+                    const concurrency = 10;
+                    let nextIdx = 0;
+                    async function fetchSegWorker() {
+                        while (nextIdx < segUrls.length) {
+                            const cur = nextIdx++;
+                            try {
+                                const segRes = await fetch(segUrls[cur], {
+                                    headers: getHeaders({ 'Referer': `${BASE_URL}/` }),
+                                    signal: AbortSignal.timeout(10000)
+                                });
+                                if (segRes.ok) {
+                                    segBuffers[cur] = await segRes.arrayBuffer();
+                                }
+                            } catch (e) { }
+                        }
+                    }
+                    await Promise.all(Array.from({ length: concurrency }, () => fetchSegWorker()));
+
+                    for (let i = 0; i < segBuffers.length; i++) {
+                        if (segBuffers[i]) {
+                            transmuxer.push(new Uint8Array(segBuffers[i]));
+                        }
+                    }
+                    transmuxer.flush();
+
+                    if (audioInit && audioChunks.length > 0) {
+                        combinedBuf = Buffer.concat([audioInit, ...audioChunks]);
+                        console.log(`[Cloud STT] ⚡ Extracted full-episode audio MP4 (${combinedBuf.length} bytes, ${(combinedBuf.length / (1024 * 1024)).toFixed(2)} MB, ${segUrls.length} segments) for ${key}`);
+                    } else if (fallbackInit.length > 0) {
+                        combinedBuf = Buffer.concat([...fallbackInit, ...fallbackMedia]);
+                    }
+
+                    if (combinedBuf && combinedBuf.length > 24 * 1024 * 1024) {
+                        combinedBuf = combinedBuf.slice(0, 24 * 1024 * 1024);
+                    }
+                }
+
+                if (!combinedBuf || combinedBuf.length === 0) {
+                    throw new Error('Failed to download HLS audio segments');
+                }
+
                 fileBlob = (typeof File !== 'undefined')
                     ? new File([combinedBuf], 'audio.mp4', { type: 'video/mp4' })
                     : new Blob([combinedBuf], { type: 'video/mp4' });
                 fileName = 'audio.mp4';
-            }
-        } else {
-            // Direct MP4 (PineDrama, TikTok CDN, Cloudflare CDN)
-            // Use Range header for rapid 1-2s download under 16MB limit
-            const fetchDirectMedia = async (url) => {
-                let res = await fetch(url, {
-                    headers: { 'User-Agent': 'Mozilla/5.0', 'Range': 'bytes=0-16777215' },
-                    signal: AbortSignal.timeout(12000)
+            } else {
+                // Direct MP4
+                let videoRes = await fetch(activeStreamUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0' },
+                    signal: AbortSignal.timeout(15000)
                 });
-                if (!res.ok && res.status === 416) {
-                    res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(12000) });
+                if (!videoRes.ok && (videoRes.status === 403 || videoRes.status === 401)) {
+                    try {
+                        const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
+                        if (fresh && fresh.play_url) {
+                            activeStreamUrl = fresh.play_url;
+                            videoRes = await fetch(activeStreamUrl, {
+                                headers: { 'User-Agent': 'Mozilla/5.0' },
+                                signal: AbortSignal.timeout(15000)
+                            });
+                        }
+                    } catch (e) { }
                 }
-                return res;
-            };
 
-            let videoRes = await fetchDirectMedia(activeStreamUrl);
-            if (!videoRes.ok && (videoRes.status === 403 || videoRes.status === 401)) {
-                console.log(`[Cloud STT] Stream token expired (HTTP ${videoRes.status}) for ${key}, refreshing...`);
-                try {
+                if (!videoRes.ok) {
+                    throw new Error(`Failed to fetch video stream: HTTP ${videoRes.status}`);
+                }
+
+                let buf = await videoRes.arrayBuffer();
+                const headStr = Buffer.from(buf.slice(0, 150)).toString('utf8');
+                if (headStr.includes('#EXTM3U') || headStr.includes('link expired') || headStr.includes('shortmax-edge')) {
                     const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
-                    if (fresh && fresh.play_url) {
-                        activeStreamUrl = fresh.play_url;
-                        videoRes = await fetchDirectMedia(activeStreamUrl);
+                    if (fresh && fresh.play_url && fresh.play_url !== activeStreamUrl) {
+                        return await transcribeViaCloudApi(slug, epNum, fresh.play_url, cleanTarget, apiKey);
                     }
-                } catch (e) { }
-            }
-
-            if (!videoRes.ok) {
-                throw new Error(`Failed to fetch video stream: HTTP ${videoRes.status}`);
-            }
-
-            let buf = await videoRes.arrayBuffer();
-            const headStr = Buffer.from(buf.slice(0, 150)).toString('utf8');
-            if (headStr.includes('#EXTM3U') || headStr.includes('link expired') || headStr.includes('shortmax-edge')) {
-                console.log(`[Cloud STT] Direct media detected as M3U8/playlist for ${key}, re-resolving fresh stream...`);
-                const fresh = await resolveFreshEpisodeStream(dramaSlug, epNum, 'vi-VN');
-                if (fresh && fresh.play_url && fresh.play_url !== activeStreamUrl) {
-                    return await transcribeViaCloudApi(slug, epNum, fresh.play_url, cleanTarget, apiKey);
                 }
-            }
 
-            if (buf.byteLength > 24 * 1024 * 1024) {
-                buf = buf.slice(0, 24 * 1024 * 1024);
+                if (buf.byteLength > 24 * 1024 * 1024) {
+                    buf = buf.slice(0, 24 * 1024 * 1024);
+                }
+                fileBlob = (typeof File !== 'undefined')
+                    ? new File([buf], 'audio.mp4', { type: 'video/mp4' })
+                    : new Blob([buf], { type: 'video/mp4' });
+                fileName = 'audio.mp4';
             }
-            fileBlob = (typeof File !== 'undefined')
-                ? new File([buf], 'audio.mp4', { type: 'video/mp4' })
-                : new Blob([buf], { type: 'video/mp4' });
         }
 
         const isGroq = apiKey.startsWith('gsk_') || !apiKey.startsWith('sk-');

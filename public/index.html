@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
     <link rel="stylesheet" href="/style.css?v=2.3.1">
 </head>
 
@@ -450,7 +450,7 @@
                         <div class="video-ambient-glow" id="video-ambient"></div>
                         <canvas id="ambient-canvas" class="ambient-canvas" width="64" height="36"></canvas>
 
-                        <video id="main-video" controls playsinline></video>
+                        <video id="main-video" controls playsinline webkit-playsinline x5-playsinline preload="metadata"></video>
                         <div id="video-overlay-loader" class="video-loading-screen" hidden>
                             <div class="stream-spinner"></div>
                         </div>

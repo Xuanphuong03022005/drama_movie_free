@@ -361,7 +361,8 @@
         setupDiscoveryFilters();
         renderHistoryRail();
         renderFavoritesRail();
-        await loadProviders();
+        renderProviders(FALLBACK_PROVIDERS);
+        loadProviders(); // Non-blocking background sync
         await loadSections();
         checkRoute();
     }
@@ -395,6 +396,8 @@
     // AMBIENT GLOW
     // ==========================================
     function startAmbientGlow() {
+        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) return; // Prevent heavy 60fps canvas pixel sampling from freezing mobile devices
         if (!ambientCanvas || !mainVideo) return;
         isAmbientActive = true;
         if (videoAmbientGlow) videoAmbientGlow.classList.add('active');
@@ -677,10 +680,20 @@
             if (!nextEpCountdown.hidden) hideCountdown();
         }
 
-        // Prefetch next episode stream & subtitles after 3s of playback or <= 30s left
-        if (currentDramaData && !_hasPrefetchedNext && (mainVideo.currentTime >= 3 || timeLeft <= 30)) {
+        // Proactive prefetch next episode stream & subtitles after 1.5s of playback or <= 45s left
+        if (currentDramaData && !_hasPrefetchedNext && (mainVideo.currentTime >= 1.5 || timeLeft <= 45)) {
             _hasPrefetchedNext = true;
             prefetchNextEpisodeStream(currentEpisodeIndex + 1);
+        } else if (currentDramaData && _hasPrefetchedNext && pct >= 45 && currentEpisodeIndex + 1 < currentDramaData.episodes.length) {
+            // Mid-episode verification: ensure next episode subtitle is ready in cache
+            const nextEp = currentDramaData.episodes[currentEpisodeIndex + 1];
+            const nextEpNum = nextEp?.number || (currentEpisodeIndex + 2);
+            const slug = getDramaSlug(currentDramaData) || currentDramaData?.slug || 'drama';
+            const subLang = selectedSubtitle || 'vi';
+            const cacheKey = `${slug}_ep${nextEpNum}_${subLang}`;
+            if (!clientSubtitleCache.has(cacheKey) && !inFlightPrefetches.has(cacheKey)) {
+                prefetchNextEpisodeSubtitle(currentEpisodeIndex + 1);
+            }
         }
     }
 
@@ -1025,8 +1038,16 @@
     };
 
     function isVttContentVietnamese(vttText) {
-        if (!vttText || typeof vttText !== 'string') return false;
-        return /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i.test(vttText);
+        if (!vttText || typeof vttText !== 'string' || !vttText.includes('-->')) return false;
+        const cues = parseWebVTT(vttText);
+        if (!cues || cues.length === 0) return false;
+        if (cues.length < 5) return false;
+        const viRegex = /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i;
+        let viCount = 0;
+        for (const c of cues) {
+            if (viRegex.test(c.text)) viCount++;
+        }
+        return (viCount / cues.length) >= 0.55;
     }
 
     function isTrackMatchingLanguage(track, targetLang) {
@@ -1215,7 +1236,8 @@
                     subStatusToast.classList.remove('hidden');
                 }
                 try {
-                    const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
+                    const groqKey = localStorage.getItem('df_groq_key') || '';
+                    const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
                     const transRes = await fetch(transUrl);
                     const transData = await transRes.json();
                     if (transData.ok && transData.vttText && isVttContentVietnamese(transData.vttText) && activeSubtitleRequest === reqId) {
@@ -3285,6 +3307,19 @@
     // ==========================================
     // 2. PROVIDERS & SECTIONS
     // ==========================================
+    const FALLBACK_PROVIDERS = [
+        { key: 'anyreel', label: 'AnyReel' },
+        { key: 'dramabox', label: 'DramaBox' },
+        { key: 'shortmax', label: 'ShortMax' },
+        { key: 'flextv', label: 'FlexTV' },
+        { key: 'reelshort', label: 'ReelShort' },
+        { key: 'melolo', label: 'Melolo' },
+        { key: 'goodshort', label: 'GoodShort' },
+        { key: 'pinedrama', label: 'PineDrama' },
+        { key: 'dotdrama', label: 'DotDrama' },
+        { key: 'vyntage', label: 'Vyntage' }
+    ];
+
     async function loadProviders() {
         try {
             const res = await fetch('/api/providers');
@@ -3347,10 +3382,81 @@
         loadSections();
     }
 
+    function applySectionsData(data, isFromCache = false) {
+        if (!data || !data.sections || data.sections.length === 0) return false;
+
+        if (Array.isArray(data.providers) && data.providers.length > 0) {
+            if (providersContainer.children.length !== data.providers.length) {
+                renderProviders(data.providers);
+            }
+        }
+
+        // Extract unique items
+        const allItems = [];
+        data.sections.forEach(sec => {
+            if (Array.isArray(sec.items)) {
+                sec.items.forEach(item => {
+                    if (!allItems.some(x => x.title === item.title)) {
+                        item.provider_key = currentProvider;
+                        allItems.push(item);
+                    }
+                });
+            }
+        });
+
+        if (allItems.length === 0) return false;
+
+        allLoadedLibraryItems = allItems;
+
+        // Setup Hero Showcase Slider with top 6 items
+        setupHeroSlider(allItems.slice(0, 6));
+
+        // Render Top 10 Rail
+        renderTop10Rail(allItems.slice(0, 10));
+
+        // Render Library Grid (or apply Smart Discovery filter if active)
+        if (activeDiscoveryMood !== 'all' || activeDiscoveryLength !== 'all') {
+            applySmartDiscoveryFilter(false);
+        } else {
+            renderGrid(allItems);
+        }
+
+        // Update Pagination
+        updatePaginationUI();
+
+        if (!isFromCache) {
+            // Low-priority background prefetch after initial rendering finishes
+            setTimeout(() => {
+                prefetchEpisodeCountsInBackground(allItems);
+            }, 4000);
+        }
+
+        return true;
+    }
+
     async function loadSections() {
-        gridLoader.hidden = false;
-        emptyState.hidden = true;
-        dramaGrid.innerHTML = '';
+        const cacheKey = `df_sec_${currentProvider}_${currentPage}_${currentLang}`;
+        let hasRenderedCached = false;
+
+        try {
+            const rawCached = sessionStorage.getItem(cacheKey);
+            if (rawCached) {
+                const cachedObj = JSON.parse(rawCached);
+                if (cachedObj && cachedObj.data && (Date.now() - (cachedObj.time || 0) < 15 * 60 * 1000)) {
+                    hasRenderedCached = applySectionsData(cachedObj.data, true);
+                    if (hasRenderedCached) {
+                        gridLoader.hidden = true;
+                        emptyState.hidden = true;
+                    }
+                }
+            }
+        } catch (e) { }
+
+        if (!hasRenderedCached) {
+            gridLoader.hidden = false;
+            emptyState.hidden = true;
+            dramaGrid.innerHTML = '';
+        }
 
         try {
             const res = await fetch(`/api/sections?provider=${currentProvider}&page=${currentPage}&lang=${currentLang}`);
@@ -3358,58 +3464,21 @@
 
             gridLoader.hidden = true;
 
-            if (Array.isArray(data.providers) && data.providers.length > 0) {
-                if (providersContainer.children.length !== data.providers.length) {
-                    renderProviders(data.providers);
-                }
-            }
-
             if (!data.ok || !data.sections || data.sections.length === 0) {
-                emptyState.hidden = false;
+                if (!hasRenderedCached) emptyState.hidden = false;
                 return;
             }
 
-            // Extract unique items
-            const allItems = [];
-            data.sections.forEach(sec => {
-                if (Array.isArray(sec.items)) {
-                    sec.items.forEach(item => {
-                        if (!allItems.some(x => x.title === item.title)) {
-                            item.provider_key = currentProvider;
-                            allItems.push(item);
-                        }
-                    });
-                }
-            });
+            try {
+                sessionStorage.setItem(cacheKey, JSON.stringify({ data, time: Date.now() }));
+            } catch (e) { }
 
-            if (allItems.length === 0) {
-                emptyState.hidden = false;
-                return;
-            }
-
-            allLoadedLibraryItems = allItems;
-
-            // Trigger low-priority background prefetch of episode counts
-            prefetchEpisodeCountsInBackground(allItems);
-
-            // Setup Hero Showcase Slider with top 6 items
-            setupHeroSlider(allItems.slice(0, 6));
-
-            // Render Top 10 Rail
-            renderTop10Rail(allItems.slice(0, 10));
-
-            // Render Library Grid (or apply Smart Discovery filter if active)
-            if (activeDiscoveryMood !== 'all' || activeDiscoveryLength !== 'all') {
-                applySmartDiscoveryFilter(false);
-            } else {
-                renderGrid(allItems);
-            }
-
-            // Update Pagination
-            updatePaginationUI();
+            applySectionsData(data, false);
         } catch (e) {
             gridLoader.hidden = true;
-            emptyState.hidden = false;
+            if (!hasRenderedCached) {
+                emptyState.hidden = false;
+            }
             console.error('Error loading sections:', e);
         }
     }
@@ -3524,12 +3593,11 @@
     }
 
     function prefetchHeroItems(items) {
-        if (!Array.isArray(items)) return;
-        items.forEach((item, idx) => {
-            setTimeout(() => {
-                fetchHeroItemDetails(item, idx);
-            }, idx * 200);
-        });
+        if (!Array.isArray(items) || items.length === 0) return;
+        // Lazily prefetch metadata only for active slide 0 after 2.5s idle to keep network free for images
+        setTimeout(() => {
+            if (items[0]) fetchHeroItemDetails(items[0], 0);
+        }, 2500);
     }
 
     function setupHeroSlider(items) {
@@ -4794,14 +4862,41 @@
 
     function isAuthKeyExpired(url) {
         if (!url || typeof url !== 'string') return true;
-        const match = url.match(/[?&]auth_key=(\d+)/i);
-        if (match) {
-            const expiry = parseInt(match[1], 10);
-            const nowSec = Math.floor(Date.now() / 1000);
-            if (expiry > 0 && expiry <= nowSec + 30) {
-                return true;
+        const nowSec = Math.floor(Date.now() / 1000);
+
+        // 1. Check wsTime parameter (Wangsu / Tencent CDN tokens expire in 2-4 hours)
+        const wsMatch = url.match(/[?&]wsTime=([0-9a-fA-F]+)/i);
+        if (wsMatch) {
+            const valStr = wsMatch[1];
+            let exp = parseInt(valStr, 10);
+            if (isNaN(exp) || exp < 1500000000 || exp > 2500000000) {
+                const hexExp = parseInt(valStr, 16);
+                if (!isNaN(hexExp) && hexExp > 1500000000 && hexExp < 2500000000) exp = hexExp;
+            }
+            if (!isNaN(exp)) {
+                if (nowSec - exp > 7200 || exp > nowSec + 86400) return true;
             }
         }
+
+        // 2. Check auth_key parameter (Alibaba Cloud CDN)
+        const authMatch = url.match(/[?&]auth_key=([^&]+)/i);
+        if (authMatch) {
+            const parts = authMatch[1].split('-');
+            for (const p of parts) {
+                const num = parseInt(p, 10);
+                if (num > 1500000000 && num < 2500000000) {
+                    if (num <= nowSec + 30 || nowSec - num > 7200) return true;
+                }
+            }
+        }
+
+        // 3. Check expires / expire parameter
+        const expMatch = url.match(/[?&]expires?=(\d+)/i);
+        if (expMatch) {
+            const exp = parseInt(expMatch[1], 10);
+            if (exp > 0 && exp <= nowSec + 30) return true;
+        }
+
         return false;
     }
 
@@ -4810,7 +4905,7 @@
         videoOverlayLoader.hidden = false;
         let streamUrl = episode.play_url || episode.direct_play_url;
 
-        const needsStreamRefresh = !streamUrl || isAuthKeyExpired(streamUrl) || (!episode.subtitle_url && (!episode.subtitles || episode.subtitles.length === 0));
+        const needsStreamRefresh = !streamUrl || isAuthKeyExpired(streamUrl);
         if (needsStreamRefresh) {
             try {
                 const epNum = episode.number || (currentEpisodeIndex + 1);
@@ -4842,6 +4937,8 @@
         streamTypeBadge.innerHTML = isHls ? '<i class="fa-solid fa-bolt"></i> HLS 1080p' : '<i class="fa-solid fa-play"></i> Direct MP4';
 
         if (hls) { hls.destroy(); hls = null; }
+
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
 
         // Proactive Non-CORS Direct MP4 routing (e.g. cdn.playsverse.com)
         const isNonCorsDomain = !isHls && (
@@ -4877,7 +4974,7 @@
                     const refreshUrl = `/api/episode/refresh?slug=${encodeURIComponent(slug)}&ep=${epNum}&watch_url=${encodeURIComponent(watchUrl)}`;
                     const epRes = await fetch(refreshUrl);
                     const epData = await epRes.json();
-                    if (epData.ok && epData.play_url && epData.play_url !== streamUrl) {
+                    if (epData.ok && epData.play_url) {
                         console.log(`[StreamRecovery] Got fresh stream URL:`, epData.play_url);
                         episode.play_url = epData.play_url;
                         episode.direct_play_url = epData.direct_play_url || '';
@@ -4902,12 +4999,19 @@
                     hls.loadSource(proxyUrl);
                 } else {
                     mainVideo.src = proxyUrl;
-                    mainVideo.onloadeddata = () => {
+                    let hasMarkedReady = false;
+                    const onReady = () => {
+                        if (hasMarkedReady) return;
+                        hasMarkedReady = true;
                         videoOverlayLoader.hidden = true;
                         mainVideo.play().catch(() => { });
                         startAmbientGlow();
                         if (resumeTime > 3) setTimeout(() => showResumeBanner(resumeTime), 1200);
                     };
+                    mainVideo.onloadedmetadata = onReady;
+                    mainVideo.oncanplay = onReady;
+                    mainVideo.onloadeddata = onReady;
+                    mainVideo.onplaying = () => { videoOverlayLoader.hidden = true; };
                     mainVideo.onerror = () => {
                         showStreamErrorUI(episode);
                     };
@@ -4924,7 +5028,19 @@
         }
 
         if (isHls && window.Hls && Hls.isSupported()) {
-            hls = new Hls({ enableWorker: true, lowLatencyMode: false, backBufferLength: 90 });
+            hls = new Hls({
+                enableWorker: !isMobileDevice,
+                lowLatencyMode: true,
+                capLevelToPlayerSize: true,
+                startLevel: isMobileDevice ? 0 : -1,
+                backBufferLength: isMobileDevice ? 15 : 60,
+                maxBufferLength: isMobileDevice ? 15 : 30,
+                maxMaxBufferLength: isMobileDevice ? 25 : 60,
+                maxBufferSize: isMobileDevice ? 15 * 1024 * 1024 : 60 * 1024 * 1024,
+                maxBufferHole: 0.5,
+                highBufferWatchdogPeriod: 2,
+                progressive: true
+            });
             hls.loadSource(playbackUrl);
             hls.attachMedia(mainVideo);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -4957,12 +5073,19 @@
             });
         } else {
             mainVideo.src = playbackUrl;
-            mainVideo.onloadeddata = () => {
+            let hasMarkedReady = false;
+            const onReady = () => {
+                if (hasMarkedReady) return;
+                hasMarkedReady = true;
                 videoOverlayLoader.hidden = true;
                 mainVideo.play().catch(() => { });
                 startAmbientGlow();
                 if (resumeTime > 3) setTimeout(() => showResumeBanner(resumeTime), 1200);
             };
+            mainVideo.onloadedmetadata = onReady;
+            mainVideo.oncanplay = onReady;
+            mainVideo.onloadeddata = onReady;
+            mainVideo.onplaying = () => { videoOverlayLoader.hidden = true; };
             mainVideo.onerror = () => {
                 handleStreamError('HTML5 Video Error');
             };
@@ -5001,6 +5124,12 @@
                     directSubTrack = nextEp.subtitles.find(s => isTrackMatchingLanguage(s, subLang));
                 }
 
+                const triggerNextNext = () => {
+                    if (currentDramaData && currentDramaData.episodes && nextIndex + 1 < currentDramaData.episodes.length) {
+                        setTimeout(() => prefetchNextEpisodeSubtitle(nextIndex + 1), 1200);
+                    }
+                };
+
                 if (directSubTrack && directSubTrack.subtitle_url) {
                     try {
                         let fetchUrl = directSubTrack.subtitle_url;
@@ -5012,6 +5141,7 @@
                                 clientSubtitleCache.set(cacheKey, { vttText: text, url: fetchUrl });
                                 console.log(`[Subtitle Prefetch] ⚡ Phụ đề Tập ${epNum} đã sẵn sàng từ trước!`);
                                 inFlightPrefetches.delete(cacheKey);
+                                triggerNextNext();
                                 return;
                             }
                         }
@@ -5032,13 +5162,15 @@
 
                 if (candidateUpstreamUrl && cleanSubLang === 'vi') {
                     try {
-                        const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
+                        const groqKey = localStorage.getItem('df_groq_key') || '';
+                        const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
                         const transRes = await fetch(transUrl);
                         const transData = await transRes.json();
                         if (transData.ok && transData.vttText && isVttContentVietnamese(transData.vttText)) {
                             clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
                             console.log(`[Subtitle Prefetch] ⚡ Phụ đề Tập ${epNum} đã dịch xong từ trước!`);
                             inFlightPrefetches.delete(cacheKey);
+                            triggerNextNext();
                             return;
                         }
                     } catch (e) { }
@@ -5062,13 +5194,15 @@
 
                 if (candidateUpstreamUrl && cleanSubLang === 'vi') {
                     try {
-                        const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi`;
+                        const groqKey = localStorage.getItem('df_groq_key') || '';
+                        const transUrl = `/api/subtitles/translate-vtt?url=${encodeURIComponent(candidateUpstreamUrl)}&slug=${encodeURIComponent(slug)}&ep=${epNum}&target_lang=vi${groqKey ? '&groq_key=' + encodeURIComponent(groqKey) : ''}`;
                         const transRes = await fetch(transUrl);
                         const transData = await transRes.json();
                         if (transData.ok && transData.vttText && isVttContentVietnamese(transData.vttText)) {
                             clientSubtitleCache.set(cacheKey, { vttText: transData.vttText, url: transData.url });
                             console.log(`[Subtitle Prefetch] ⚡ Phụ đề Tập ${epNum} đã dịch xong từ trước!`);
                             inFlightPrefetches.delete(cacheKey);
+                            triggerNextNext();
                             return;
                         }
                     } catch (e) { }
@@ -5087,6 +5221,7 @@
                     if (cleanSubLang !== 'vi' || isVttContentVietnamese(data.vttText)) {
                         clientSubtitleCache.set(cacheKey, { vttText: data.vttText, url: data.url });
                         console.log(`[Subtitle Prefetch] 🎉 Đã dịch xong phụ đề Tập ${epNum}! Khi xem sẽ có ngay lập tức.`);
+                        triggerNextNext();
                     }
                 }
             } catch (err) {
