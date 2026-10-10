@@ -2720,26 +2720,3 @@ if (require.main === module) {
 }
 
 module.exports = app;
-    } catch (err) {
-    console.error('Error in /api/subtitles/vtt:', err);
-    res.status(500).send(err.message);
-}
-});
-
-// SPA fallback
-app.get('*', (req, res) => {
-    const indexPath = path.join(__dirname, 'public', 'index.html');
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).send('Not Found');
-    }
-});
-
-if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`Server running at http://localhost:${PORT}`);
-    });
-}
-
-module.exports = app;
