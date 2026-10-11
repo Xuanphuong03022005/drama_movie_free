@@ -2444,15 +2444,17 @@ body {
 
 .card-badge-ep {
     position: absolute;
-    bottom: 9px;
-    right: 9px;
-    top: auto;
+    top: 10px;
+    right: 10px;
+    bottom: auto;
     left: auto;
+    width: auto;
+    height: auto;
     background: rgba(10, 14, 26, 0.85);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     padding: 3.5px 9px;
-    border-radius: 6px;
+    border-radius: 9999px;
     font-size: 11px;
     font-weight: 700;
     color: #f1f5f9;
@@ -2460,7 +2462,7 @@ body {
     z-index: 3;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
     pointer-events: none;
     white-space: nowrap;
@@ -9098,38 +9100,57 @@ body.theme-light .player-modal.miniplayer-mode .miniplayer-progress-track,
     position: absolute !important;
     top: 10px !important;
     left: 10px !important;
-    background: rgba(15, 17, 28, 0.8) !important;
+    bottom: auto !important;
+    right: auto !important;
+    width: auto !important;
+    height: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    background: rgba(15, 17, 28, 0.85) !important;
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
     border: 1px solid rgba(255, 255, 255, 0.18) !important;
     color: #e2e8f0 !important;
     font-size: 11px !important;
     font-weight: 700 !important;
-    padding: 4px 10px !important;
+    padding: 3.5px 10px !important;
     border-radius: 9999px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
-    z-index: 2 !important;
+    z-index: 3 !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
 }
 
 .card-badge-ep {
     position: absolute !important;
     top: 10px !important;
     right: 10px !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: auto !important;
+    height: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
     background: rgba(15, 23, 42, 0.85) !important;
     backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
     border: 1px solid rgba(16, 185, 129, 0.4) !important;
     color: #6ee7b7 !important;
     font-size: 11px !important;
     font-weight: 700 !important;
-    padding: 4px 10px !important;
+    padding: 3.5px 10px !important;
     border-radius: 9999px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
-    z-index: 2 !important;
+    z-index: 3 !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
 }
 
 .card-badge-ep i {
     color: #10b981 !important;
-    margin-right: 3px !important;
+    font-size: 10px !important;
+    margin-right: 2px !important;
 }
 
 .card-play-btn-circle {
