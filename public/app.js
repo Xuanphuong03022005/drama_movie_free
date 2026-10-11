@@ -3458,19 +3458,222 @@
     // 2. PROVIDERS & SECTIONS
     // ==========================================
     const FALLBACK_PROVIDERS = [
-        { key: 'anyreel', label: 'AnyReel' },
-        { key: 'dramabox', label: 'DramaBox' },
-        { key: 'shortmax', label: 'ShortMax' },
-        { key: 'flextv', label: 'FlexTV' },
-        { key: 'reelshort', label: 'ReelShort' },
-        { key: 'melolo', label: 'Melolo' },
-        { key: 'goodshort', label: 'GoodShort' },
-        { key: 'pinedrama', label: 'PineDrama' },
-        { key: 'dotdrama', label: 'DotDrama' },
-        { key: 'dotdrama2', label: 'DotDrama II' },
-        { key: 'dramabite', label: 'Dramabite' },
-        { key: 'dramanova', label: 'DramaNova' },
-        { key: 'dramashorts', label: 'DramaShorts' }
+            {
+                    "key": "anyreel",
+                    "label": "AnyReel"
+            },
+            {
+                    "key": "bibishort",
+                    "label": "BibiShort"
+            },
+            {
+                    "key": "candyjar",
+                    "label": "CandyJar"
+            },
+            {
+                    "key": "cubetv",
+                    "label": "CubeTV"
+            },
+            {
+                    "key": "dotdrama",
+                    "label": "DotDrama"
+            },
+            {
+                    "key": "dotdrama2",
+                    "label": "DotDrama II"
+            },
+            {
+                    "key": "dramabite",
+                    "label": "Dramabite"
+            },
+            {
+                    "key": "dramabox",
+                    "label": "DramaBox"
+            },
+            {
+                    "key": "dramanova",
+                    "label": "DramaNova"
+            },
+            {
+                    "key": "dramashorts",
+                    "label": "DramaShorts"
+            },
+            {
+                    "key": "dramatv",
+                    "label": "DramaTV"
+            },
+            {
+                    "key": "dramawave",
+                    "label": "DramaWave"
+            },
+            {
+                    "key": "dreameshort",
+                    "label": "DreameShort"
+            },
+            {
+                    "key": "flareflow",
+                    "label": "FlareFlow"
+            },
+            {
+                    "key": "flextv",
+                    "label": "FlexTV"
+            },
+            {
+                    "key": "flickreels",
+                    "label": "FlickReels"
+            },
+            {
+                    "key": "freedrama",
+                    "label": "FreeDrama"
+            },
+            {
+                    "key": "freereels",
+                    "label": "FreeReels"
+            },
+            {
+                    "key": "fundrama",
+                    "label": "Fun Drama"
+            },
+            {
+                    "key": "goodshort",
+                    "label": "GoodShort"
+            },
+            {
+                    "key": "happyshort",
+                    "label": "HappyShort"
+            },
+            {
+                    "key": "idrama",
+                    "label": "iDrama"
+            },
+            {
+                    "key": "joyreels",
+                    "label": "JoyReels"
+            },
+            {
+                    "key": "kalostv",
+                    "label": "KalosTV"
+            },
+            {
+                    "key": "melolo",
+                    "label": "Melolo"
+            },
+            {
+                    "key": "microdrama",
+                    "label": "MicroDrama"
+            },
+            {
+                    "key": "minishorts",
+                    "label": "MiniShorts"
+            },
+            {
+                    "key": "minutedrama",
+                    "label": "MinuteDrama"
+            },
+            {
+                    "key": "moboreels",
+                    "label": "MoboReels"
+            },
+            {
+                    "key": "mydrama",
+                    "label": "My Drama"
+            },
+            {
+                    "key": "myrelle",
+                    "label": "MyRelle"
+            },
+            {
+                    "key": "netshort",
+                    "label": "NetShort"
+            },
+            {
+                    "key": "ohmytv",
+                    "label": "OhMyTV"
+            },
+            {
+                    "key": "pinedrama",
+                    "label": "PineDrama"
+            },
+            {
+                    "key": "playlet",
+                    "label": "Playlet"
+            },
+            {
+                    "key": "rapidtv",
+                    "label": "RapidTV"
+            },
+            {
+                    "key": "rapidtv2",
+                    "label": "RapidTV II"
+            },
+            {
+                    "key": "raptdrama",
+                    "label": "RaptDrama"
+            },
+            {
+                    "key": "reelala",
+                    "label": "Reelala"
+            },
+            {
+                    "key": "reelbuzz",
+                    "label": "ReelBuzz"
+            },
+            {
+                    "key": "reelife",
+                    "label": "Reelife"
+            },
+            {
+                    "key": "reelshort",
+                    "label": "ReelShort"
+            },
+            {
+                    "key": "sarostv",
+                    "label": "SAROS TV"
+            },
+            {
+                    "key": "serealplus",
+                    "label": "Sereal+"
+            },
+            {
+                    "key": "shortical",
+                    "label": "Shortical"
+            },
+            {
+                    "key": "shortmax",
+                    "label": "ShortMax"
+            },
+            {
+                    "key": "sixthshort",
+                    "label": "SixthShort"
+            },
+            {
+                    "key": "stardusttv",
+                    "label": "StardustTV"
+            },
+            {
+                    "key": "starshort",
+                    "label": "StarShort"
+            },
+            {
+                    "key": "storeel",
+                    "label": "Storeel"
+            },
+            {
+                    "key": "topdrama",
+                    "label": "TopDrama"
+            },
+            {
+                    "key": "velolo",
+                    "label": "Velolo"
+            },
+            {
+                    "key": "vigloo",
+                    "label": "Vigloo"
+            },
+            {
+                    "key": "vyntage",
+                    "label": "Vyntage"
+            }
     ];
 
     async function loadProviders() {
@@ -3478,9 +3681,7 @@
             const res = await fetch('/api/providers');
             const data = await res.json();
             if (data.ok && Array.isArray(data.providers) && data.providers.length > 0) {
-                const supportedKeys = new Set(FALLBACK_PROVIDERS.map(p => p.key));
-                const verified = data.providers.filter(p => supportedKeys.has(p.key?.toLowerCase()));
-                renderProviders(verified.length > 0 ? verified : FALLBACK_PROVIDERS);
+                renderProviders(data.providers);
             } else {
                 renderProviders(FALLBACK_PROVIDERS);
             }
@@ -3559,9 +3760,7 @@
         if (!data || !data.sections || data.sections.length === 0) return false;
 
         if (Array.isArray(data.providers) && data.providers.length > 0) {
-            const supportedKeys = new Set(FALLBACK_PROVIDERS.map(p => p.key));
-            const verified = data.providers.filter(p => supportedKeys.has(p.key?.toLowerCase()));
-            const provsToUse = verified.length > 0 ? verified : data.providers;
+            const provsToUse = data.providers;
             const currentPillCount = providersContainer.querySelectorAll('[data-provider]').length;
             if (provsToUse.length !== currentPillCount) {
                 renderProviders(provsToUse);

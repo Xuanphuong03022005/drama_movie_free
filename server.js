@@ -147,8 +147,8 @@ app.get('/api/drama/supabase-list', async (req, res) => {
     }
 });
 
-const UPSTREAM_HOSTS = ['https://edge.narto-drama.com', 'https://narto-drama.com'];
-const BASE_URL = 'https://edge.narto-drama.com';
+const UPSTREAM_HOSTS = ['https://narto-drama.com', 'https://edge.narto-drama.com'];
+const BASE_URL = 'https://narto-drama.com';
 const ORIGIN_URL = 'https://narto-drama.com';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -352,15 +352,11 @@ async function fetchLiveProvidersFromUpstream() {
         }, 5000);
         if (response && response.ok) {
             const data = await response.json();
-            if (Array.isArray(data.providers) && data.providers.length > 0) {
-                const validKeys = new Set(localFallbackSections ? Object.keys(localFallbackSections) : FALLBACK_PROVIDERS.map(p => p.key));
-                const filtered = data.providers.filter(p => p && p.key && validKeys.has(p.key.toLowerCase()));
-                if (filtered.length >= 5) {
-                    cachedProviders = filtered;
-                    lastProvidersFetch = Date.now();
-                    console.log(`[Providers] Successfully synced and verified ${cachedProviders.length} active providers`);
-                    return cachedProviders;
-                }
+            if (Array.isArray(data.providers) && data.providers.length >= 10) {
+                cachedProviders = data.providers.filter(p => p && p.key && typeof p.key === 'string');
+                lastProvidersFetch = Date.now();
+                console.log(`[Providers] Successfully synced ${cachedProviders.length} active providers from upstream`);
+                return cachedProviders;
             }
         }
     } catch (err) {
@@ -496,13 +492,9 @@ app.get('/api/sections', async (req, res) => {
             data = (localFallbackSections && localFallbackSections[provider]) ? localFallbackSections[provider] : { sections: [] };
         }
 
-        if (Array.isArray(data.providers) && data.providers.length > 0) {
-            const validKeys = new Set(localFallbackSections ? Object.keys(localFallbackSections) : FALLBACK_PROVIDERS.map(p => p.key));
-            const filtered = data.providers.filter(p => p && p.key && validKeys.has(p.key.toLowerCase()));
-            if (filtered.length >= 5) {
-                cachedProviders = filtered;
-                lastProvidersFetch = Date.now();
-            }
+        if (Array.isArray(data.providers) && data.providers.length >= 10) {
+            cachedProviders = data.providers.filter(p => p && p.key && typeof p.key === 'string');
+            lastProvidersFetch = Date.now();
         }
 
         // Normalize poster URLs across all sections and items
