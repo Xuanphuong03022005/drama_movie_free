@@ -1917,6 +1917,89 @@
             });
         }
 
+        // Mobile Bottom Navigation Dock Handlers
+        const dockHome = document.getElementById('dock-home-btn');
+        const dockTop10 = document.getElementById('dock-top10-btn');
+        const dockDiscovery = document.getElementById('dock-discovery-btn');
+        const dockFavorites = document.getElementById('dock-favorites-btn');
+        const dockHistory = document.getElementById('dock-history-btn');
+
+        function setDockActive(activeEl) {
+            document.querySelectorAll('.dock-item').forEach(el => el.classList.remove('active'));
+            if (activeEl) activeEl.classList.add('active');
+        }
+
+        if (dockHome) {
+            dockHome.addEventListener('click', (e) => {
+                e.preventDefault();
+                setDockActive(dockHome);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+        if (dockTop10) {
+            dockTop10.addEventListener('click', (e) => {
+                e.preventDefault();
+                setDockActive(dockTop10);
+                const el = document.getElementById('top10');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+        if (dockDiscovery) {
+            dockDiscovery.addEventListener('click', (e) => {
+                e.preventDefault();
+                openDiscoveryModal();
+            });
+        }
+        if (dockFavorites) {
+            dockFavorites.addEventListener('click', (e) => {
+                e.preventDefault();
+                setDockActive(dockFavorites);
+                const favList = getFavorites();
+                if (favList.length === 0) {
+                    showToast(t('toast_fav_empty'), 'fa-heart');
+                } else {
+                    favoritesSection.hidden = false;
+                    favoritesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        }
+        if (dockHistory) {
+            dockHistory.addEventListener('click', (e) => {
+                e.preventDefault();
+                setDockActive(dockHistory);
+                const histList = getHistory();
+                if (histList.length === 0) {
+                    showToast(t('toast_history_empty'), 'fa-clock-rotate-left');
+                } else {
+                    historySection.hidden = false;
+                    historySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        }
+
+        // Auto-sync active dock item on scroll
+        let dockScrollTimer = null;
+        window.addEventListener('scroll', () => {
+            if (dockScrollTimer) return;
+            dockScrollTimer = setTimeout(() => {
+                dockScrollTimer = null;
+                const scrollY = window.scrollY || window.pageYOffset;
+                const top10El = document.getElementById('top10');
+                const favEl = document.getElementById('favorites-section');
+                const histEl = document.getElementById('history-section');
+
+                if (favEl && !favEl.hidden && favEl.offsetTop && Math.abs(scrollY - favEl.offsetTop) < 250) {
+                    setDockActive(dockFavorites);
+                } else if (histEl && !histEl.hidden && histEl.offsetTop && Math.abs(scrollY - histEl.offsetTop) < 250) {
+                    setDockActive(dockHistory);
+                } else if (top10El && top10El.offsetTop && Math.abs(scrollY - top10El.offsetTop) < 350) {
+                    setDockActive(dockTop10);
+                } else if (scrollY < 400) {
+                    setDockActive(dockHome);
+                }
+            }, 100);
+        }, { passive: true });
+
         // VIP Login Modal Controls
         if (navLoginBtn) {
             navLoginBtn.addEventListener('click', () => {
@@ -3057,12 +3140,25 @@
         const catalogSuffix = document.getElementById('catalog-title-suffix');
         if (catalogSuffix) catalogSuffix.textContent = t('catalog_suffix');
         const catalogSub = document.getElementById('catalog-subtitle');
-        if (catalogSub) catalogSub.textContent = t('catalog_subtitle', { provider: currentProvider.toUpperCase() });
+        const activeProviderName = currentProviderTitle ? currentProviderTitle.textContent : currentProvider.toUpperCase();
+        if (catalogSub) catalogSub.textContent = t('catalog_subtitle', { provider: activeProviderName });
 
         const emptyTitle = document.getElementById('empty-title');
         if (emptyTitle) emptyTitle.textContent = t('empty_title');
         const emptyDesc = document.getElementById('empty-desc');
         if (emptyDesc) emptyDesc.textContent = t('empty_desc');
+
+        // Mobile Bottom Dock labels
+        const dockHomeText = document.getElementById('dock-home-text');
+        if (dockHomeText) dockHomeText.textContent = t('nav_home') || (isVi ? 'Trang chủ' : 'Home');
+        const dockTop10Text = document.getElementById('dock-top10-text');
+        if (dockTop10Text) dockTop10Text.textContent = 'Top 10';
+        const dockDiscoveryText = document.getElementById('dock-discovery-text');
+        if (dockDiscoveryText) dockDiscoveryText.textContent = t('discovery_nav') || (isVi ? 'Khám phá' : 'Discover');
+        const dockFavText = document.getElementById('dock-favorites-text');
+        if (dockFavText) dockFavText.textContent = isVi ? 'Yêu thích' : 'Favorites';
+        const dockHistoryText = document.getElementById('dock-history-text');
+        if (dockHistoryText) dockHistoryText.textContent = isVi ? 'Xem tiếp' : 'History';
 
         // Filter banner
         const clearFilterBtn = document.getElementById('clear-filter-btn');
@@ -3363,59 +3459,18 @@
     // ==========================================
     const FALLBACK_PROVIDERS = [
         { key: 'anyreel', label: 'AnyReel' },
-        { key: 'bibishort', label: 'BibiShort' },
-        { key: 'candyjar', label: 'CandyJar' },
-        { key: 'cubetv', label: 'CubeTV' },
+        { key: 'dramabox', label: 'DramaBox' },
+        { key: 'shortmax', label: 'ShortMax' },
+        { key: 'flextv', label: 'FlexTV' },
+        { key: 'reelshort', label: 'ReelShort' },
+        { key: 'melolo', label: 'Melolo' },
+        { key: 'goodshort', label: 'GoodShort' },
+        { key: 'pinedrama', label: 'PineDrama' },
         { key: 'dotdrama', label: 'DotDrama' },
         { key: 'dotdrama2', label: 'DotDrama II' },
         { key: 'dramabite', label: 'Dramabite' },
-        { key: 'dramabox', label: 'DramaBox' },
         { key: 'dramanova', label: 'DramaNova' },
-        { key: 'dramashorts', label: 'DramaShorts' },
-        { key: 'dramatv', label: 'DramaTV' },
-        { key: 'dramawave', label: 'DramaWave' },
-        { key: 'dreameshort', label: 'DreameShort' },
-        { key: 'flareflow', label: 'FlareFlow' },
-        { key: 'flextv', label: 'FlexTV' },
-        { key: 'flickreels', label: 'FlickReels' },
-        { key: 'freedrama', label: 'FreeDrama' },
-        { key: 'freereels', label: 'FreeReels' },
-        { key: 'fundrama', label: 'Fun Drama' },
-        { key: 'goodshort', label: 'GoodShort' },
-        { key: 'happyshort', label: 'HappyShort' },
-        { key: 'idrama', label: 'iDrama' },
-        { key: 'joyreels', label: 'JoyReels' },
-        { key: 'kalostv', label: 'KalosTV' },
-        { key: 'melolo', label: 'Melolo' },
-        { key: 'microdrama', label: 'MicroDrama' },
-        { key: 'minishorts', label: 'MiniShorts' },
-        { key: 'minutedrama', label: 'MinuteDrama' },
-        { key: 'moboreels', label: 'MoboReels' },
-        { key: 'mydrama', label: 'My Drama' },
-        { key: 'myrelle', label: 'MyRelle' },
-        { key: 'netshort', label: 'NetShort' },
-        { key: 'ohmytv', label: 'OhMyTV' },
-        { key: 'pinedrama', label: 'PineDrama' },
-        { key: 'playlet', label: 'Playlet' },
-        { key: 'rapidtv', label: 'RapidTV' },
-        { key: 'rapidtv2', label: 'RapidTV II' },
-        { key: 'raptdrama', label: 'RaptDrama' },
-        { key: 'reelala', label: 'Reelala' },
-        { key: 'reelbuzz', label: 'ReelBuzz' },
-        { key: 'reelife', label: 'Reelife' },
-        { key: 'reelshort', label: 'ReelShort' },
-        { key: 'sarostv', label: 'SAROS TV' },
-        { key: 'serealplus', label: 'Sereal+' },
-        { key: 'shortical', label: 'Shortical' },
-        { key: 'shortmax', label: 'ShortMax' },
-        { key: 'sixthshort', label: 'SixthShort' },
-        { key: 'stardusttv', label: 'StardustTV' },
-        { key: 'starshort', label: 'StarShort' },
-        { key: 'storeel', label: 'Storeel' },
-        { key: 'topdrama', label: 'TopDrama' },
-        { key: 'velolo', label: 'Velolo' },
-        { key: 'vigloo', label: 'Vigloo' },
-        { key: 'vyntage', label: 'Vyntage' }
+        { key: 'dramashorts', label: 'DramaShorts' }
     ];
 
     async function loadProviders() {
@@ -3423,7 +3478,9 @@
             const res = await fetch('/api/providers');
             const data = await res.json();
             if (data.ok && Array.isArray(data.providers) && data.providers.length > 0) {
-                renderProviders(data.providers);
+                const supportedKeys = new Set(FALLBACK_PROVIDERS.map(p => p.key));
+                const verified = data.providers.filter(p => supportedKeys.has(p.key?.toLowerCase()));
+                renderProviders(verified.length > 0 ? verified : FALLBACK_PROVIDERS);
             } else {
                 renderProviders(FALLBACK_PROVIDERS);
             }
@@ -3480,18 +3537,21 @@
             syncDiscoveryModalChipsUI();
         }
 
+        const displayLabel = label || key.toUpperCase();
         if (activeFilterType || (activeFilterBanner && !activeFilterBanner.hidden)) {
             activeFilterType = null;
             activeFilterValue = null;
             if (activeFilterBanner) activeFilterBanner.hidden = true;
-            if (catalogSubtitle) catalogSubtitle.textContent = 'High definition streaming collection';
             const topPag = document.getElementById('top-pagination-bar');
             if (topPag) topPag.style.display = '';
+        }
+        if (catalogSubtitle) {
+            catalogSubtitle.textContent = t('catalog_subtitle', { provider: displayLabel });
         }
         document.querySelectorAll('.provider-pill').forEach(el => {
             el.classList.toggle('active', el.getAttribute('data-provider') === key);
         });
-        currentProviderTitle.textContent = label || key.toUpperCase();
+        currentProviderTitle.textContent = displayLabel;
         loadSections();
     }
 
@@ -3499,10 +3559,18 @@
         if (!data || !data.sections || data.sections.length === 0) return false;
 
         if (Array.isArray(data.providers) && data.providers.length > 0) {
+            const supportedKeys = new Set(FALLBACK_PROVIDERS.map(p => p.key));
+            const verified = data.providers.filter(p => supportedKeys.has(p.key?.toLowerCase()));
+            const provsToUse = verified.length > 0 ? verified : data.providers;
             const currentPillCount = providersContainer.querySelectorAll('[data-provider]').length;
-            if (data.providers.length >= currentPillCount && currentPillCount !== data.providers.length) {
-                renderProviders(data.providers);
+            if (provsToUse.length !== currentPillCount) {
+                renderProviders(provsToUse);
             }
+        }
+
+        const activeLabel = currentProviderTitle ? currentProviderTitle.textContent : currentProvider.toUpperCase();
+        if (catalogSubtitle && (!activeFilterType || !activeFilterBanner || activeFilterBanner.hidden)) {
+            catalogSubtitle.textContent = t('catalog_subtitle', { provider: activeLabel });
         }
 
         // Extract unique items
@@ -3637,7 +3705,7 @@
         }
 
         // Show subtle loading state until accurate episode count arrives
-        heroEpisodesBadge.textContent = `... ${t('hero_episodes_suffix')}`;
+        heroEpisodesBadge.innerHTML = `<i class="fa-solid fa-film"></i> <span>... ${t('hero_episodes_suffix')}</span>`;
         heroEpisodesBadge.style.opacity = '0.65';
 
         fetchHeroItemDetails(item, slideIndex);
@@ -3652,7 +3720,7 @@
             item.total_episodes = cached.total_episodes;
             if (cached.episodes) item.episodes = cached.episodes;
             if (currentHeroIndex === slideIndex && heroEpisodesBadge) {
-                heroEpisodesBadge.textContent = `${cached.total_episodes} ${t('hero_episodes_suffix')}`;
+                heroEpisodesBadge.innerHTML = `<i class="fa-solid fa-film"></i> <span>${cached.total_episodes} ${t('hero_episodes_suffix')}</span>`;
                 heroEpisodesBadge.style.opacity = '1';
             }
             return Promise.resolve(cached);
@@ -3661,7 +3729,7 @@
         if (heroItemFetchPromises.has(watchUrl)) {
             return heroItemFetchPromises.get(watchUrl).then(data => {
                 if (data && currentHeroIndex === slideIndex && heroEpisodesBadge) {
-                    heroEpisodesBadge.textContent = `${data.total_episodes} ${t('hero_episodes_suffix')}`;
+                    heroEpisodesBadge.innerHTML = `<i class="fa-solid fa-film"></i> <span>${data.total_episodes} ${t('hero_episodes_suffix')}</span>`;
                     heroEpisodesBadge.style.opacity = '1';
                 }
                 return data;
@@ -3684,7 +3752,7 @@
 
                     // Update badge if user is currently viewing this slide
                     if (currentHeroIndex === slideIndex && heroEpisodesBadge) {
-                        heroEpisodesBadge.textContent = `${count} ${t('hero_episodes_suffix')}`;
+                        heroEpisodesBadge.innerHTML = `<i class="fa-solid fa-film"></i> <span>${count} ${t('hero_episodes_suffix')}</span>`;
                         heroEpisodesBadge.style.opacity = '1';
                     }
                     return data;
@@ -3739,7 +3807,10 @@
             card.setAttribute('title', item.title || '');
 
             const posterSrc = formatPosterUrl(item.poster_url);
-            const providerName = item.category_name || currentProvider || 'DramaBox';
+            const activeLabel = currentProviderTitle ? currentProviderTitle.textContent : (currentProvider ? currentProvider.toUpperCase() : 'DramaFlow');
+            const providerName = (item.category_name && item.category_name.toLowerCase() === currentProvider.toLowerCase())
+                ? item.category_name
+                : activeLabel;
 
             card.innerHTML = `
                 <img src="${posterSrc}" alt="${escapeHtml(item.title || '')}" loading="lazy" />
@@ -4012,12 +4083,16 @@
     // ==========================================
     function renderGrid(items) {
         dramaGrid.innerHTML = '';
+        const activeLabel = currentProviderTitle ? currentProviderTitle.textContent : currentProvider.toUpperCase();
         items.forEach(item => {
             const card = document.createElement('div');
             card.className = 'drama-card';
+            const badgeText = (item.category_name && item.category_name.toLowerCase() === currentProvider.toLowerCase())
+                ? item.category_name
+                : activeLabel;
             const tagsText = (item.tag_names && item.tag_names.length)
                 ? item.tag_names.join(' • ')
-                : (item.category_name || currentProvider.toUpperCase());
+                : badgeText;
             const posterSrc = formatPosterUrl(item.poster_url);
 
             const epCount = getItemEpisodeCount(item);
@@ -4028,7 +4103,7 @@
             card.innerHTML = `
                 <div class="poster-frame">
                     <img class="poster-img" src="${posterSrc}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_FALLBACK_POSTER}';">
-                    <span class="card-badge-provider">${item.category_name || currentProvider.toUpperCase()}</span>
+                    <span class="card-badge-provider">${escapeHtml(badgeText)}</span>
                     ${epBadgeHtml}
                     <div class="card-play-hover-overlay">
                         <div class="card-play-btn-circle"><i class="fa-solid fa-play"></i></div>
@@ -5630,6 +5705,11 @@
         if (headerFavoritesBadge) {
             headerFavoritesBadge.textContent = list.length;
             headerFavoritesBadge.hidden = list.length === 0;
+        }
+        const dockFavBadge = document.getElementById('dock-favorites-badge');
+        if (dockFavBadge) {
+            dockFavBadge.textContent = list.length;
+            dockFavBadge.hidden = list.length === 0;
         }
         if (list.length === 0) {
             favoritesSection.hidden = true;

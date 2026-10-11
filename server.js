@@ -163,59 +163,18 @@ try {
 if (!Array.isArray(FALLBACK_PROVIDERS) || FALLBACK_PROVIDERS.length === 0) {
     FALLBACK_PROVIDERS = [
         { key: 'anyreel', label: 'AnyReel' },
-        { key: 'bibishort', label: 'BibiShort' },
-        { key: 'candyjar', label: 'CandyJar' },
-        { key: 'cubetv', label: 'CubeTV' },
+        { key: 'dramabox', label: 'DramaBox' },
+        { key: 'shortmax', label: 'ShortMax' },
+        { key: 'flextv', label: 'FlexTV' },
+        { key: 'reelshort', label: 'ReelShort' },
+        { key: 'melolo', label: 'Melolo' },
+        { key: 'goodshort', label: 'GoodShort' },
+        { key: 'pinedrama', label: 'PineDrama' },
         { key: 'dotdrama', label: 'DotDrama' },
         { key: 'dotdrama2', label: 'DotDrama II' },
         { key: 'dramabite', label: 'Dramabite' },
-        { key: 'dramabox', label: 'DramaBox' },
         { key: 'dramanova', label: 'DramaNova' },
-        { key: 'dramashorts', label: 'DramaShorts' },
-        { key: 'dramatv', label: 'DramaTV' },
-        { key: 'dramawave', label: 'DramaWave' },
-        { key: 'dreameshort', label: 'DreameShort' },
-        { key: 'flareflow', label: 'FlareFlow' },
-        { key: 'flextv', label: 'FlexTV' },
-        { key: 'flickreels', label: 'FlickReels' },
-        { key: 'freedrama', label: 'FreeDrama' },
-        { key: 'freereels', label: 'FreeReels' },
-        { key: 'fundrama', label: 'Fun Drama' },
-        { key: 'goodshort', label: 'GoodShort' },
-        { key: 'happyshort', label: 'HappyShort' },
-        { key: 'idrama', label: 'iDrama' },
-        { key: 'joyreels', label: 'JoyReels' },
-        { key: 'kalostv', label: 'KalosTV' },
-        { key: 'melolo', label: 'Melolo' },
-        { key: 'microdrama', label: 'MicroDrama' },
-        { key: 'minishorts', label: 'MiniShorts' },
-        { key: 'minutedrama', label: 'MinuteDrama' },
-        { key: 'moboreels', label: 'MoboReels' },
-        { key: 'mydrama', label: 'My Drama' },
-        { key: 'myrelle', label: 'MyRelle' },
-        { key: 'netshort', label: 'NetShort' },
-        { key: 'ohmytv', label: 'OhMyTV' },
-        { key: 'pinedrama', label: 'PineDrama' },
-        { key: 'playlet', label: 'Playlet' },
-        { key: 'rapidtv', label: 'RapidTV' },
-        { key: 'rapidtv2', label: 'RapidTV II' },
-        { key: 'raptdrama', label: 'RaptDrama' },
-        { key: 'reelala', label: 'Reelala' },
-        { key: 'reelbuzz', label: 'ReelBuzz' },
-        { key: 'reelife', label: 'Reelife' },
-        { key: 'reelshort', label: 'ReelShort' },
-        { key: 'sarostv', label: 'SAROS TV' },
-        { key: 'serealplus', label: 'Sereal+' },
-        { key: 'shortical', label: 'Shortical' },
-        { key: 'shortmax', label: 'ShortMax' },
-        { key: 'sixthshort', label: 'SixthShort' },
-        { key: 'stardusttv', label: 'StardustTV' },
-        { key: 'starshort', label: 'StarShort' },
-        { key: 'storeel', label: 'Storeel' },
-        { key: 'topdrama', label: 'TopDrama' },
-        { key: 'velolo', label: 'Velolo' },
-        { key: 'vigloo', label: 'Vigloo' },
-        { key: 'vyntage', label: 'Vyntage' }
+        { key: 'dramashorts', label: 'DramaShorts' }
     ];
 }
 
@@ -393,11 +352,15 @@ async function fetchLiveProvidersFromUpstream() {
         }, 5000);
         if (response && response.ok) {
             const data = await response.json();
-            if (Array.isArray(data.providers) && data.providers.length >= 20) {
-                cachedProviders = data.providers;
-                lastProvidersFetch = Date.now();
-                console.log(`[Providers] Successfully synced ${cachedProviders.length} providers from upstream`);
-                return cachedProviders;
+            if (Array.isArray(data.providers) && data.providers.length > 0) {
+                const validKeys = new Set(localFallbackSections ? Object.keys(localFallbackSections) : FALLBACK_PROVIDERS.map(p => p.key));
+                const filtered = data.providers.filter(p => p && p.key && validKeys.has(p.key.toLowerCase()));
+                if (filtered.length >= 5) {
+                    cachedProviders = filtered;
+                    lastProvidersFetch = Date.now();
+                    console.log(`[Providers] Successfully synced and verified ${cachedProviders.length} active providers`);
+                    return cachedProviders;
+                }
             }
         }
     } catch (err) {
@@ -508,12 +471,6 @@ app.get('/api/sections', async (req, res) => {
             if (localFallbackSections[provider]) {
                 data = localFallbackSections[provider];
                 totalItems = countItems(data);
-            } else {
-                // If specific provider is not pre-baked, serve closest catalog section so page is never empty
-                const fbKeys = Object.keys(localFallbackSections);
-                const altKey = fbKeys[Math.abs(provider.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % fbKeys.length] || 'anyreel';
-                data = localFallbackSections[altKey];
-                totalItems = countItems(data);
             }
         }
 
@@ -536,12 +493,16 @@ app.get('/api/sections', async (req, res) => {
         }
 
         if (!data) {
-            data = localFallbackSections ? (localFallbackSections['anyreel'] || Object.values(localFallbackSections)[0]) : { sections: [] };
+            data = (localFallbackSections && localFallbackSections[provider]) ? localFallbackSections[provider] : { sections: [] };
         }
 
-        if (Array.isArray(data.providers) && data.providers.length >= 20) {
-            cachedProviders = data.providers;
-            lastProvidersFetch = Date.now();
+        if (Array.isArray(data.providers) && data.providers.length > 0) {
+            const validKeys = new Set(localFallbackSections ? Object.keys(localFallbackSections) : FALLBACK_PROVIDERS.map(p => p.key));
+            const filtered = data.providers.filter(p => p && p.key && validKeys.has(p.key.toLowerCase()));
+            if (filtered.length >= 5) {
+                cachedProviders = filtered;
+                lastProvidersFetch = Date.now();
+            }
         }
 
         // Normalize poster URLs across all sections and items
@@ -553,7 +514,7 @@ app.get('/api/sections', async (req, res) => {
             });
         }
 
-        const fullProvidersList = (cachedProviders && cachedProviders.length >= 20) ? cachedProviders : FALLBACK_PROVIDERS;
+        const fullProvidersList = cachedProviders || FALLBACK_PROVIDERS;
         const payload = {
             ok: true,
             provider,

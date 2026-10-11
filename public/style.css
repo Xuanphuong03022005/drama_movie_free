@@ -8795,3 +8795,693 @@ body.theme-light .player-modal.miniplayer-mode .miniplayer-progress-track,
         display: none !important;
     }
 }
+
+
+/* ==========================================================================
+   NEXT-LEVEL ULTRA-PREMIUM CINEMATIC UI ENHANCEMENTS (V3.0)
+   Designed for High-Engagement, Silky-Smooth Interactions & Pure Luxury
+   ========================================================================== */
+
+/* 1. Global Keyframes for Aurora, Shimmer & Micro-Interactions */
+@keyframes heroKenBurns {
+    0% { transform: scale(1.02) translate(0, 0); }
+    50% { transform: scale(1.08) translate(-1%, -1.5%); }
+    100% { transform: scale(1.03) translate(1%, 0.5%); }
+}
+
+@keyframes auroraFloat {
+    0%, 100% { opacity: 0.5; transform: scale(1) translate(0, 0); filter: blur(90px); }
+    50% { opacity: 0.85; transform: scale(1.15) translate(25px, -20px); filter: blur(110px); }
+}
+
+@keyframes shimmerSweep {
+    0% { transform: translateX(-150%) skewX(-20deg); }
+    25%, 100% { transform: translateX(250%) skewX(-20deg); }
+}
+
+@keyframes pulseGlowRing {
+    0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7); }
+    70% { box-shadow: 0 0 0 14px rgba(244, 63, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+}
+
+@keyframes flamePulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.05); filter: brightness(1.2); }
+}
+
+@keyframes cardFadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 2. Hero IMAX Cinema Stage Enhancements */
+.hero-showcase {
+    position: relative;
+    border-radius: clamp(20px, 2.5vw, 28px) !important;
+    overflow: hidden !important;
+    background: #06070c !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 32px 85px -15px rgba(0, 0, 0, 0.9), 0 0 60px rgba(99, 102, 241, 0.12) !important;
+    transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.hero-backdrop {
+    animation: heroKenBurns 30s infinite alternate ease-in-out !important;
+    will-change: transform;
+}
+
+.hero-ambient-glow {
+    animation: auroraFloat 12s infinite alternate ease-in-out !important;
+    will-change: transform, opacity;
+}
+
+.hero-gradient-overlay {
+    background: linear-gradient(180deg, rgba(6,7,12,0.2) 0%, rgba(6,7,12,0.65) 60%, #06070c 100%),
+                radial-gradient(circle at 75% 35%, transparent 25%, rgba(6,7,12,0.85) 85%) !important;
+}
+
+.hero-meta-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+    margin-bottom: 22px !important;
+}
+
+.hero-trend-pill {
+    background: linear-gradient(135deg, rgba(244,63,94,0.28) 0%, rgba(249,115,22,0.28) 100%) !important;
+    border: 1px solid rgba(244,63,94,0.55) !important;
+    color: #fda4af !important;
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    padding: 6px 14px !important;
+    border-radius: 9999px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    box-shadow: 0 0 20px rgba(244,63,94,0.35) !important;
+}
+
+.hero-trend-pill i {
+    color: #fb7185;
+    animation: flamePulse 2s infinite ease-in-out;
+}
+
+.hero-ep-badge {
+    background: rgba(16,185,129,0.18) !important;
+    border: 1px solid rgba(16,185,129,0.45) !important;
+    color: #6ee7b7 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    padding: 6px 14px !important;
+    border-radius: 9999px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    box-shadow: 0 0 16px rgba(16,185,129,0.25) !important;
+}
+
+.hero-quality-pill {
+    background: rgba(99,102,241,0.2) !important;
+    border: 1px solid rgba(99,102,241,0.45) !important;
+    color: #c7d2fe !important;
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    padding: 6px 14px !important;
+    border-radius: 9999px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    box-shadow: 0 0 16px rgba(99,102,241,0.25) !important;
+}
+
+.hero-title {
+    font-size: clamp(28px, 4.2vw, 48px) !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.025em !important;
+    line-height: 1.15 !important;
+    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.85) !important;
+    margin-bottom: 14px !important;
+}
+
+.hero-synopsis {
+    font-size: clamp(14px, 1.2vw, 16px) !important;
+    line-height: 1.6 !important;
+    color: #cbd5e1 !important;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9) !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Call to Action Buttons */
+.hero-cta-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+    margin-top: 24px !important;
+}
+
+.btn-hero-play {
+    position: relative !important;
+    overflow: hidden !important;
+    background: linear-gradient(135deg, #f43f5e 0%, #a855f7 50%, #6366f1 100%) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 15px !important;
+    padding: 13px 28px !important;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 10px 32px -4px rgba(244, 63, 94, 0.55), 0 0 25px rgba(168, 85, 247, 0.4) !important;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease !important;
+    cursor: pointer !important;
+}
+
+.btn-hero-play::after {
+    content: '' !important;
+    position: absolute !important;
+    top: -50% !important;
+    left: -50% !important;
+    width: 200% !important;
+    height: 200% !important;
+    background: linear-gradient(60deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%) !important;
+    animation: shimmerSweep 4.5s infinite !important;
+    pointer-events: none !important;
+}
+
+.btn-hero-play:hover {
+    transform: translateY(-3px) scale(1.03) !important;
+    box-shadow: 0 14px 40px -4px rgba(244, 63, 94, 0.7), 0 0 32px rgba(168, 85, 247, 0.55) !important;
+}
+
+.btn-hero-play:active {
+    transform: translateY(0) scale(0.97) !important;
+}
+
+.btn-hero-detail {
+    background: rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #f8fafc !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    padding: 13px 24px !important;
+    border-radius: 9999px !important;
+    transition: all 0.25s ease !important;
+    cursor: pointer !important;
+}
+
+.btn-hero-detail:hover {
+    background: rgba(255, 255, 255, 0.18) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    transform: translateY(-2px) !important;
+}
+
+.btn-hero-fav {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #f8fafc !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 17px !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    cursor: pointer !important;
+}
+
+.btn-hero-fav:hover {
+    background: rgba(244, 63, 94, 0.2) !important;
+    border-color: rgba(244, 63, 94, 0.5) !important;
+    color: #f43f5e !important;
+    transform: translateY(-2px) scale(1.08) !important;
+}
+
+.btn-hero-fav.active {
+    background: rgba(244, 63, 94, 0.3) !important;
+    border-color: #f43f5e !important;
+    color: #f43f5e !important;
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.4) !important;
+}
+
+/* 3. 3D Coverflow Cards Polish */
+.hero-coverflow-card {
+    border-radius: 18px !important;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.85), 0 0 20px rgba(99, 102, 241, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.5s ease, border-color 0.5s ease !important;
+}
+
+.hero-coverflow-card.is-active {
+    border-color: rgba(168, 85, 247, 0.65) !important;
+    box-shadow: 0 28px 60px rgba(0, 0, 0, 0.95), 0 0 35px rgba(168, 85, 247, 0.45) !important;
+}
+
+.card-exclusive-badge {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 27, 75, 0.85) 100%) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(168, 85, 247, 0.4) !important;
+    border-radius: 9999px !important;
+    padding: 5px 12px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+}
+
+.card-exclusive-badge i {
+    color: #f43f5e !important;
+}
+
+/* 4. Main Library Cards - Candy Shop Tactile Experience */
+.drama-card {
+    border-radius: 18px !important;
+    background: #0d101a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    overflow: hidden !important;
+    box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease !important;
+    animation: cardFadeInUp 0.4s ease-out backwards;
+}
+
+.drama-card:hover {
+    transform: translateY(-8px) scale(1.025) !important;
+    border-color: rgba(168, 85, 247, 0.6) !important;
+    box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.9), 0 0 28px rgba(139, 92, 246, 0.38) !important;
+}
+
+.poster-frame {
+    position: relative !important;
+    aspect-ratio: 3 / 4.3 !important;
+    overflow: hidden !important;
+    background: #07090e !important;
+}
+
+.poster-img {
+    transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.drama-card:hover .poster-img {
+    transform: scale(1.06) !important;
+}
+
+.card-badge-provider {
+    position: absolute !important;
+    top: 10px !important;
+    left: 10px !important;
+    background: rgba(15, 17, 28, 0.8) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #e2e8f0 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    padding: 4px 10px !important;
+    border-radius: 9999px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+    z-index: 2 !important;
+}
+
+.card-badge-ep {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    background: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(16, 185, 129, 0.4) !important;
+    color: #6ee7b7 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    padding: 4px 10px !important;
+    border-radius: 9999px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+    z-index: 2 !important;
+}
+
+.card-badge-ep i {
+    color: #10b981 !important;
+    margin-right: 3px !important;
+}
+
+.card-play-btn-circle {
+    width: 52px !important;
+    height: 52px !important;
+    background: linear-gradient(135deg, #f43f5e 0%, #8b5cf6 100%) !important;
+    border: 2.5px solid rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 8px 25px rgba(244, 63, 94, 0.6) !important;
+    color: #ffffff !important;
+    font-size: 18px !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transform: scale(0.85) !important;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.drama-card:hover .card-play-btn-circle {
+    transform: scale(1.05) !important;
+}
+
+.card-info-block {
+    padding: 14px 14px 16px !important;
+}
+
+.card-title-text {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+    color: #f8fafc !important;
+    margin-bottom: 6px !important;
+    transition: color 0.2s ease !important;
+}
+
+.drama-card:hover .card-title-text {
+    color: #c084fc !important;
+}
+
+.card-meta-text {
+    font-size: 12.5px !important;
+    color: #94a3b8 !important;
+    font-weight: 500 !important;
+}
+
+/* 5. Top 10 Ranked Hits Rail Supreme */
+.top10-card-wrap {
+    position: relative !important;
+    padding-left: clamp(48px, 5.5vw, 70px) !important;
+    cursor: pointer !important;
+}
+
+.top10-rank-num {
+    position: absolute !important;
+    left: 0 !important;
+    bottom: 8px !important;
+    font-size: clamp(85px, 9vw, 135px) !important;
+    font-family: var(--font-heading) !important;
+    font-weight: 900 !important;
+    line-height: 0.8 !important;
+    -webkit-text-stroke: 3px rgba(255, 255, 255, 0.45) !important;
+    color: transparent !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.15) 75%, transparent 100%) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.95)) !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+    transition: transform 0.3s ease !important;
+}
+
+.top10-card-wrap:hover .top10-rank-num {
+    transform: scale(1.06) translateX(-3px) !important;
+    -webkit-text-stroke: 3px rgba(168, 85, 247, 0.8) !important;
+}
+
+.top10-card-inner {
+    position: relative !important;
+    z-index: 2 !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    background: #0d101a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.75) !important;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.top10-card-wrap:hover .top10-card-inner {
+    transform: translateY(-8px) scale(1.02) !important;
+    border-color: rgba(168, 85, 247, 0.6) !important;
+    box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.9), 0 0 28px rgba(139, 92, 246, 0.35) !important;
+}
+
+/* 6. Providers Horizontal Rail Polish */
+.providers-rail-wrap {
+    position: relative !important;
+    padding: 8px 0 12px !important;
+    mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent) !important;
+    -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent) !important;
+}
+
+.providers-rail-inner {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    padding: 4px 28px !important;
+}
+
+.providers-rail-inner::-webkit-scrollbar {
+    display: none !important;
+}
+
+.provider-pill {
+    flex-shrink: 0 !important;
+    padding: 8px 18px !important;
+    border-radius: 9999px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #94a3b8 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(12px) !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+}
+
+.provider-pill:hover {
+    background: rgba(255, 255, 255, 0.12) !important;
+    color: #f8fafc !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    transform: translateY(-2px) !important;
+}
+
+.provider-pill.active {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%) !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    box-shadow: 0 6px 20px -2px rgba(124, 58, 237, 0.55), 0 0 16px rgba(236, 72, 153, 0.35) !important;
+    transform: translateY(-2px) scale(1.03) !important;
+}
+
+.provider-discovery-pill {
+    background: linear-gradient(135deg, rgba(244,63,94,0.18) 0%, rgba(139,92,246,0.18) 100%) !important;
+    border: 1px solid rgba(244,63,94,0.4) !important;
+    color: #fda4af !important;
+}
+
+/* 7. Floating Mobile Bottom Dock (Thumb-First Navigation) */
+.mobile-bottom-dock {
+    display: none;
+}
+
+@media (max-width: 820px) {
+    body {
+        padding-bottom: 96px !important;
+    }
+
+    .mobile-bottom-dock {
+        display: flex !important;
+        position: fixed !important;
+        bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: calc(100% - 24px) !important;
+        max-width: 430px !important;
+        height: 62px !important;
+        background: rgba(11, 14, 25, 0.88) !important;
+        backdrop-filter: blur(28px) saturate(200%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        border-radius: 9999px !important;
+        box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75), 0 0 24px rgba(124, 58, 237, 0.28) !important;
+        z-index: 999 !important;
+        align-items: center !important;
+        justify-content: space-around !important;
+        padding: 0 8px !important;
+    }
+
+    .dock-item {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 3px !important;
+        color: #94a3b8 !important;
+        text-decoration: none !important;
+        font-size: 10px !important;
+        font-weight: 600 !important;
+        padding: 6px 12px !important;
+        border-radius: 9999px !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        cursor: pointer !important;
+        background: transparent !important;
+        border: none !important;
+        position: relative !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+
+    .dock-item i {
+        font-size: 16px !important;
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    }
+
+    .dock-item.active {
+        color: #c084fc !important;
+    }
+
+    .dock-item.active i {
+        transform: scale(1.15) !important;
+        color: #c084fc !important;
+    }
+
+    .dock-item:active {
+        transform: scale(0.92) !important;
+    }
+
+    /* Floating Center Discovery Button */
+    .dock-discovery-trigger {
+        position: relative !important;
+        transform: translateY(-8px) !important;
+    }
+
+    .dock-center-glow {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #f43f5e 0%, #8b5cf6 100%) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #ffffff !important;
+        font-size: 17px !important;
+        box-shadow: 0 8px 22px rgba(244, 63, 94, 0.6), 0 0 16px rgba(139, 92, 246, 0.45) !important;
+        border: 2px solid rgba(255, 255, 255, 0.85) !important;
+        transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    }
+
+    .dock-discovery-trigger:active .dock-center-glow {
+        transform: scale(0.9) !important;
+    }
+
+    .dock-badge {
+        position: absolute !important;
+        top: -4px !important;
+        right: -6px !important;
+        background: #f43f5e !important;
+        color: #ffffff !important;
+        font-size: 9px !important;
+        font-weight: 800 !important;
+        min-width: 16px !important;
+        height: 16px !important;
+        border-radius: 9999px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 4px !important;
+        box-shadow: 0 2px 8px rgba(244, 63, 94, 0.6) !important;
+    }
+
+    .dock-icon-wrap {
+        position: relative !important;
+        display: inline-flex !important;
+    }
+}
+
+/* 8. Light Theme Support for Next-Level Elements */
+body.theme-light .hero-showcase,
+:root[data-theme="light"] .hero-showcase {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 24px 60px -10px rgba(124, 58, 237, 0.12), 0 4px 18px rgba(15, 23, 42, 0.05) !important;
+}
+
+body.theme-light .hero-gradient-overlay,
+:root[data-theme="light"] .hero-gradient-overlay {
+    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.7) 60%, #ffffff 100%),
+                radial-gradient(circle at 75% 35%, transparent 25%, rgba(255,255,255,0.85) 85%) !important;
+}
+
+body.theme-light .hero-title,
+:root[data-theme="light"] .hero-title {
+    color: #0f172a !important;
+    text-shadow: 0 2px 10px rgba(255, 255, 255, 0.8) !important;
+}
+
+body.theme-light .hero-synopsis,
+:root[data-theme="light"] .hero-synopsis {
+    color: #334155 !important;
+    text-shadow: none !important;
+}
+
+body.theme-light .drama-card,
+:root[data-theme="light"] .drama-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 6px 20px -2px rgba(124, 58, 237, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04) !important;
+}
+
+body.theme-light .drama-card:hover,
+:root[data-theme="light"] .drama-card:hover {
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 18px 36px -4px rgba(124, 58, 237, 0.2), 0 4px 12px rgba(15, 23, 42, 0.06) !important;
+}
+
+body.theme-light .card-title-text,
+:root[data-theme="light"] .card-title-text {
+    color: #0f172a !important;
+}
+
+body.theme-light .card-title-text:hover,
+:root[data-theme="light"] .card-title-text:hover {
+    color: #7c3aed !important;
+}
+
+body.theme-light .top10-card-inner,
+:root[data-theme="light"] .top10-card-inner {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+}
+
+body.theme-light .top10-rank-num,
+:root[data-theme="light"] .top10-rank-num {
+    -webkit-text-stroke: 3px rgba(124, 58, 237, 0.45) !important;
+    background: linear-gradient(180deg, #7c3aed 0%, rgba(124, 58, 237, 0.25) 75%, transparent 100%) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    filter: drop-shadow(0 6px 14px rgba(124, 58, 237, 0.15)) !important;
+}
+
+body.theme-light .mobile-bottom-dock,
+:root[data-theme="light"] .mobile-bottom-dock {
+    background: rgba(255, 255, 255, 0.94) !important;
+    border-color: rgba(124, 58, 237, 0.18) !important;
+    box-shadow: 0 16px 40px rgba(124, 58, 237, 0.16), 0 4px 12px rgba(15, 23, 42, 0.06) !important;
+}
+
+body.theme-light .dock-item,
+:root[data-theme="light"] .dock-item {
+    color: #64748b !important;
+}
+
+body.theme-light .dock-item.active,
+:root[data-theme="light"] .dock-item.active {
+    color: #7c3aed !important;
+}
+
+body.theme-light .dock-item.active i,
+:root[data-theme="light"] .dock-item.active i {
+    color: #7c3aed !important;
+}
+

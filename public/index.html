@@ -16,7 +16,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=2.5.2">
+    <link rel="stylesheet" href="/style.css?v=3.0.0">
     <script>
         (function() {
             try {
@@ -258,7 +258,9 @@
                     <p class="hero-synopsis" id="hero-desc">Discover the most captivating short drama stories with
                         seamless HLS streaming, zero ad interruptions, and instant multi-episode navigation.</p>
                     <div class="hero-meta-row" id="hero-meta-row">
-                        <span id="hero-episodes-badge" class="hero-ep-badge">... tập</span>
+                        <span id="hero-trend-badge" class="hero-trend-pill"><i class="fa-solid fa-fire"></i> <span id="hero-trend-text">#1 TOP THỊNH HÀNH</span></span>
+                        <span id="hero-episodes-badge" class="hero-ep-badge"><i class="fa-solid fa-film"></i> <span id="hero-ep-count-text">... tập</span></span>
+                        <span class="hero-quality-pill"><i class="fa-solid fa-bolt"></i> 1080P HD</span>
                     </div>
                     <div class="hero-cta-group">
                         <button class="btn btn-hero-play" id="hero-play-btn">
@@ -1025,7 +1027,36 @@
         </div>
     </div>
 
-    <script src="/app.js?v=2.6.0"></script>
+    <!-- Floating Mobile Bottom Navigation Dock (Thumb-First Luxury UX) -->
+    <nav class="mobile-bottom-dock" id="mobile-bottom-dock" aria-label="Mobile Navigation">
+        <a href="#featured" class="dock-item active" id="dock-home-btn" title="Trang chủ">
+            <i class="fa-solid fa-house"></i>
+            <span id="dock-home-text">Trang chủ</span>
+        </a>
+        <a href="#top10" class="dock-item" id="dock-top10-btn" title="Top 10 Hot">
+            <i class="fa-solid fa-fire text-rose"></i>
+            <span id="dock-top10-text">Top 10</span>
+        </a>
+        <button type="button" class="dock-item dock-discovery-trigger" id="dock-discovery-btn" title="Khám phá">
+            <div class="dock-center-glow">
+                <i class="fa-solid fa-sliders"></i>
+            </div>
+            <span id="dock-discovery-text">Khám phá</span>
+        </button>
+        <a href="#favorites-section" class="dock-item" id="dock-favorites-btn" title="Yêu thích">
+            <div class="dock-icon-wrap">
+                <i class="fa-solid fa-heart"></i>
+                <span class="dock-badge" id="dock-favorites-badge" hidden>0</span>
+            </div>
+            <span id="dock-favorites-text">Yêu thích</span>
+        </a>
+        <a href="#history-section" class="dock-item" id="dock-history-btn" title="Xem tiếp">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span id="dock-history-text">Xem tiếp</span>
+        </a>
+    </nav>
+
+    <script src="/app.js?v=3.0.0"></script>
 </body>
 
 </html>
