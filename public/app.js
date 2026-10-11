@@ -4972,6 +4972,8 @@
     async function openDrama(item, initialEpNum = 1) {
         if (isMiniplayer) restoreFromMiniplayer();
         playerModal.hidden = false;
+        document.body.classList.add('player-active');
+        document.body.classList.remove('miniplayer-active');
         document.body.style.overflow = 'hidden';
         trackVisit({ drama_title: item ? item.title : '', provider: item ? (item.category_name || currentProvider) : '' });
 
@@ -5682,6 +5684,8 @@
         if (!currentDramaData || playerModal.hidden) return;
         isMiniplayer = true;
         playerModal.classList.add('miniplayer-mode');
+        document.body.classList.remove('player-active');
+        document.body.classList.add('miniplayer-active');
         document.body.style.overflow = '';
         stopAmbientGlow();
         hideCountdown();
@@ -5708,6 +5712,8 @@
         isMiniplayer = false;
         playerModal.classList.remove('miniplayer-mode');
         playerModal.hidden = false;
+        document.body.classList.add('player-active');
+        document.body.classList.remove('miniplayer-active');
         document.body.style.overflow = 'hidden';
         mainVideo.controls = true;
         if (!mainVideo.paused) {
@@ -5721,6 +5727,7 @@
         closeReelsEpisodesSheet();
         playerModal.classList.remove('miniplayer-mode');
         playerModal.hidden = true;
+        document.body.classList.remove('player-active', 'miniplayer-active');
         document.body.style.overflow = '';
         mainVideo.pause();
         mainVideo.controls = true;
