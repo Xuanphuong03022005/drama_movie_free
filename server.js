@@ -3480,8 +3480,21 @@ app.get('*', (req, res) => {
 });
 
 if (require.main === module) {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
         console.log(`Server running at http://localhost:${PORT}`);
+    });
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.warn(`[Server] Port ${PORT} temporarily busy, retrying in 1.5s...`);
+            setTimeout(() => {
+                try { server.close(); } catch (e) { }
+                server.listen(PORT, () => {
+                    console.log(`Server running at http://localhost:${PORT}`);
+                });
+            }, 1500);
+        } else {
+            console.error('[Server] Listen error:', err);
+        }
     });
 }
 
