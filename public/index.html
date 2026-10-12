@@ -16,7 +16,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.1.1">
+    <link rel="stylesheet" href="/style.css?v=3.2.0">
     <script>
         (function() {
             try {
@@ -212,11 +212,52 @@
                     </div>
                 </div>
 
-                <!-- Login VIP Access Button -->
-                <button type="button" class="nav-login-btn" id="nav-login-btn-block" title="VIP Member Access">
-                    <i class="fa-solid fa-user"></i>
-                    <span>Login</span>
-                </button>
+                <!-- Login VIP Access Button & Logged-In User Cluster -->
+                <div class="user-auth-cluster" id="user-auth-cluster">
+                    <button type="button" class="nav-login-btn" id="nav-login-btn-block" title="Đăng nhập / Đăng ký thành viên VIP">
+                        <i class="fa-solid fa-user"></i>
+                        <span id="nav-login-text">Login</span>
+                    </button>
+
+                    <!-- Logged-in User Profile Dropdown Menu -->
+                    <div class="user-profile-menu" id="user-profile-menu" hidden>
+                        <div class="user-profile-header">
+                            <img id="user-avatar-img" src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="Avatar" class="user-avatar-thumb">
+                            <div class="user-profile-info">
+                                <div class="user-display-name" id="user-display-name">Thành Viên</div>
+                                <div class="user-email-text" id="user-email-text">user@gmail.com</div>
+                                <div class="user-vip-status-badge" id="user-vip-status-badge">
+                                    <i class="fa-solid fa-crown"></i> <span id="user-vip-badge-text">Miễn Phí</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="user-profile-divider"></div>
+                        <div class="user-profile-stats">
+                            <div class="user-stat-item">
+                                <span class="stat-label">Số dư ví</span>
+                                <span class="stat-value" id="user-balance-value">0 đ</span>
+                            </div>
+                            <div class="user-stat-item">
+                                <span class="stat-label">Thời hạn VIP</span>
+                                <span class="stat-value highlight" id="user-vip-expiry-value">Chưa kích hoạt</span>
+                            </div>
+                        </div>
+                        <div class="user-profile-actions">
+                            <button type="button" class="user-action-item" id="btn-open-vip-plans">
+                                <i class="fa-solid fa-crown text-amber"></i> <span>Nâng cấp Gói VIP</span>
+                            </button>
+                            <a href="http://localhost:3001" target="_blank" rel="noopener" class="user-action-item admin-access-item" id="btn-admin-link" hidden>
+                                <i class="fa-solid fa-shield-halved text-rose"></i> <span>Bảng Quản Trị Admin</span>
+                            </a>
+                            <div class="user-admin-pending" id="user-admin-pending" hidden>
+                                <i class="fa-solid fa-clock-rotate-left text-amber"></i> <span>Chờ Admin cấp quyền</span>
+                            </div>
+                            <button type="button" class="user-action-item logout-action" id="btn-logout-user">
+                                <i class="fa-solid fa-right-from-bracket"></i> <span>Đăng xuất</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -843,13 +884,15 @@
         <div class="footer-copyright-bar">
             <p>© 2026 DramaFlow PRO Platform. All rights reserved. Powered by Direct HLS CDN Clustering.</p>
             <div class="footer-legal-links">
-                <a href="#">Privacy Policy</a>
+                <button type="button" class="footer-policy-btn" id="footer-privacy-btn">Chính Sách Bảo Mật</button>
                 <span>•</span>
-                <a href="#">Terms of Service</a>
+                <button type="button" class="footer-policy-btn" id="footer-terms-btn">Điều Khoản Dịch Vụ</button>
                 <span>•</span>
-                <a href="#">DMCA</a>
+                <button type="button" class="footer-policy-btn" id="footer-vip-btn">Chính Sách VIP</button>
                 <span>•</span>
-                <a href="#">API Status</a>
+                <button type="button" class="footer-policy-btn" id="footer-dmca-btn">Bản Quyền DMCA</button>
+                <span>•</span>
+                <button type="button" class="footer-policy-btn" id="footer-api-status-btn">Trạng Thái Hệ Thống</button>
             </div>
         </div>
     </footer>
@@ -982,38 +1025,185 @@
         </div>
     </div>
 
-    <!-- VIP Login / Member Access Modal -->
-    <div id="login-modal" class="login-modal" hidden>
+    <!-- Comprehensive User Auth Modal (Login & Gmail Registration) -->
+    <div id="login-modal" class="login-modal auth-modal" hidden>
         <div class="login-modal-backdrop" id="login-modal-backdrop"></div>
-        <div class="login-modal-card">
-            <button type="button" class="login-close-btn" id="login-close-btn" title="Close"><i
-                    class="fa-solid fa-xmark"></i></button>
-            <div class="login-modal-header">
-                <div class="login-badge-pro" id="login-modal-badge"><i class="fa-solid fa-crown"></i> VIP ACCESS</div>
-                <h3 id="login-modal-title">DramaFlow PRO Member</h3>
-                <p id="login-modal-desc">Enjoy ad-free streaming, 4K multi-episode playback, and cloud watchlist
-                    synchronization.</p>
+        <div class="login-modal-card auth-modal-card">
+            <button type="button" class="login-close-btn" id="login-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+
+            <!-- Auth Navigation Tabs -->
+            <div class="auth-tabs-row">
+                <button type="button" class="auth-tab-btn active" id="tab-login-btn" data-tab="login">
+                    <i class="fa-solid fa-right-to-bracket"></i> Đăng Nhập
+                </button>
+                <button type="button" class="auth-tab-btn" id="tab-register-btn" data-tab="register">
+                    <i class="fa-solid fa-user-plus"></i> Đăng Ký Gmail
+                </button>
             </div>
-            <form class="login-form" id="login-form">
-                <div class="login-input-group">
-                    <label for="login-username" id="login-username-label"><i class="fa-solid fa-user"></i> Member
-                        Username / Nickname</label>
-                    <input type="text" id="login-username" placeholder="Enter username or Guest VIP" value="VIP Guest"
-                        autocomplete="username">
+
+            <!-- TAB 1: LOGIN FORM -->
+            <div class="auth-tab-pane active" id="pane-login">
+                <div class="login-modal-header">
+                    <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> THÀNH VIÊN VIP</div>
+                    <h3 id="login-modal-title">Đăng Nhập Tài Khoản</h3>
+                    <p>Truy cập trải nghiệm xem phim không quảng cáo, mở khóa tập VIP và đồng bộ thiết bị.</p>
                 </div>
-                <div class="login-input-group">
-                    <label for="login-email" id="login-email-label"><i class="fa-solid fa-envelope"></i> Email
-                        (Optional)</label>
-                    <input type="email" id="login-email" placeholder="vip@dramaflow.pro" autocomplete="email">
+                <form class="login-form" id="login-form">
+                    <div class="login-input-group">
+                        <label for="login-identifier"><i class="fa-solid fa-envelope"></i> Email hoặc Tên tài khoản</label>
+                        <input type="text" id="login-identifier" placeholder="Ví dụ: admin@drama.vn hoặc hoang_minh" required autocomplete="username">
+                    </div>
+                    <div class="login-input-group">
+                        <label for="login-password"><i class="fa-solid fa-lock"></i> Mật khẩu (Nếu có)</label>
+                        <input type="password" id="login-password" placeholder="Nhập mật khẩu (hoặc để trống)" autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn-submit-login" id="login-submit-btn">
+                        <i class="fa-solid fa-right-to-bracket"></i> <span>Đăng Nhập Ngay</span>
+                    </button>
+                </form>
+
+                <!-- Quick One-Click Demo Accounts for Testing -->
+                <div class="demo-accounts-wrap">
+                    <div class="demo-accounts-title">
+                        <span><i class="fa-solid fa-bolt text-amber"></i> Đăng nhập nhanh tài khoản mẫu:</span>
+                    </div>
+                    <div class="demo-chips-grid" id="demo-chips-container">
+                        <!-- Loaded dynamically or static fallback -->
+                        <button type="button" class="demo-chip-btn" data-id="admin@drama.vn">
+                            <i class="fa-solid fa-shield-halved text-rose"></i> Admin (Toàn quyền)
+                        </button>
+                        <button type="button" class="demo-chip-btn" data-id="hoangminh@gmail.com">
+                            <i class="fa-solid fa-crown text-amber"></i> Hoàng Minh (VIP 14 ngày)
+                        </button>
+                        <button type="button" class="demo-chip-btn" data-id="lananh.drama@gmail.com">
+                            <i class="fa-solid fa-user text-muted"></i> Lan Anh (User Free)
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="btn-submit-login" id="login-submit-btn"><i
-                        class="fa-solid fa-right-to-bracket"></i> <span id="login-submit-text">Sign In to VIP
-                        Account</span></button>
-                <div class="login-guest-status" id="login-guest-status">
-                    <i class="fa-solid fa-circle-check text-success"></i> <span id="login-status-text">Active VIP
-                        Status: <strong>Free Unlimited Ad-Free Access Enabled</strong></span>
+            </div>
+
+            <!-- TAB 2: REGISTER WITH GMAIL -->
+            <div class="auth-tab-pane" id="pane-register" hidden>
+                <div class="login-modal-header">
+                    <div class="login-badge-pro bg-emerald-glass"><i class="fa-brands fa-google text-rose"></i> ĐĂNG KÝ GMAIL</div>
+                    <h3>Tạo Tài Khoản Mới</h3>
+                    <p>Đăng ký bằng địa chỉ Gmail. Tài khoản sẽ được tự động đồng bộ sang Bảng Quản Trị Admin.</p>
                 </div>
-            </form>
+                <form class="login-form" id="register-form">
+                    <div class="login-input-group">
+                        <label for="reg-email"><i class="fa-solid fa-envelope"></i> Địa chỉ Gmail (*)</label>
+                        <input type="email" id="reg-email" placeholder="example@gmail.com" required autocomplete="email">
+                    </div>
+                    <div class="login-input-group">
+                        <label for="reg-name"><i class="fa-solid fa-id-card"></i> Họ và tên / Tên hiển thị</label>
+                        <input type="text" id="reg-name" placeholder="Ví dụ: Nguyễn Văn A" autocomplete="name">
+                    </div>
+                    <div class="login-input-group">
+                        <label for="reg-password"><i class="fa-solid fa-lock"></i> Mật khẩu</label>
+                        <input type="password" id="reg-password" placeholder="Tạo mật khẩu đăng nhập" autocomplete="new-password">
+                    </div>
+                    <div class="auth-notice-card">
+                        <i class="fa-solid fa-circle-info text-primary"></i>
+                        <span>Sau khi đăng ký, bạn có thể xem các tập phim miễn phí. Quyền truy cập Bảng Quản Trị User sẽ ở trạng thái chờ Admin phê duyệt.</span>
+                    </div>
+                    <button type="submit" class="btn-submit-login btn-register-submit" id="register-submit-btn">
+                        <i class="fa-solid fa-user-check"></i> <span>Tạo Tài Khoản Ngay</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIP Subscription Plans Modal (Synced from Admin) -->
+    <div id="vip-plans-modal" class="login-modal vip-modal" hidden>
+        <div class="login-modal-backdrop" id="vip-plans-backdrop"></div>
+        <div class="login-modal-card vip-modal-card">
+            <button type="button" class="login-close-btn" id="vip-plans-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="vip-modal-header">
+                <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> GÓI CƯỚC XEM PHIM VIP</div>
+                <h3>Mở Khóa Toàn Bộ Kho Phim VIP</h3>
+                <p>Xem phim không giới hạn, chuẩn nét 4K Ultra HD, không quảng cáo và âm thanh vòm sống động.</p>
+            </div>
+            <div class="vip-plans-grid" id="vip-plans-grid">
+                <!-- Dynamically loaded plans from Supabase -->
+                <div class="plans-loading-placeholder">
+                    <div class="mini-spinner"></div>
+                    <span>Đang đồng bộ gói cước từ Admin...</span>
+                </div>
+            </div>
+            <div class="vip-wallet-status-bar" id="vip-wallet-status-bar">
+                <div class="wallet-left">
+                    <span>Số dư ví của bạn:</span>
+                    <strong id="modal-wallet-balance">0 đ</strong>
+                </div>
+                <div class="wallet-right">
+                    <button type="button" class="btn-wallet-topup" id="btn-demo-topup" title="Cộng tiền test vào ví">
+                        <i class="fa-solid fa-plus"></i> Nạp thêm 100k (Test)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Episode VIP Policy Lock Modal (Triggered when user clicks locked episode) -->
+    <div id="episode-vip-modal" class="login-modal ep-lock-modal" hidden>
+        <div class="login-modal-backdrop" id="episode-vip-backdrop"></div>
+        <div class="login-modal-card ep-lock-card">
+            <button type="button" class="login-close-btn" id="episode-vip-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="ep-lock-header">
+                <div class="ep-lock-icon-glow">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h3 id="ep-lock-title">Tập Phim Này Bị Khóa (VIP)</h3>
+                <p id="ep-lock-reason">Phim áp dụng chính sách xem miễn phí theo quy định hệ thống.</p>
+            </div>
+            <div class="ep-policy-summary-box" id="ep-policy-summary-box">
+                <div class="policy-stat-item">
+                    <span class="p-label">Tập đang chọn:</span>
+                    <strong class="p-value highlight" id="ep-lock-num">Tập 10</strong>
+                </div>
+                <div class="policy-stat-item">
+                    <span class="p-label">Chính sách phim:</span>
+                    <strong class="p-value" id="ep-lock-quota">Xem miễn phí 8/40 tập (20%)</strong>
+                </div>
+                <div class="policy-stat-item">
+                    <span class="p-label">Trạng thái:</span>
+                    <strong class="p-value text-rose" id="ep-lock-status">Cần nâng cấp VIP</strong>
+                </div>
+            </div>
+            <div class="ep-lock-actions">
+                <button type="button" class="btn-upgrade-vip-main" id="btn-ep-lock-upgrade">
+                    <i class="fa-solid fa-crown"></i> <span>Xem Gói Cước & Mở Khóa Ngay</span>
+                </button>
+                <button type="button" class="btn-login-ep-lock" id="btn-ep-lock-login">
+                    <i class="fa-solid fa-right-to-bracket"></i> <span>Đã có tài khoản? Đăng nhập</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legal & Policies Information Modal -->
+    <div id="legal-policy-modal" class="login-modal legal-modal" hidden>
+        <div class="login-modal-backdrop" id="legal-policy-backdrop"></div>
+        <div class="login-modal-card legal-modal-card">
+            <button type="button" class="login-close-btn" id="legal-policy-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="legal-modal-tabs">
+                <button type="button" class="legal-tab-btn active" data-policy="privacy">
+                    <i class="fa-solid fa-shield-halved"></i> Bảo Mật
+                </button>
+                <button type="button" class="legal-tab-btn" data-policy="terms">
+                    <i class="fa-solid fa-file-contract"></i> Điều Khoản
+                </button>
+                <button type="button" class="legal-tab-btn" data-policy="vip_policy">
+                    <i class="fa-solid fa-crown text-amber"></i> Chính Sách VIP
+                </button>
+                <button type="button" class="legal-tab-btn" data-policy="dmca">
+                    <i class="fa-solid fa-copyright"></i> DMCA
+                </button>
+            </div>
+            <div class="legal-modal-content-body" id="legal-modal-content-body">
+                <!-- Dynamically injected from /api/policies/legal -->
+            </div>
         </div>
     </div>
 
@@ -1056,7 +1246,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.1.1"></script>
+    <script src="/app.js?v=3.2.0"></script>
 </body>
 
 </html>

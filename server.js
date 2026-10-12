@@ -147,6 +147,204 @@ app.get('/api/drama/supabase-list', async (req, res) => {
     }
 });
 
+// ==========================================
+// USER AUTHENTICATION & GMAIL REGISTRATION
+// ==========================================
+app.post('/api/auth/register-gmail', async (req, res) => {
+    try {
+        const { email, full_name, password } = req.body;
+        const result = await db.registerWithGmail({ email, full_name, password });
+        res.status(201).json({ ok: true, ...result });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { identifier, password } = req.body;
+        const result = await db.loginUser({ identifier, password });
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+    try {
+        const userId = req.query.userId || req.headers['x-user-id'];
+        if (!userId) return res.json({ ok: true, user: null });
+        const user = await db.getUserById(userId);
+        res.json({ ok: true, user });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/auth/demo-users', async (req, res) => {
+    try {
+        const demoUsers = await db.getQuickDemoUsers();
+        res.json({ ok: true, users: demoUsers });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// ==========================================
+// ADMIN POLICIES & FREE EPISODE ACCESS RULES
+// ==========================================
+app.get('/api/policies/settings', async (req, res) => {
+    try {
+        const settings = await db.getSystemSettings();
+        res.json({ ok: true, settings });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/policies/drama', async (req, res) => {
+    try {
+        const title = req.query.title || '';
+        const system = await db.getSystemSettings();
+        const specific = await db.getDramaAccessSetting(title);
+        res.json({
+            ok: true,
+            system,
+            dramaRule: specific || {
+                drama_title: title,
+                total_episodes: system.default_total_episodes,
+                free_episode_percent: system.default_free_episode_percent,
+                free_episodes_count: Math.ceil(system.default_total_episodes * (system.default_free_episode_percent / 100)),
+                is_all_free: false,
+                is_vip_only: false,
+                is_custom_rule: false
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.post('/api/policies/check-access', async (req, res) => {
+    try {
+        const { userId, dramaTitle, episodeNumber, totalEpisodes } = req.body;
+        const result = await db.checkEpisodeAccess({
+            userId,
+            dramaTitle,
+            episodeNumber,
+            totalEpisodes
+        });
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// ==========================================
+// SUBSCRIPTION PLANS & VIP TRANSACTIONS
+// ==========================================
+app.get('/api/subscription/plans', async (req, res) => {
+    try {
+        const plans = await db.getSubscriptionPlans();
+        res.json({ ok: true, plans });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.post('/api/subscription/purchase', async (req, res) => {
+    try {
+        const { userId, planId, paymentMethod } = req.body;
+        const result = await db.purchaseSubscription({ userId, planId, paymentMethod });
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+// ==========================================
+// LEGAL & SERVICE POLICIES
+// ==========================================
+app.get('/api/policies/legal', (req, res) => {
+    res.json({
+        ok: true,
+        policies: {
+            privacy: {
+                id: 'privacy',
+                title: 'Chính Sách Bảo Mật (Privacy Policy)',
+                last_updated: '2026-10-12',
+                sections: [
+                    {
+                        heading: '1. Thu thập thông tin người dùng',
+                        content: 'Chúng tôi chỉ lưu trữ thông tin cơ bản khi bạn đăng ký tài khoản (địa chỉ Gmail, họ tên hiển thị). Lịch sử xem phim và danh sách yêu thích được lưu trữ cục bộ (Local Storage) trên thiết bị của bạn nhằm tối ưu tốc độ và sự riêng tư.'
+                    },
+                    {
+                        heading: '2. Bảo mật dữ liệu & Mã hóa 256-Bit SSL',
+                        content: 'Tất cả các kết nối, phiên đăng nhập và giao dịch trên DramaFlow PRO đều được mã hóa bằng chuẩn TLS/SSL 256-bit cao cấp nhất. Mật khẩu và thông tin tài khoản được lưu trữ an toàn trong hệ thống đám mây Supabase PostgreSQL.'
+                    },
+                    {
+                        heading: '3. Quyền của người dùng',
+                        content: 'Bạn có toàn quyền truy xuất, thay đổi thông tin hồ sơ hoặc yêu cầu xóa dữ liệu tài khoản bất kỳ lúc nào thông qua quản trị viên hệ thống.'
+                    }
+                ]
+            },
+            terms: {
+                id: 'terms',
+                title: 'Điều Khoản Dịch Vụ (Terms of Service)',
+                last_updated: '2026-10-12',
+                sections: [
+                    {
+                        heading: '1. Quy định sử dụng nền tảng',
+                        content: 'DramaFlow PRO cung cấp giao diện phát trực tuyến video phim ngắn tốc độ cao. Người dùng cam kết không sử dụng các công cụ tự động (bot, scraper phá hoại) gây quá tải hạ tầng phát video.'
+                    },
+                    {
+                        heading: '2. Tài khoản và quyền truy cập',
+                        content: 'Người dùng sau khi đăng ký bằng Gmail có quyền xem các tập phim miễn phí theo chính sách. Quyền truy cập vào Bảng Quản Trị Hệ Thống (Admin Table) phải được Quản trị viên duyệt và cấp quyền theo quy trình kiểm duyệt.'
+                    },
+                    {
+                        heading: '3. Giới hạn trách nhiệm',
+                        content: 'Nền tảng nỗ lực đảm bảo thời gian hoạt động (uptime) 99.9%. Trong trường hợp lỗi đường truyền upstream từ nhà cung cấp nội dung, chúng tôi sẽ kích hoạt chế độ sao lưu tự động (Automatic Failover) ngay lập tức.'
+                    }
+                ]
+            },
+            vip_policy: {
+                id: 'vip_policy',
+                title: 'Chính Sách Gói Cước & Hội Viên VIP',
+                last_updated: '2026-10-12',
+                sections: [
+                    {
+                        heading: '1. Cơ chế xem miễn phí & Khóa tập VIP',
+                        content: 'Mỗi bộ phim trên hệ thống đều áp dụng chính sách phát hành: Admin thiết lập tỷ lệ xem miễn phí (mặc định 20% số tập đầu hoặc theo cấu hình từng bộ phim). Các tập tiếp theo được bảo lưu cho thành viên VIP.'
+                    },
+                    {
+                        heading: '2. Các gói đăng ký VIP linh hoạt',
+                        content: 'Hệ thống cung cấp 4 gói hội viên: Gói 1 Ngày (24h trải nghiệm), Gói 1 Tuần (7 ngày tiết kiệm), Gói 1 Tháng (30 ngày phổ biến), và Gói 1 Năm (365 ngày Hoàng Gia siêu tiết kiệm). Gói VIP mở khóa 100% tập phim trên mọi nhà cung cấp với độ phân giải cao nhất.'
+                    },
+                    {
+                        heading: '3. Cộng dồn thời hạn VIP',
+                        content: 'Khi mua thêm gói cước trong thời gian gói cũ vẫn còn hiệu lực, thời gian sử dụng sẽ được cộng dồn lũy kế tự động vào tài khoản của bạn.'
+                    }
+                ]
+            },
+            dmca: {
+                id: 'dmca',
+                title: 'Chính Sách Bản Quyền DMCA',
+                last_updated: '2026-10-12',
+                sections: [
+                    {
+                        heading: '1. Tuyên bố quyền sở hữu nội dung',
+                        content: 'DramaFlow PRO hoạt động như một cổng giao diện phát trực tuyến đám mây kết nối trực tiếp đến các máy chủ luồng HLS công khai. Chúng tôi tôn trọng quyền sở hữu trí tuệ của các nhà sáng tạo nội dung.'
+                    },
+                    {
+                        heading: '2. Quy trình gỡ bỏ nội dung vi phạm (Notice and Takedown)',
+                        content: 'Nếu bạn là chủ sở hữu bản quyền hợp pháp và nhận thấy nội dung vi phạm bản quyền trên nền tảng, vui lòng gửi thông báo DMCA chính thức kèm theo bằng chứng bản quyền đến hòm thư hỗ trợ kỹ thuật: copyright@dramaflow.pro. Chúng tôi sẽ xử lý gỡ bỏ trong vòng 24 giờ.'
+                    }
+                ]
+            }
+        }
+    });
+});
+
 const UPSTREAM_HOSTS = ['https://narto-drama.com', 'https://edge.narto-drama.com'];
 const BASE_URL = 'https://narto-drama.com';
 const ORIGIN_URL = 'https://narto-drama.com';

@@ -591,6 +591,432 @@ async function getDramaCount() {
     }
 }
 
+/**
+ * Helper to compute user VIP status and normalize user fields
+ */
+function formatUser(row) {
+    if (!row) return null;
+    const expiresAt = row.subscription_expires_at ? new Date(row.subscription_expires_at) : null;
+    const isVip = Boolean(expiresAt && expiresAt > new Date());
+    let vipRemainingDays = 0;
+    if (isVip && expiresAt) {
+        const diff = expiresAt.getTime() - Date.now();
+        vipRemainingDays = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    }
+    return {
+        id: String(row.id),
+        username: row.username || '',
+        email: row.email || null,
+        phone: row.phone || null,
+        full_name: row.full_name || '',
+        role: row.role || 'user',
+        status: row.status || 'active',
+        balance: parseFloat(row.balance) || 0,
+        subscription_plan_id: row.subscription_plan_id ? String(row.subscription_plan_id) : null,
+        subscription_expires_at: row.subscription_expires_at,
+        avatar_url: row.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${row.username || 'user'}`,
+        can_access_user_table: Boolean(row.can_access_user_table),
+        approval_status: row.approval_status || (row.can_access_user_table ? 'approved' : 'pending'),
+        approved_at: row.approved_at,
+        is_vip: isVip,
+        vip_remaining_days: vipRemainingDays,
+        created_at: row.created_at,
+        updated_at: row.updated_at
+    };
+}
+
+/**
+ * Register user with Gmail
+ */
+async function registerWithGmail({ email, full_name, password }) {
+    if (!email || !email.trim()) {
+        throw new Error('Địa chỉ Gmail là bắt buộc');
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+        throw new Error('Định dạng email không hợp lệ');
+    }
+
+    const client = getPool();
+    // Check if email already registered
+    const existCheck = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [cleanEmail]);
+    if (existCheck.rows.length > 0) {
+        throw new Error(`Địa chỉ Gmail "${cleanEmail}" đã được đăng ký trên hệ thống! Vui lòng đăng nhập.`);
+    }
+
+    // Generate unique username
+    let baseUsername = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+    if (!baseUsername) baseUsername = `user_${Date.now().toString().slice(-6)}`;
+    let username = baseUsername;
+    let count = 1;
+    while (true) {
+        const uCheck = await client.query('SELECT id FROM users WHERE username = $1 LIMIT 1', [username]);
+        if (uCheck.rows.length === 0) break;
+        username = `${baseUsername}_${count++}`;
+    }
+
+    const displayName = full_name && full_name.trim() ? full_name.trim() : username;
+    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+
+    const insertSql = `
+        INSERT INTO users (
+            username, email, full_name, password_hash, role, status,
+            balance, can_access_user_table, approval_status, avatar_url, updated_at
+        ) VALUES ($1, $2, $3, $4, 'user', 'active', 0, false, 'pending', $5, NOW())
+        RETURNING *
+    `;
+    const res = await client.query(insertSql, [username, cleanEmail, displayName, password || null, avatarUrl]);
+    const user = formatUser(res.rows[0]);
+    return {
+        user,
+        message: `Đăng ký thành công tài khoản Gmail "${cleanEmail}". Tài khoản được kích hoạt để xem phim!`
+    };
+}
+
+/**
+ * Login with email or username
+ */
+async function loginUser({ identifier, password }) {
+    if (!identifier || !identifier.trim()) {
+        throw new Error('Vui lòng nhập Email hoặc Tên tài khoản');
+    }
+    const cleanId = identifier.trim();
+    const client = getPool();
+    let res;
+    if (cleanId.includes('@')) {
+        res = await client.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [cleanId.toLowerCase()]);
+    } else {
+        res = await client.query('SELECT * FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1', [cleanId.toLowerCase()]);
+    }
+
+    if (res.rows.length === 0) {
+        throw new Error(`Không tìm thấy tài khoản với thông tin: ${cleanId}`);
+    }
+
+    const row = res.rows[0];
+    if (row.status !== 'active') {
+        throw new Error('Tài khoản này hiện đang bị tạm khóa');
+    }
+
+    const user = formatUser(row);
+    return {
+        user,
+        canAccessUserTable: user.can_access_user_table,
+        approvalStatus: user.approval_status
+    };
+}
+
+/**
+ * Get user by ID
+ */
+async function getUserById(id) {
+    if (!id) return null;
+    const client = getPool();
+    const res = await client.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [id]);
+    if (res.rows.length === 0) return null;
+    return formatUser(res.rows[0]);
+}
+
+/**
+ * Get demo quick accounts for fast 1-click test login
+ */
+async function getQuickDemoUsers() {
+    try {
+        const client = getPool();
+        const res = await client.query(`
+            SELECT id, username, email, full_name, role, balance, subscription_expires_at, can_access_user_table, approval_status, avatar_url
+            FROM users
+            ORDER BY id ASC
+            LIMIT 5
+        `);
+        return res.rows.map(formatUser);
+    } catch (e) {
+        return [];
+    }
+}
+
+/**
+ * Get system policy settings
+ */
+async function getSystemSettings() {
+    try {
+        const client = getPool();
+        const res = await client.query('SELECT setting_key, setting_value, description FROM system_settings');
+        const settingsMap = {};
+        res.rows.forEach(r => {
+            settingsMap[r.setting_key] = r.setting_value;
+        });
+        const defaultFreePercent = parseFloat(settingsMap.default_free_episode_percent || '20');
+        const defaultTotalEpisodes = parseInt(settingsMap.default_total_episodes || '30', 10);
+        return {
+            default_free_episode_percent: defaultFreePercent,
+            default_total_episodes: defaultTotalEpisodes,
+            raw: settingsMap
+        };
+    } catch (e) {
+        return {
+            default_free_episode_percent: 20,
+            default_total_episodes: 30,
+            raw: {}
+        };
+    }
+}
+
+/**
+ * Get access setting for a specific drama
+ */
+async function getDramaAccessSetting(dramaTitle) {
+    if (!dramaTitle || !dramaTitle.trim()) return null;
+    try {
+        const client = getPool();
+        const res = await client.query(
+            'SELECT * FROM drama_access_settings WHERE LOWER(TRIM(drama_title)) = LOWER(TRIM($1)) LIMIT 1',
+            [dramaTitle.trim()]
+        );
+        if (res.rows.length === 0) return null;
+        const row = res.rows[0];
+        const total = parseInt(row.total_episodes || 30, 10);
+        const percent = parseFloat(row.free_episode_percent || 20);
+        const freeCount = row.custom_free_episodes_count !== null && row.custom_free_episodes_count !== undefined
+            ? parseInt(row.custom_free_episodes_count, 10)
+            : Math.min(total, Math.ceil(total * (percent / 100)));
+
+        return {
+            id: String(row.id),
+            drama_title: row.drama_title,
+            total_episodes: total,
+            free_episode_percent: percent,
+            custom_free_episodes_count: row.custom_free_episodes_count,
+            free_episodes_count: freeCount,
+            is_all_free: Boolean(row.is_all_free),
+            is_vip_only: Boolean(row.is_vip_only),
+            note: row.note || ''
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Get all active subscription plans from admin
+ */
+async function getSubscriptionPlans() {
+    try {
+        const client = getPool();
+        const res = await client.query(`
+            SELECT id, name, code, duration_days, price, original_price, badge, description, features, is_active, sort_order
+            FROM subscription_plans
+            WHERE is_active = true
+            ORDER BY sort_order ASC, price ASC
+        `);
+        return res.rows.map(r => ({
+            id: String(r.id),
+            name: r.name,
+            code: r.code,
+            duration_days: parseInt(r.duration_days, 10),
+            price: parseFloat(r.price),
+            original_price: r.original_price ? parseFloat(r.original_price) : null,
+            badge: r.badge || '',
+            description: r.description || '',
+            features: typeof r.features === 'string' ? JSON.parse(r.features) : (r.features || []),
+            is_active: Boolean(r.is_active),
+            sort_order: r.sort_order || 0
+        }));
+    } catch (e) {
+        return [];
+    }
+}
+
+/**
+ * Purchase a subscription plan
+ */
+async function purchaseSubscription({ userId, planId, paymentMethod = 'wallet' }) {
+    if (!userId || !planId) {
+        throw new Error('Cần cung cấp userId và planId để mua gói');
+    }
+    const client = getPool();
+
+    // 1. Fetch user
+    const uRes = await client.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [userId]);
+    if (uRes.rows.length === 0) throw new Error('Không tìm thấy người dùng');
+    const userRow = uRes.rows[0];
+    if (userRow.status !== 'active') throw new Error('Tài khoản này đang bị khóa');
+
+    // 2. Fetch plan
+    const pRes = await client.query('SELECT * FROM subscription_plans WHERE id = $1 AND is_active = true LIMIT 1', [planId]);
+    if (pRes.rows.length === 0) throw new Error('Gói xem phim không tồn tại hoặc đã tạm ngưng');
+    const plan = pRes.rows[0];
+    const planPrice = parseFloat(plan.price);
+    const durationDays = parseInt(plan.duration_days, 10);
+
+    const userBalance = parseFloat(userRow.balance || 0);
+    // If wallet payment, check balance (or allow demo top-up if user chooses test)
+    if (paymentMethod === 'wallet' && userBalance < planPrice) {
+        throw new Error(`Số dư ví (${new Intl.NumberFormat('vi-VN').format(userBalance)}đ) không đủ để mua gói (${new Intl.NumberFormat('vi-VN').format(planPrice)}đ).`);
+    }
+
+    // 3. Begin transaction
+    await client.query('BEGIN');
+    try {
+        // Deduct balance if wallet
+        if (paymentMethod === 'wallet') {
+            await client.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [planPrice, userId]);
+        }
+
+        // Extend VIP
+        const updateVipSql = `
+            UPDATE users
+            SET 
+                subscription_plan_id = $1,
+                subscription_expires_at = (
+                    CASE 
+                        WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at > NOW()
+                        THEN subscription_expires_at + ($2 || ' days')::INTERVAL
+                        ELSE NOW() + ($2 || ' days')::INTERVAL
+                    END
+                ),
+                updated_at = NOW()
+            WHERE id = $3
+            RETURNING *
+        `;
+        const updatedUserRes = await client.query(updateVipSql, [planId, durationDays, userId]);
+
+        // Insert order record into user_subscriptions
+        const now = new Date();
+        const endDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+        await client.query(`
+            INSERT INTO user_subscriptions (
+                user_id, plan_id, plan_name, duration_days, price_paid,
+                payment_method, start_date, end_date, status, note, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'active', $8, NOW())
+        `, [
+            userId,
+            planId,
+            plan.name,
+            durationDays,
+            planPrice,
+            paymentMethod,
+            endDate,
+            `Kích hoạt ${plan.name} qua cổng người dùng`
+        ]);
+
+        await client.query('COMMIT');
+        const updatedUser = formatUser(updatedUserRes.rows[0]);
+        return {
+            ok: true,
+            user: updatedUser,
+            plan: {
+                id: String(plan.id),
+                name: plan.name,
+                duration_days: durationDays,
+                price: planPrice
+            },
+            message: `Kích hoạt thành công ${plan.name}! Bạn có thêm ${durationDays} ngày VIP để xem toàn bộ phim.`
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    }
+}
+
+/**
+ * Check whether a user has permission to watch an episode under admin policies
+ */
+async function checkEpisodeAccess({ userId, dramaTitle, episodeNumber = 1, totalEpisodes = 30 }) {
+    const epNum = Math.max(1, parseInt(episodeNumber, 10) || 1);
+    const system = await getSystemSettings();
+    const specificSetting = await getDramaAccessSetting(dramaTitle);
+
+    let effectiveTotal = totalEpisodes || system.default_total_episodes || 30;
+    let freePercent = system.default_free_episode_percent || 20;
+    let isAllFree = false;
+    let isVipOnly = false;
+    let freeCount = 0;
+    let isCustomRule = false;
+
+    if (specificSetting) {
+        isCustomRule = true;
+        effectiveTotal = specificSetting.total_episodes || effectiveTotal;
+        freePercent = specificSetting.free_episode_percent;
+        isAllFree = specificSetting.is_all_free;
+        isVipOnly = specificSetting.is_vip_only;
+        freeCount = specificSetting.free_episodes_count;
+    } else {
+        freeCount = Math.min(effectiveTotal, Math.ceil(effectiveTotal * (freePercent / 100)));
+    }
+
+    let user = null;
+    let isVip = false;
+    let vipRemainingDays = 0;
+
+    if (userId) {
+        user = await getUserById(userId);
+        if (user) {
+            isVip = user.is_vip;
+            vipRemainingDays = user.vip_remaining_days;
+        }
+    }
+
+    let canWatch = false;
+    let accessType = 'LOCKED';
+    let message = '';
+
+    if (isAllFree) {
+        canWatch = true;
+        accessType = 'ALL_FREE';
+        message = 'Bộ phim này được mở miễn phí toàn bộ các tập!';
+    } else if (isVipOnly) {
+        if (isVip) {
+            canWatch = true;
+            accessType = 'VIP_EXCLUSIVE';
+            message = `Bạn được xem tập ${epNum} nhờ đặc quyền VIP (còn ${vipRemainingDays} ngày).`;
+        } else {
+            canWatch = false;
+            accessType = 'VIP_REQUIRED';
+            message = 'Bộ phim này thuộc diện VIP độc quyền (Khóa 100%). Cần đăng ký gói VIP để xem.';
+        }
+    } else if (epNum <= freeCount) {
+        canWatch = true;
+        accessType = 'FREE_PREVIEW';
+        message = `Tập ${epNum} được xem miễn phí (${freeCount}/${effectiveTotal} tập đầu - tương đương ${freePercent}% phim).`;
+    } else {
+        if (isVip) {
+            canWatch = true;
+            accessType = 'VIP_UNLOCKED';
+            message = `Tập ${epNum} mở khóa nhờ gói xem phim VIP của bạn (hạn còn: ${vipRemainingDays} ngày).`;
+        } else {
+            canWatch = false;
+            accessType = 'LOCKED_BUY_PLAN';
+            message = `Tập ${epNum} bị khóa! Phim chỉ cho phép xem miễn phí ${freeCount}/${effectiveTotal} tập đầu (${freePercent}%). Vui lòng đăng ký gói VIP để xem tiếp.`;
+        }
+    }
+
+    return {
+        canWatch,
+        accessType,
+        message,
+        requestedEpisode: epNum,
+        rule: {
+            drama_title: dramaTitle,
+            total_episodes: effectiveTotal,
+            free_episode_percent: freePercent,
+            free_episodes_count: freeCount,
+            is_all_free: isAllFree,
+            is_vip_only: isVipOnly,
+            is_custom_rule: isCustomRule
+        },
+        user: user ? {
+            id: user.id,
+            username: user.username,
+            full_name: user.full_name,
+            is_vip: isVip,
+            vip_remaining_days: vipRemainingDays,
+            balance: user.balance
+        } : null
+    };
+}
+
 module.exports = {
     initDatabase,
     recordVisit,
@@ -601,6 +1027,16 @@ module.exports = {
     saveDramasBatch,
     getDramas,
     getDramaCount,
+    formatUser,
+    registerWithGmail,
+    loginUser,
+    getUserById,
+    getQuickDemoUsers,
+    getSystemSettings,
+    getDramaAccessSetting,
+    getSubscriptionPlans,
+    purchaseSubscription,
+    checkEpisodeAccess,
     getStatus: () => ({
         connected: isConnected,
         host: DB_HOST,
@@ -611,3 +1047,4 @@ module.exports = {
         error: connectionError
     })
 };
+

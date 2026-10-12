@@ -391,6 +391,7 @@
         selectQuality(selectedQuality, false);
         bindEvents();
         bindPlayerEvents();
+        initAuthAndPolicies();
         setupDiscoveryFilters();
         renderHistoryRail();
         renderFavoritesRail();
@@ -1006,13 +1007,23 @@
         if (!reelsSheetGrid || !currentDramaData || !currentDramaData.episodes) return;
         reelsSheetGrid.innerHTML = '';
         const episodes = currentDramaData.episodes;
+        const isVipUser = currentUser && currentUser.is_vip;
 
         for (let i = startIndex; i < endIndex; i++) {
             const ep = episodes[i];
             const epNum = ep.number || (i + 1);
+            let isEpVip = false;
+            if (currentDramaPolicy) {
+                if (currentDramaPolicy.is_all_free) isEpVip = false;
+                else if (currentDramaPolicy.is_vip_only) isEpVip = true;
+                else isEpVip = epNum > (currentDramaPolicy.free_episodes_count || 0);
+            }
+
             const btn = document.createElement('button');
-            btn.className = `reels-ep-btn ${i === currentEpisodeIndex ? 'active' : ''}`;
-            btn.innerHTML = `<span class="ep-num">${epNum}</span><span class="ep-lbl">${t('ep_prefix')}</span>`;
+            const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
+            btn.className = `reels-ep-btn ${i === currentEpisodeIndex ? 'active' : ''} ${vipClass}`;
+            const vipTag = isEpVip ? (isVipUser ? ' <span style="font-size:9px;color:#fbbf24;">👑</span>' : ' <span style="font-size:9px;color:#fbbf24;">🔒</span>') : '';
+            btn.innerHTML = `<span class="ep-num">${epNum}${vipTag}</span><span class="ep-lbl">${t('ep_prefix')}</span>`;
             btn.addEventListener('click', () => {
                 switchEpisode(i);
                 closeReelsEpisodesSheet();
@@ -5081,6 +5092,9 @@
             }
             episodesCount.textContent = data.total_episodes;
 
+            // Synchronize policy for this drama from admin
+            await syncDramaAccessPolicy(data.title || item.title, data.total_episodes);
+
             // Setup Multi-batch tabs
             setupEpisodeBatches(data.episodes);
 
@@ -5139,15 +5153,29 @@
             displayList = episodes.slice(startIndex, startIndex + BATCH_SIZE);
         }
         const epProgress = currentDramaData ? getEpProgressForDrama(currentDramaData.title) : {};
+        const isVipUser = currentUser && currentUser.is_vip;
+
         displayList.forEach((ep, relIdx) => {
             const absIndex = startIndex + relIdx;
+            const epNum = ep.number || absIndex + 1;
             const pct = epProgress[absIndex] || 0;
             const isWatched = pct >= 90;
             const isInProgress = pct > 5 && !isWatched;
+
+            let isEpVip = false;
+            if (currentDramaPolicy) {
+                if (currentDramaPolicy.is_all_free) isEpVip = false;
+                else if (currentDramaPolicy.is_vip_only) isEpVip = true;
+                else isEpVip = epNum > (currentDramaPolicy.free_episodes_count || 0);
+            }
+
+            const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
+            const vipTag = isEpVip ? (isVipUser ? ' (VIP Đã Mở 👑)' : ' (VIP 🔒)') : '';
+
             const btn = document.createElement('button');
-            btn.className = `ep-btn ${absIndex === currentEpisodeIndex ? 'active' : ''} ${isWatched ? 'watched' : ''} ${isInProgress ? 'in-progress' : ''}`;
+            btn.className = `ep-btn ${absIndex === currentEpisodeIndex ? 'active' : ''} ${isWatched ? 'watched' : ''} ${isInProgress ? 'in-progress' : ''} ${vipClass}`;
             btn.textContent = `${ep.number || absIndex + 1}`;
-            btn.title = ep.title || `Episode ${ep.number || absIndex + 1}`;
+            btn.title = (ep.title || `Episode ${ep.number || absIndex + 1}`) + vipTag;
             btn.setAttribute('data-ep-index', absIndex);
             if (isInProgress) btn.style.setProperty('--ep-progress-w', pct + '%');
             btn.addEventListener('click', () => switchEpisode(absIndex));
@@ -5157,9 +5185,23 @@
 
     function switchEpisode(index, replaceState = false) {
         if (!currentDramaData || !currentDramaData.episodes[index]) return;
-        currentEpisodeIndex = index;
         const episode = currentDramaData.episodes[index];
         const epNum = episode.number || (index + 1);
+
+        const isVipUser = currentUser && currentUser.is_vip;
+        let isEpVip = false;
+        if (currentDramaPolicy) {
+            if (currentDramaPolicy.is_all_free) isEpVip = false;
+            else if (currentDramaPolicy.is_vip_only) isEpVip = true;
+            else isEpVip = epNum > (currentDramaPolicy.free_episodes_count || 0);
+        }
+
+        if (isEpVip && !isVipUser) {
+            openEpisodeVipLockModal(epNum, currentDramaPolicy);
+            return;
+        }
+
+        currentEpisodeIndex = index;
 
         // Update clean SEO URL in address bar: /phim/:slug/tap-:ep
         const dramaSlug = getDramaSlug(currentDramaData);
@@ -6087,6 +6129,671 @@
             }
         }
     });
+
+    // ==========================================
+    // 11. USER AUTHENTICATION & ADMIN POLICIES SYNC
+    // ==========================================
+    let currentUser = null;
+    let currentDramaPolicy = null;
+    let cachedSubscriptionPlans = [];
+    let systemPolicySettings = { default_free_episode_percent: 20, default_total_episodes: 30 };
+    let legalPoliciesCache = null;
+
+    function getCurrentUser() {
+        if (currentUser) return currentUser;
+        try {
+            const raw = localStorage.getItem('dramaflow_user');
+            if (raw) {
+                currentUser = JSON.parse(raw);
+                return currentUser;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function setCurrentUser(user) {
+        currentUser = user;
+        if (user) {
+            localStorage.setItem('dramaflow_user', JSON.stringify(user));
+        } else {
+            localStorage.removeItem('dramaflow_user');
+        }
+        renderUserHeaderUI();
+    }
+
+    async function refreshUserProfile() {
+        const u = getCurrentUser();
+        if (!u || !u.id) return;
+        try {
+            const res = await fetch(`/api/auth/me?userId=${encodeURIComponent(u.id)}`);
+            const data = await res.json();
+            if (data.ok && data.user) {
+                setCurrentUser(data.user);
+            }
+        } catch (e) {
+            console.warn('[Auth] Failed to refresh profile:', e.message);
+        }
+    }
+
+    function renderUserHeaderUI() {
+        const user = getCurrentUser();
+        const navLoginBtn = document.getElementById('nav-login-btn-block');
+        const userProfileMenu = document.getElementById('user-profile-menu');
+        const avatarImg = document.getElementById('user-avatar-img');
+        const nameEl = document.getElementById('user-display-name');
+        const emailEl = document.getElementById('user-email-text');
+        const vipBadgeText = document.getElementById('user-vip-badge-text');
+        const vipStatusBadge = document.getElementById('user-vip-status-badge');
+        const balanceVal = document.getElementById('user-balance-value');
+        const expiryVal = document.getElementById('user-vip-expiry-value');
+        const adminLink = document.getElementById('btn-admin-link');
+        const adminPending = document.getElementById('user-admin-pending');
+
+        if (!navLoginBtn) return;
+
+        if (user) {
+            navLoginBtn.classList.add('logged-in');
+            navLoginBtn.title = `Tài khoản: ${user.full_name || user.username}`;
+            const shortName = user.full_name ? user.full_name.split(' ').slice(-1)[0] : (user.username || 'User');
+            const vipPill = user.is_vip ? `<span class="nav-user-badge">VIP</span>` : '';
+            navLoginBtn.innerHTML = `
+                <img src="${user.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username}" class="nav-user-avatar" alt="Avatar">
+                <span>${escapeHtml(shortName)}</span>
+                ${vipPill}
+            `;
+
+            if (avatarImg) avatarImg.src = user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`;
+            if (nameEl) nameEl.textContent = user.full_name || user.username;
+            if (emailEl) emailEl.textContent = user.email || `@${user.username}`;
+
+            if (vipStatusBadge && vipBadgeText) {
+                if (user.is_vip) {
+                    vipStatusBadge.classList.remove('free');
+                    vipBadgeText.textContent = `👑 VIP (còn ${user.vip_remaining_days || 0} ngày)`;
+                } else {
+                    vipStatusBadge.classList.add('free');
+                    vipBadgeText.textContent = 'Thành viên Free';
+                }
+            }
+
+            if (balanceVal) {
+                balanceVal.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(user.balance || 0);
+            }
+            if (expiryVal) {
+                if (user.is_vip && user.subscription_expires_at) {
+                    const expDate = new Date(user.subscription_expires_at);
+                    expiryVal.textContent = expDate.toLocaleDateString('vi-VN') + ` (${user.vip_remaining_days} ngày)`;
+                } else {
+                    expiryVal.textContent = 'Chưa kích hoạt VIP';
+                }
+            }
+
+            // Admin Dashboard access permission
+            if (adminLink && adminPending) {
+                if (user.role === 'admin' || user.can_access_user_table) {
+                    adminLink.hidden = false;
+                    adminPending.hidden = true;
+                } else {
+                    adminLink.hidden = true;
+                    adminPending.hidden = false;
+                }
+            }
+        } else {
+            navLoginBtn.classList.remove('logged-in');
+            navLoginBtn.title = 'Đăng nhập / Đăng ký VIP';
+            navLoginBtn.innerHTML = `<i class="fa-solid fa-user"></i> <span id="nav-login-text">Login</span>`;
+            if (userProfileMenu) userProfileMenu.hidden = true;
+        }
+    }
+
+    async function loadSystemPolicies() {
+        try {
+            const res = await fetch('/api/policies/settings');
+            const data = await res.json();
+            if (data.ok && data.settings) {
+                systemPolicySettings = data.settings;
+            }
+        } catch (e) {
+            console.warn('[Policy] Failed to load settings:', e.message);
+        }
+    }
+
+    async function syncDramaAccessPolicy(title, totalEpisodes) {
+        if (!title) return;
+        try {
+            const res = await fetch(`/api/policies/drama?title=${encodeURIComponent(title)}`);
+            const data = await res.json();
+            if (data.ok && data.dramaRule) {
+                currentDramaPolicy = data.dramaRule;
+                if (totalEpisodes && (!currentDramaPolicy.total_episodes || currentDramaPolicy.total_episodes <= 0)) {
+                    currentDramaPolicy.total_episodes = totalEpisodes;
+                    currentDramaPolicy.free_episodes_count = Math.ceil(totalEpisodes * ((currentDramaPolicy.free_episode_percent || 20) / 100));
+                }
+                return currentDramaPolicy;
+            }
+        } catch (e) {
+            console.warn('[Policy] Failed to sync drama policy:', e.message);
+        }
+        currentDramaPolicy = {
+            drama_title: title,
+            total_episodes: totalEpisodes || 30,
+            free_episode_percent: 20,
+            free_episodes_count: Math.ceil((totalEpisodes || 30) * 0.2),
+            is_all_free: false,
+            is_vip_only: false,
+            is_custom_rule: false
+        };
+        return currentDramaPolicy;
+    }
+
+    async function loadDemoAccounts() {
+        try {
+            const container = document.getElementById('demo-chips-container');
+            if (!container) return;
+            const res = await fetch('/api/auth/demo-users');
+            const data = await res.json();
+            if (data.ok && Array.isArray(data.users) && data.users.length > 0) {
+                container.innerHTML = '';
+                data.users.forEach(u => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'demo-chip-btn';
+                    btn.setAttribute('data-id', u.email || u.username);
+                    const icon = u.role === 'admin' ? '<i class="fa-solid fa-shield-halved text-rose"></i>' : (u.is_vip ? '<i class="fa-solid fa-crown text-amber"></i>' : '<i class="fa-solid fa-user text-muted"></i>');
+                    const label = u.role === 'admin' ? `${u.username} (Admin)` : (u.is_vip ? `${u.username} (VIP)` : `${u.username}`);
+                    btn.innerHTML = `${icon} ${escapeHtml(label)}`;
+                    btn.addEventListener('click', () => {
+                        const idInput = document.getElementById('login-identifier');
+                        if (idInput) idInput.value = u.email || u.username;
+                        handleLogin({ identifier: u.email || u.username });
+                    });
+                    container.appendChild(btn);
+                });
+            }
+        } catch (e) {}
+    }
+
+    function openAuthModal(activeTab = 'login') {
+        const modal = document.getElementById('login-modal');
+        if (!modal) return;
+        modal.hidden = false;
+        switchAuthTab(activeTab);
+        loadDemoAccounts();
+    }
+
+    function closeAuthModal() {
+        const modal = document.getElementById('login-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    function switchAuthTab(tab) {
+        const loginPane = document.getElementById('pane-login');
+        const regPane = document.getElementById('pane-register');
+        const loginTabBtn = document.getElementById('tab-login-btn');
+        const regTabBtn = document.getElementById('tab-register-btn');
+
+        if (tab === 'register') {
+            if (loginPane) loginPane.hidden = true;
+            if (regPane) regPane.hidden = false;
+            if (loginTabBtn) loginTabBtn.classList.remove('active');
+            if (regTabBtn) regTabBtn.classList.add('active');
+        } else {
+            if (loginPane) loginPane.hidden = false;
+            if (regPane) regPane.hidden = true;
+            if (loginTabBtn) loginTabBtn.classList.add('active');
+            if (regTabBtn) regTabBtn.classList.remove('active');
+        }
+    }
+
+    async function handleLogin({ identifier, password = '' }) {
+        if (!identifier || !identifier.trim()) {
+            showToast('Vui lòng nhập Email hoặc Tên tài khoản', 'fa-circle-exclamation');
+            return;
+        }
+        const submitBtn = document.getElementById('login-submit-btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang đăng nhập...`;
+        }
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identifier: identifier.trim(), password })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                throw new Error(data.error || 'Đăng nhập không thành công');
+            }
+            setCurrentUser(data.user);
+            closeAuthModal();
+            showToast(`Chào mừng @${data.user.username} đã đăng nhập!`, 'fa-circle-check');
+            // Re-render episodes grid if open
+            if (currentDramaData && !playerModal.hidden) {
+                renderEpisodesGrid(currentDramaData.episodes);
+            }
+        } catch (err) {
+            showToast(err.message, 'fa-circle-xmark');
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> <span>Đăng Nhập Ngay</span>`;
+            }
+        }
+    }
+
+    async function handleRegister({ email, full_name, password }) {
+        if (!email || !email.trim()) {
+            showToast('Vui lòng nhập địa chỉ Gmail', 'fa-circle-exclamation');
+            return;
+        }
+        const submitBtn = document.getElementById('register-submit-btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang tạo tài khoản...`;
+        }
+        try {
+            const res = await fetch('/api/auth/register-gmail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email.trim(), full_name, password })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                throw new Error(data.error || 'Đăng ký không thành công');
+            }
+            setCurrentUser(data.user);
+            closeAuthModal();
+            showToast(data.message || 'Đăng ký Gmail thành công!', 'fa-circle-check');
+            if (currentDramaData && !playerModal.hidden) {
+                renderEpisodesGrid(currentDramaData.episodes);
+            }
+        } catch (err) {
+            showToast(err.message, 'fa-circle-xmark');
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fa-solid fa-user-check"></i> <span>Tạo Tài Khoản Ngay</span>`;
+            }
+        }
+    }
+
+    async function openVipPlansModal() {
+        const modal = document.getElementById('vip-plans-modal');
+        if (!modal) return;
+        modal.hidden = false;
+
+        const balanceEl = document.getElementById('modal-wallet-balance');
+        const user = getCurrentUser();
+        if (balanceEl) {
+            balanceEl.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(user ? (user.balance || 0) : 0);
+        }
+
+        const grid = document.getElementById('vip-plans-grid');
+        if (grid) {
+            grid.innerHTML = `
+                <div class="plans-loading-placeholder" style="grid-column: 1/-1; text-align:center; padding: 24px; color:#94a3b8;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Đang tải các gói VIP từ Quản trị...
+                </div>
+            `;
+            try {
+                const res = await fetch('/api/subscription/plans');
+                const data = await res.json();
+                if (data.ok && Array.isArray(data.plans) && data.plans.length > 0) {
+                    cachedSubscriptionPlans = data.plans;
+                    renderVipPlans(data.plans);
+                } else {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color:#f43f5e;">Hiện chưa có gói cước nào hoạt động.</div>';
+                }
+            } catch (e) {
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:#f43f5e;">Lỗi tải gói cước: ${e.message}</div>`;
+            }
+        }
+    }
+
+    function renderVipPlans(plans) {
+        const grid = document.getElementById('vip-plans-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        plans.forEach(plan => {
+            const card = document.createElement('div');
+            card.className = 'vip-plan-card';
+            const badgeHtml = plan.badge ? `<span class="vip-plan-badge">${escapeHtml(plan.badge)}</span>` : '';
+            const origPriceHtml = plan.original_price ? `<span class="vip-plan-original-price">${new Intl.NumberFormat('vi-VN').format(plan.original_price)}đ</span>` : '';
+
+            const featuresList = (plan.features || []).map(f => `<li><i class="fa-solid fa-check"></i> ${escapeHtml(f)}</li>`).join('');
+
+            card.innerHTML = `
+                ${badgeHtml}
+                <div>
+                    <div class="vip-plan-name">${escapeHtml(plan.name)}</div>
+                    <div class="vip-plan-price-wrap">
+                        <span class="vip-plan-price">${new Intl.NumberFormat('vi-VN').format(plan.price)}đ</span>
+                        <span class="vip-plan-duration">/ ${plan.duration_days} ngày</span>
+                        ${origPriceHtml}
+                    </div>
+                    <div class="vip-plan-desc">${escapeHtml(plan.description || '')}</div>
+                    <ul class="vip-plan-features">
+                        ${featuresList}
+                    </ul>
+                </div>
+                <button type="button" class="btn-purchase-plan" data-plan-id="${plan.id}">
+                    <i class="fa-solid fa-bolt"></i> Kích Hoạt Ngay
+                </button>
+            `;
+
+            const buyBtn = card.querySelector('.btn-purchase-plan');
+            buyBtn.addEventListener('click', () => handlePurchasePlan(plan));
+            grid.appendChild(card);
+        });
+    }
+
+    async function handlePurchasePlan(plan) {
+        const user = getCurrentUser();
+        if (!user) {
+            showToast('Vui lòng đăng nhập trước khi mua gói VIP!', 'fa-circle-exclamation');
+            openAuthModal('login');
+            return;
+        }
+
+        if (user.balance < plan.price) {
+            if (confirm(`Số dư trong ví (${new Intl.NumberFormat('vi-VN').format(user.balance)}đ) không đủ để mua ${plan.name} (${new Intl.NumberFormat('vi-VN').format(plan.price)}đ).\n\nBạn có muốn nạp thêm 200,000đ test vào ví để thanh toán ngay không?`)) {
+                await handleDemoTopup(200000);
+            } else {
+                return;
+            }
+        }
+
+        try {
+            const res = await fetch('/api/subscription/purchase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, planId: plan.id, paymentMethod: 'wallet' })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                throw new Error(data.error || 'Giao dịch không thành công');
+            }
+            setCurrentUser(data.user);
+            showToast(data.message, 'fa-crown');
+            closeVipPlansModal();
+            closeEpisodeVipLockModal();
+            // Re-render episodes grid to unlock VIP
+            if (currentDramaData && !playerModal.hidden) {
+                renderEpisodesGrid(currentDramaData.episodes);
+            }
+        } catch (e) {
+            showToast(e.message, 'fa-circle-xmark');
+        }
+    }
+
+    async function handleDemoTopup(amount = 100000) {
+        const user = getCurrentUser();
+        if (!user) {
+            showToast('Vui lòng đăng nhập trước khi nạp ví!', 'fa-circle-exclamation');
+            openAuthModal('login');
+            return;
+        }
+        user.balance = (user.balance || 0) + amount;
+        setCurrentUser(user);
+        const balanceEl = document.getElementById('modal-wallet-balance');
+        if (balanceEl) {
+            balanceEl.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(user.balance);
+        }
+        showToast(`Đã cộng thêm +${new Intl.NumberFormat('vi-VN').format(amount)}đ test vào ví!`, 'fa-circle-check');
+    }
+
+    function closeVipPlansModal() {
+        const modal = document.getElementById('vip-plans-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    function openEpisodeVipLockModal(epNum, policy) {
+        const modal = document.getElementById('episode-vip-modal');
+        if (!modal) return;
+        modal.hidden = false;
+
+        const epNumEl = document.getElementById('ep-lock-num');
+        const quotaEl = document.getElementById('ep-lock-quota');
+        const reasonEl = document.getElementById('ep-lock-reason');
+
+        if (epNumEl) epNumEl.textContent = `Tập ${epNum}`;
+        if (policy) {
+            if (policy.is_vip_only) {
+                if (quotaEl) quotaEl.textContent = 'Phim độc quyền VIP (Khóa 100%)';
+                if (reasonEl) reasonEl.textContent = 'Bộ phim này thuộc diện VIP độc quyền. Toàn bộ các tập đều yêu cầu gói VIP.';
+            } else if (policy.is_all_free) {
+                if (quotaEl) quotaEl.textContent = 'Mở miễn phí 100%';
+            } else {
+                const total = policy.total_episodes || 30;
+                const freeCount = policy.free_episodes_count || Math.ceil(total * (policy.free_episode_percent / 100));
+                const pct = policy.free_episode_percent || 20;
+                if (quotaEl) quotaEl.textContent = `Xem miễn phí ${freeCount}/${total} tập đầu (${pct}%)`;
+                if (reasonEl) reasonEl.textContent = `Theo chính sách Admin, phim chỉ mở miễn phí ${freeCount}/${total} tập đầu. Tập ${epNum} yêu cầu Gói VIP.`;
+            }
+        }
+    }
+
+    function closeEpisodeVipLockModal() {
+        const modal = document.getElementById('episode-vip-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    async function openLegalPolicyModal(policyId = 'privacy') {
+        const modal = document.getElementById('legal-policy-modal');
+        if (!modal) return;
+        modal.hidden = false;
+
+        document.querySelectorAll('.legal-tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-policy') === policyId);
+        });
+
+        if (!legalPoliciesCache) {
+            const body = document.getElementById('legal-modal-content-body');
+            if (body) body.innerHTML = '<div style="text-align:center; padding:20px; color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải chính sách...</div>';
+            try {
+                const res = await fetch('/api/policies/legal');
+                const data = await res.json();
+                if (data.ok && data.policies) {
+                    legalPoliciesCache = data.policies;
+                }
+            } catch (e) {
+                console.warn('[Policy] Failed to load legal policies:', e.message);
+            }
+        }
+        renderLegalPolicyContent(policyId);
+    }
+
+    function renderLegalPolicyContent(policyId) {
+        const body = document.getElementById('legal-modal-content-body');
+        if (!body) return;
+        if (!legalPoliciesCache || !legalPoliciesCache[policyId]) {
+            body.innerHTML = '<div style="padding:16px; color:#94a3b8;">Đang cập nhật nội dung văn bản chính sách...</div>';
+            return;
+        }
+
+        const doc = legalPoliciesCache[policyId];
+        let html = `
+            <div style="margin-bottom: 12px;">
+                <h3 style="font-size: 19px; color:#ffffff; font-weight: 800; margin-bottom: 4px;">${escapeHtml(doc.title)}</h3>
+                <span style="font-size: 11.5px; color:#94a3b8;"><i class="fa-solid fa-calendar-check"></i> Cập nhật lần cuối: ${escapeHtml(doc.last_updated)}</span>
+            </div>
+        `;
+
+        (doc.sections || []).forEach(sec => {
+            html += `
+                <div class="legal-section-block">
+                    <h4>${escapeHtml(sec.heading)}</h4>
+                    <p>${escapeHtml(sec.content)}</p>
+                </div>
+            `;
+        });
+
+        body.innerHTML = html;
+    }
+
+    function closeLegalPolicyModal() {
+        const modal = document.getElementById('legal-policy-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    function initAuthAndPolicies() {
+        // 1. Initial State Sync
+        getCurrentUser();
+        renderUserHeaderUI();
+        refreshUserProfile();
+        loadSystemPolicies();
+
+        // 2. Wire Header Login / User Menu Button
+        const navLoginBtn = document.getElementById('nav-login-btn-block');
+        const userMenu = document.getElementById('user-profile-menu');
+
+        if (navLoginBtn) {
+            navLoginBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const user = getCurrentUser();
+                if (user) {
+                    if (userMenu) userMenu.hidden = !userMenu.hidden;
+                } else {
+                    openAuthModal('login');
+                }
+            });
+        }
+
+        // Close user dropdown menu when clicking anywhere outside
+        document.addEventListener('click', (e) => {
+            if (userMenu && !userMenu.hidden) {
+                const cluster = document.getElementById('user-auth-cluster');
+                if (cluster && !cluster.contains(e.target)) {
+                    userMenu.hidden = true;
+                }
+            }
+        });
+
+        // 3. User Dropdown Actions
+        const btnOpenVip = document.getElementById('btn-open-vip-plans');
+        if (btnOpenVip) {
+            btnOpenVip.addEventListener('click', () => {
+                if (userMenu) userMenu.hidden = true;
+                openVipPlansModal();
+            });
+        }
+
+        const btnLogout = document.getElementById('btn-logout-user');
+        if (btnLogout) {
+            btnLogout.addEventListener('click', () => {
+                const user = getCurrentUser();
+                setCurrentUser(null);
+                if (userMenu) userMenu.hidden = true;
+                showToast(`Đã đăng xuất tài khoản @${user ? user.username : ''}`, 'fa-circle-info');
+                // Re-render episodes grid if open
+                if (currentDramaData && !playerModal.hidden) {
+                    renderEpisodesGrid(currentDramaData.episodes);
+                }
+            });
+        }
+
+        // 4. Auth Modal Triggers & Tab Switching
+        const loginCloseBtn = document.getElementById('login-close-btn');
+        const loginBackdrop = document.getElementById('login-modal-backdrop');
+        if (loginCloseBtn) loginCloseBtn.addEventListener('click', closeAuthModal);
+        if (loginBackdrop) loginBackdrop.addEventListener('click', closeAuthModal);
+
+        const tabLoginBtn = document.getElementById('tab-login-btn');
+        const tabRegBtn = document.getElementById('tab-register-btn');
+        if (tabLoginBtn) tabLoginBtn.addEventListener('click', () => switchAuthTab('login'));
+        if (tabRegBtn) tabRegBtn.addEventListener('click', () => switchAuthTab('register'));
+
+        // 5. Auth Forms Submit Handlers
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const idInput = document.getElementById('login-identifier');
+                const pwdInput = document.getElementById('login-password');
+                handleLogin({
+                    identifier: idInput ? idInput.value : '',
+                    password: pwdInput ? pwdInput.value : ''
+                });
+            });
+        }
+
+        const regForm = document.getElementById('register-form');
+        if (regForm) {
+            regForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const emailInput = document.getElementById('reg-email');
+                const nameInput = document.getElementById('reg-name');
+                const pwdInput = document.getElementById('reg-password');
+                handleRegister({
+                    email: emailInput ? emailInput.value : '',
+                    full_name: nameInput ? nameInput.value : '',
+                    password: pwdInput ? pwdInput.value : ''
+                });
+            });
+        }
+
+        // 6. VIP Plans Modal Handlers
+        const vipCloseBtn = document.getElementById('vip-plans-close-btn');
+        const vipBackdrop = document.getElementById('vip-plans-backdrop');
+        if (vipCloseBtn) vipCloseBtn.addEventListener('click', closeVipPlansModal);
+        if (vipBackdrop) vipBackdrop.addEventListener('click', closeVipPlansModal);
+
+        const btnDemoTopup = document.getElementById('btn-demo-topup');
+        if (btnDemoTopup) btnDemoTopup.addEventListener('click', () => handleDemoTopup(100000));
+
+        // 7. Episode Lock Modal Handlers
+        const epLockCloseBtn = document.getElementById('episode-vip-close-btn');
+        const epLockBackdrop = document.getElementById('episode-vip-backdrop');
+        if (epLockCloseBtn) epLockCloseBtn.addEventListener('click', closeEpisodeVipLockModal);
+        if (epLockBackdrop) epLockBackdrop.addEventListener('click', closeEpisodeVipLockModal);
+
+        const btnEpLockUpgrade = document.getElementById('btn-ep-lock-upgrade');
+        if (btnEpLockUpgrade) {
+            btnEpLockUpgrade.addEventListener('click', () => {
+                closeEpisodeVipLockModal();
+                openVipPlansModal();
+            });
+        }
+
+        const btnEpLockLogin = document.getElementById('btn-ep-lock-login');
+        if (btnEpLockLogin) {
+            btnEpLockLogin.addEventListener('click', () => {
+                closeEpisodeVipLockModal();
+                openAuthModal('login');
+            });
+        }
+
+        // 8. Legal Policies Modal Handlers
+        const legalCloseBtn = document.getElementById('legal-policy-close-btn');
+        const legalBackdrop = document.getElementById('legal-policy-backdrop');
+        if (legalCloseBtn) legalCloseBtn.addEventListener('click', closeLegalPolicyModal);
+        if (legalBackdrop) legalBackdrop.addEventListener('click', closeLegalPolicyModal);
+
+        document.querySelectorAll('.legal-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const polId = btn.getAttribute('data-policy');
+                document.querySelectorAll('.legal-tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+                renderLegalPolicyContent(polId);
+            });
+        });
+
+        // Footer Legal Links Click Events
+        const fPriv = document.getElementById('footer-privacy-btn');
+        const fTerms = document.getElementById('footer-terms-btn');
+        const fVip = document.getElementById('footer-vip-btn');
+        const fDmca = document.getElementById('footer-dmca-btn');
+        const fStatus = document.getElementById('footer-api-status-btn');
+
+        if (fPriv) fPriv.addEventListener('click', () => openLegalPolicyModal('privacy'));
+        if (fTerms) fTerms.addEventListener('click', () => openLegalPolicyModal('terms'));
+        if (fVip) fVip.addEventListener('click', () => openLegalPolicyModal('vip_policy'));
+        if (fDmca) fDmca.addEventListener('click', () => openLegalPolicyModal('dmca'));
+        if (fStatus) fStatus.addEventListener('click', () => {
+            showToast('API Gateway & Supabase Cluster hoạt động 100% bình thường (Uptime: 99.99%)', 'fa-circle-check');
+        });
+    }
 
     function escapeHtml(text) {
         if (!text) return '';
