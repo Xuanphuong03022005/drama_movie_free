@@ -1007,22 +1007,33 @@
         if (!reelsSheetGrid || !currentDramaData || !currentDramaData.episodes) return;
         reelsSheetGrid.innerHTML = '';
         const episodes = currentDramaData.episodes;
-        const isVipUser = currentUser && currentUser.is_vip;
+        const totalEpisodes = currentDramaData?.total_episodes || episodes.length || 40;
+        const freePercent = (currentDramaPolicy && currentDramaPolicy.free_episode_percent !== undefined)
+            ? Number(currentDramaPolicy.free_episode_percent)
+            : Number(systemPolicySettings?.default_free_episode_percent || localStorage.getItem('dramaflow_free_percent') || 90);
+
+        const freeCount = (currentDramaPolicy && currentDramaPolicy.custom_free_episodes_count != null)
+            ? Number(currentDramaPolicy.custom_free_episodes_count)
+            : Math.min(totalEpisodes, Math.ceil(totalEpisodes * (freePercent / 100)));
 
         for (let i = startIndex; i < endIndex; i++) {
             const ep = episodes[i];
             const epNum = ep.number || (i + 1);
-            let isEpVip = false;
+            let isFree = epNum <= freeCount;
             if (currentDramaPolicy) {
-                if (currentDramaPolicy.is_all_free) isEpVip = false;
-                else if (currentDramaPolicy.is_vip_only) isEpVip = true;
-                else isEpVip = epNum > (currentDramaPolicy.free_episodes_count || 0);
+                if (currentDramaPolicy.is_all_free) isFree = true;
+                else if (currentDramaPolicy.is_vip_only) isFree = false;
+                else isFree = epNum <= freeCount;
             }
 
+            const canPlay = isFree || isVipUser;
+            const isEpVip = !isFree;
+
             const btn = document.createElement('button');
+            const accessClass = canPlay ? 'unlocked' : 'locked';
             const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
-            btn.className = `reels-ep-btn ${i === currentEpisodeIndex ? 'active' : ''} ${vipClass}`;
-            const vipTag = isEpVip ? (isVipUser ? ' <span style="font-size:9px;color:#fbbf24;">👑</span>' : ' <span style="font-size:9px;color:#fbbf24;">🔒</span>') : '';
+            btn.className = `reels-ep-btn ${accessClass} ${i === currentEpisodeIndex ? 'active' : ''} ${vipClass}`;
+            const vipTag = !canPlay ? ' <span style="font-size:9px;color:#fb7185;">🔒</span>' : (isEpVip ? ' <span style="font-size:9px;color:#fbbf24;">👑</span>' : '');
             btn.innerHTML = `<span class="ep-num">${epNum}${vipTag}</span><span class="ep-lbl">${t('ep_prefix')}</span>`;
             btn.addEventListener('click', () => {
                 switchEpisode(i);
@@ -5155,6 +5166,15 @@
         const epProgress = currentDramaData ? getEpProgressForDrama(currentDramaData.title) : {};
         const isVipUser = currentUser && currentUser.is_vip;
 
+        const totalEpisodes = currentDramaData?.total_episodes || episodes.length || 40;
+        const freePercent = (currentDramaPolicy && currentDramaPolicy.free_episode_percent !== undefined)
+            ? Number(currentDramaPolicy.free_episode_percent)
+            : Number(systemPolicySettings?.default_free_episode_percent || localStorage.getItem('dramaflow_free_percent') || 90);
+
+        const freeCount = (currentDramaPolicy && currentDramaPolicy.custom_free_episodes_count != null)
+            ? Number(currentDramaPolicy.custom_free_episodes_count)
+            : Math.min(totalEpisodes, Math.ceil(totalEpisodes * (freePercent / 100)));
+
         displayList.forEach((ep, relIdx) => {
             const absIndex = startIndex + relIdx;
             const epNum = ep.number || absIndex + 1;
@@ -5162,20 +5182,24 @@
             const isWatched = pct >= 90;
             const isInProgress = pct > 5 && !isWatched;
 
-            let isEpVip = false;
+            let isFree = epNum <= freeCount;
             if (currentDramaPolicy) {
-                if (currentDramaPolicy.is_all_free) isEpVip = false;
-                else if (currentDramaPolicy.is_vip_only) isEpVip = true;
-                else isEpVip = epNum > (currentDramaPolicy.free_episodes_count || 0);
+                if (currentDramaPolicy.is_all_free) isFree = true;
+                else if (currentDramaPolicy.is_vip_only) isFree = false;
+                else isFree = epNum <= freeCount;
             }
 
+            const canPlay = isFree || isVipUser;
+            const isEpVip = !isFree;
+
+            const accessClass = canPlay ? 'unlocked' : 'locked';
             const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
-            const vipTag = isEpVip ? (isVipUser ? ' (VIP Đã Mở 👑)' : ' (VIP 🔒)') : '';
+            const vipTag = isEpVip ? (isVipUser ? ' (VIP Đã Mở 👑)' : ' (VIP 🔒)') : ' (Xem Miễn Phí ▶)';
 
             const btn = document.createElement('button');
-            btn.className = `ep-btn ${absIndex === currentEpisodeIndex ? 'active' : ''} ${isWatched ? 'watched' : ''} ${isInProgress ? 'in-progress' : ''} ${vipClass}`;
-            btn.textContent = `${ep.number || absIndex + 1}`;
-            btn.title = (ep.title || `Episode ${ep.number || absIndex + 1}`) + vipTag;
+            btn.className = `ep-btn ${accessClass} ${absIndex === currentEpisodeIndex ? 'active' : ''} ${isWatched ? 'watched' : ''} ${isInProgress ? 'in-progress' : ''} ${vipClass}`;
+            btn.innerHTML = `<span>${epNum}</span>${!canPlay ? '<i class="icon-lock">🔒</i>' : '<i class="icon-play">▶</i>'}`;
+            btn.title = (ep.title || `Tập ${epNum}`) + vipTag;
             btn.setAttribute('data-ep-index', absIndex);
             if (isInProgress) btn.style.setProperty('--ep-progress-w', pct + '%');
             btn.addEventListener('click', () => switchEpisode(absIndex));
@@ -5183,21 +5207,27 @@
         });
     }
 
-    function switchEpisode(index, replaceState = false) {
+    async function switchEpisode(index, replaceState = false) {
         if (!currentDramaData || !currentDramaData.episodes[index]) return;
         const episode = currentDramaData.episodes[index];
         const epNum = episode.number || (index + 1);
+        const dramaTitle = currentDramaData.title || '';
 
-        const isVipUser = currentUser && currentUser.is_vip;
-        let isEpVip = false;
-        if (currentDramaPolicy) {
-            if (currentDramaPolicy.is_all_free) isEpVip = false;
-            else if (currentDramaPolicy.is_vip_only) isEpVip = true;
-            else isEpVip = epNum > (currentDramaPolicy.free_episodes_count || 0);
-        }
+        // Call check-permission API to verify watch permission
+        const permission = await checkEpisodePermission(dramaTitle, epNum, currentUser);
 
-        if (isEpVip && !isVipUser) {
-            openEpisodeVipLockModal(epNum, currentDramaPolicy);
+        if (!permission.canWatch) {
+            // Stop video if currently playing
+            if (mainVideo && !mainVideo.paused) {
+                try { mainVideo.pause(); } catch (e) {}
+            }
+            showVipUpgradeModal({
+                message: permission.message,
+                episodeNumber: epNum,
+                plans: permission.availablePlans || [],
+                drama: permission.drama || currentDramaPolicy,
+                accessType: permission.accessType
+            });
             return;
         }
 
@@ -6246,41 +6276,166 @@
         }
     }
 
+    const API_BASE = (window.location.port === '3001') ? '' : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:3001' : '');
+
     async function loadSystemPolicies() {
+        try {
+            const res = await fetch(`${API_BASE}/api/drama-access/settings`);
+            const data = await res.json();
+            if (data.success && data.data && data.data.systemConfig) {
+                const pct = Number(data.data.systemConfig.defaultFreePercent ?? 90);
+                const eps = Number(data.data.systemConfig.defaultTotalEpisodes ?? 40);
+                systemPolicySettings = {
+                    default_free_episode_percent: pct,
+                    default_total_episodes: eps,
+                    description: data.data.systemConfig.description
+                };
+                try { localStorage.setItem('dramaflow_free_percent', String(pct)); } catch (e) {}
+                return systemPolicySettings;
+            }
+        } catch (e) {
+            console.warn('[DramaAccess] Failed to load settings from primary URL, trying fallback:', e.message);
+        }
+        try {
+            const res = await fetch('/api/drama-access/settings');
+            const data = await res.json();
+            if (data.success && data.data && data.data.systemConfig) {
+                const pct = Number(data.data.systemConfig.defaultFreePercent ?? 90);
+                const eps = Number(data.data.systemConfig.defaultTotalEpisodes ?? 40);
+                systemPolicySettings = {
+                    default_free_episode_percent: pct,
+                    default_total_episodes: eps,
+                    description: data.data.systemConfig.description
+                };
+                try { localStorage.setItem('dramaflow_free_percent', String(pct)); } catch (e) {}
+                return systemPolicySettings;
+            }
+        } catch (e) {}
         try {
             const res = await fetch('/api/policies/settings');
             const data = await res.json();
             if (data.ok && data.settings) {
                 systemPolicySettings = data.settings;
+                const pct = Number(data.settings.default_free_episode_percent ?? 90);
+                try { localStorage.setItem('dramaflow_free_percent', String(pct)); } catch (e) {}
             }
         } catch (e) {
-            console.warn('[Policy] Failed to load settings:', e.message);
+            console.warn('[Policy] Failed to load fallback settings:', e.message);
+        }
+    }
+
+    async function checkEpisodePermission(dramaTitle, episodeNumber, user) {
+        try {
+            const res = await fetch(`${API_BASE}/api/drama-access/check-permission`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dramaTitle: dramaTitle,
+                    episodeNumber: episodeNumber,
+                    userId: user ? user.id : null,
+                    totalEpisodes: currentDramaData?.total_episodes || (currentDramaData?.episodes ? currentDramaData.episodes.length : 40)
+                })
+            });
+            const result = await res.json();
+            if (result.success && result.data) {
+                return result.data;
+            }
+            return {
+                canWatch: false,
+                accessType: 'LOCKED_BUY_PLAN',
+                message: result.message || 'Không thể xác thực quyền xem tập phim.',
+                availablePlans: cachedSubscriptionPlans || []
+            };
+        } catch (err) {
+            console.warn('[DramaAccess] Check permission API error:', err.message);
+            // Try local origin fallback
+            try {
+                const resFallback = await fetch('/api/drama-access/check-permission', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dramaTitle: dramaTitle,
+                        episodeNumber: episodeNumber,
+                        userId: user ? user.id : null,
+                        totalEpisodes: currentDramaData?.total_episodes || (currentDramaData?.episodes ? currentDramaData.episodes.length : 40)
+                    })
+                });
+                const resultFallback = await resFallback.json();
+                if (resultFallback.success && resultFallback.data) {
+                    return resultFallback.data;
+                }
+            } catch (e) {}
+            const isVip = Boolean(user && user.is_vip);
+            let freePct = (currentDramaPolicy && currentDramaPolicy.free_episode_percent !== undefined)
+                ? Number(currentDramaPolicy.free_episode_percent)
+                : Number(systemPolicySettings?.default_free_episode_percent || localStorage.getItem('dramaflow_free_percent') || 90);
+            let total = currentDramaData?.total_episodes || (currentDramaData?.episodes ? currentDramaData.episodes.length : 40);
+            let freeCount = Math.min(total, Math.ceil(total * (freePct / 100)));
+            const canWatch = isVip || episodeNumber <= freeCount;
+            return {
+                canWatch,
+                accessType: canWatch ? (isVip ? 'VIP_UNLOCKED' : 'FREE_PREVIEW') : 'LOCKED_BUY_PLAN',
+                message: canWatch 
+                    ? `Tập ${episodeNumber} nằm trong diện xem miễn phí (${freeCount}/${total} tập đầu - theo mức ${freePct}% áp dụng cho tất cả phim).`
+                    : `Tập ${episodeNumber} bị khóa! Hệ thống cho phép xem miễn phí ${freeCount}/${total} tập đầu (${freePct}%). Vui lòng đăng ký gói VIP để tiếp tục theo dõi trọn bộ.`,
+                availablePlans: cachedSubscriptionPlans || []
+            };
         }
     }
 
     async function syncDramaAccessPolicy(title, totalEpisodes) {
         if (!title) return;
+        if (!systemPolicySettings || systemPolicySettings.default_free_episode_percent === undefined) {
+            await loadSystemPolicies();
+        }
+        const sysPercent = Number(systemPolicySettings?.default_free_episode_percent || localStorage.getItem('dramaflow_free_percent') || 90);
+        const effTotal = parseInt(totalEpisodes, 10) || 40;
+
+        try {
+            // Check permission with episode 1 to get server's authoritative drama rule
+            const perm = await checkEpisodePermission(title, 1, currentUser);
+            if (perm && perm.drama) {
+                const dramaRule = perm.drama;
+                const freePct = dramaRule.free_episode_percent !== undefined ? Number(dramaRule.free_episode_percent) : sysPercent;
+                const freeCount = Math.min(effTotal, Math.ceil(effTotal * (freePct / 100)));
+                currentDramaPolicy = {
+                    drama_title: title,
+                    total_episodes: effTotal,
+                    free_episode_percent: freePct,
+                    free_episodes_count: freeCount,
+                    locked_episodes_count: Math.max(0, effTotal - freeCount),
+                    is_all_free: Boolean(dramaRule.is_all_free || freePct >= 100),
+                    is_vip_only: Boolean(dramaRule.is_vip_only || freePct <= 0),
+                    is_custom_rule: Boolean(dramaRule.is_custom_rule)
+                };
+                return currentDramaPolicy;
+            }
+        } catch (e) {
+            console.warn('[Policy] Failed to sync drama policy via permission check:', e.message);
+        }
+
         try {
             const res = await fetch(`/api/policies/drama?title=${encodeURIComponent(title)}`);
             const data = await res.json();
             if (data.ok && data.dramaRule) {
                 currentDramaPolicy = data.dramaRule;
-                if (totalEpisodes && (!currentDramaPolicy.total_episodes || currentDramaPolicy.total_episodes <= 0)) {
-                    currentDramaPolicy.total_episodes = totalEpisodes;
-                    currentDramaPolicy.free_episodes_count = Math.ceil(totalEpisodes * ((currentDramaPolicy.free_episode_percent || 20) / 100));
-                }
+                const freePct = currentDramaPolicy.free_episode_percent !== undefined ? Number(currentDramaPolicy.free_episode_percent) : sysPercent;
+                currentDramaPolicy.total_episodes = effTotal;
+                currentDramaPolicy.free_episode_percent = freePct;
+                currentDramaPolicy.free_episodes_count = Math.min(effTotal, Math.ceil(effTotal * (freePct / 100)));
                 return currentDramaPolicy;
             }
-        } catch (e) {
-            console.warn('[Policy] Failed to sync drama policy:', e.message);
-        }
+        } catch (e) {}
+
+        const freeCount = Math.min(effTotal, Math.ceil(effTotal * (sysPercent / 100)));
         currentDramaPolicy = {
             drama_title: title,
-            total_episodes: totalEpisodes || 30,
-            free_episode_percent: 20,
-            free_episodes_count: Math.ceil((totalEpisodes || 30) * 0.2),
-            is_all_free: false,
-            is_vip_only: false,
+            total_episodes: effTotal,
+            free_episode_percent: sysPercent,
+            free_episodes_count: freeCount,
+            locked_episodes_count: Math.max(0, effTotal - freeCount),
+            is_all_free: sysPercent >= 100,
+            is_vip_only: sysPercent <= 0,
             is_custom_rule: false
         };
         return currentDramaPolicy;
@@ -6549,7 +6704,7 @@
         if (modal) modal.hidden = true;
     }
 
-    function openEpisodeVipLockModal(epNum, policy) {
+    function showVipUpgradeModal({ message, episodeNumber, plans = [], drama = null, accessType = 'LOCKED_BUY_PLAN' }) {
         const modal = document.getElementById('episode-vip-modal');
         if (!modal) return;
         modal.hidden = false;
@@ -6557,23 +6712,161 @@
         const epNumEl = document.getElementById('ep-lock-num');
         const quotaEl = document.getElementById('ep-lock-quota');
         const reasonEl = document.getElementById('ep-lock-reason');
+        const statusEl = document.getElementById('ep-lock-status');
+        const titleEl = document.getElementById('ep-lock-title');
+        const btnLogin = document.getElementById('btn-ep-lock-login');
 
-        if (epNumEl) epNumEl.textContent = `Tập ${epNum}`;
-        if (policy) {
-            if (policy.is_vip_only) {
-                if (quotaEl) quotaEl.textContent = 'Phim độc quyền VIP (Khóa 100%)';
-                if (reasonEl) reasonEl.textContent = 'Bộ phim này thuộc diện VIP độc quyền. Toàn bộ các tập đều yêu cầu gói VIP.';
-            } else if (policy.is_all_free) {
-                if (quotaEl) quotaEl.textContent = 'Mở miễn phí 100%';
+        if (titleEl) {
+            titleEl.textContent = `Tập ${episodeNumber} Bị Khóa (VIP)`;
+        }
+        if (epNumEl) {
+            epNumEl.textContent = `Tập ${episodeNumber}`;
+        }
+        if (reasonEl) {
+            reasonEl.textContent = message || `Tập ${episodeNumber} bị khóa! Hệ thống cho phép xem miễn phí một số tập đầu. Vui lòng đăng ký gói VIP để tiếp tục theo dõi trọn bộ.`;
+        }
+        if (statusEl) {
+            if (accessType === 'VIP_REQUIRED' || accessType === 'VIP_EXCLUSIVE') {
+                statusEl.textContent = 'Phim độc quyền VIP';
             } else {
-                const total = policy.total_episodes || 30;
-                const freeCount = policy.free_episodes_count || Math.ceil(total * (policy.free_episode_percent / 100));
-                const pct = policy.free_episode_percent || 20;
-                if (quotaEl) quotaEl.textContent = `Xem miễn phí ${freeCount}/${total} tập đầu (${pct}%)`;
-                if (reasonEl) reasonEl.textContent = `Theo chính sách Admin, phim chỉ mở miễn phí ${freeCount}/${total} tập đầu. Tập ${epNum} yêu cầu Gói VIP.`;
+                statusEl.textContent = 'Cần nâng cấp VIP';
+            }
+        }
+
+        const effectiveTotal = drama?.total_episodes || currentDramaPolicy?.total_episodes || currentDramaData?.total_episodes || 40;
+        const effectivePct = drama?.free_episode_percent || currentDramaPolicy?.free_episode_percent || systemPolicySettings?.default_free_episode_percent || 20;
+        const freeCount = drama?.free_episodes_count || currentDramaPolicy?.free_episodes_count || Math.ceil(effectiveTotal * (effectivePct / 100));
+
+        if (quotaEl) {
+            quotaEl.textContent = `Xem miễn phí ${freeCount}/${effectiveTotal} tập đầu (${effectivePct}%)`;
+        }
+
+        if (btnLogin) {
+            const user = getCurrentUser();
+            if (user) {
+                btnLogin.innerHTML = `<i class="fa-solid fa-wallet"></i> <span>Số dư ví: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(user.balance || 0)} (@${user.username})</span>`;
+            } else {
+                btnLogin.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> <span>Đã có tài khoản? Đăng nhập</span>`;
+            }
+        }
+
+        renderEpisodeLockPlans(plans);
+    }
+
+    function renderEpisodeLockPlans(plans) {
+        const container = document.getElementById('ep-lock-plans-list');
+        const section = document.getElementById('ep-lock-plans-section');
+        if (!container) return;
+
+        let displayPlans = (Array.isArray(plans) && plans.length > 0) ? plans : cachedSubscriptionPlans;
+        if ((!displayPlans || displayPlans.length === 0) && cachedSubscriptionPlans.length > 0) {
+            displayPlans = cachedSubscriptionPlans;
+        }
+
+        if (!displayPlans || displayPlans.length === 0) {
+            fetch('/api/subscription/plans')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.ok && Array.isArray(d.plans) && d.plans.length > 0) {
+                        cachedSubscriptionPlans = d.plans;
+                        renderEpisodeLockPlans(d.plans);
+                    } else if (section) {
+                        section.hidden = true;
+                    }
+                })
+                .catch(() => { if (section) section.hidden = true; });
+            return;
+        }
+
+        if (section) section.hidden = false;
+        container.innerHTML = '';
+
+        displayPlans.forEach(plan => {
+            const card = document.createElement('div');
+            card.className = 'ep-lock-plan-card';
+            const badgeHtml = plan.badge ? `<span class="ep-lock-plan-badge">${escapeHtml(plan.badge)}</span>` : '';
+            const origPrice = plan.original_price ? `<span class="orig-price">${new Intl.NumberFormat('vi-VN').format(plan.original_price)}đ</span>` : '';
+
+            card.innerHTML = `
+                <div class="ep-lock-plan-info">
+                    <div class="ep-lock-plan-top">
+                        <strong class="plan-name">${escapeHtml(plan.name)}</strong>
+                        ${badgeHtml}
+                    </div>
+                    <div class="ep-lock-plan-sub">
+                        <span class="plan-price">${new Intl.NumberFormat('vi-VN').format(plan.price)}đ</span>
+                        <span class="plan-duration">/${plan.duration_days} ngày</span>
+                        ${origPrice}
+                    </div>
+                </div>
+                <button type="button" class="btn-lock-plan-buy" data-plan-id="${plan.id}">
+                    <i class="fa-solid fa-bolt"></i> Mua Gói Mở Khóa Ngay
+                </button>
+            `;
+
+            const buyBtn = card.querySelector('.btn-lock-plan-buy');
+            buyBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await handlePurchasePlan(plan);
+            });
+            container.appendChild(card);
+        });
+    }
+
+    function openEpisodeVipLockModal(epNum, policy, customMessage = '') {
+        showVipUpgradeModal({
+            message: customMessage,
+            episodeNumber: epNum,
+            plans: cachedSubscriptionPlans || [],
+            drama: policy,
+            accessType: 'LOCKED_BUY_PLAN'
+        });
+    }
+
+    async function onEpisodeClick(dramaTitle, episodeNumber, user) {
+        if (!currentDramaData || !currentDramaData.episodes) return;
+        const idx = currentDramaData.episodes.findIndex(e => (e.number || 0) === episodeNumber);
+        if (idx !== -1) {
+            await switchEpisode(idx);
+        } else {
+            const perm = await checkEpisodePermission(dramaTitle, episodeNumber, user || currentUser);
+            if (!perm.canWatch) {
+                showVipUpgradeModal({
+                    message: perm.message,
+                    episodeNumber: episodeNumber,
+                    plans: perm.availablePlans || [],
+                    drama: perm.drama,
+                    accessType: perm.accessType
+                });
             }
         }
     }
+
+    function renderEpisodeButtons(totalEpisodes, freePercent, isUserVip) {
+        const freeCount = Math.ceil(totalEpisodes * (freePercent / 100));
+        const container = document.getElementById('episodes-list') || episodesGrid;
+        if (!container) return;
+        container.innerHTML = '';
+
+        for (let ep = 1; ep <= totalEpisodes; ep++) {
+            const isFree = ep <= freeCount;
+            const canPlay = isFree || isUserVip;
+
+            const btn = document.createElement('button');
+            btn.className = `ep-btn ${canPlay ? 'unlocked' : 'locked'}`;
+            btn.innerHTML = `
+                <span>Tập ${ep}</span>
+                ${!canPlay ? '<i class="icon-lock">🔒</i>' : '<i class="icon-play">▶</i>'}
+            `;
+            btn.onclick = () => onEpisodeClick(currentDramaData?.title || 'Phim', ep, currentUser);
+            container.appendChild(btn);
+        }
+    }
+
+    window.onEpisodeClick = onEpisodeClick;
+    window.renderEpisodeButtons = renderEpisodeButtons;
+    window.checkEpisodePermission = checkEpisodePermission;
+    window.showVipUpgradeModal = showVipUpgradeModal;
 
     function closeEpisodeVipLockModal() {
         const modal = document.getElementById('episode-vip-modal');

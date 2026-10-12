@@ -28,6 +28,13 @@ try {
     }
 } catch (e) { }
 
+process.on('unhandledRejection', (reason) => {
+    console.warn('[Process] ⚠️ Unhandled Rejection:', reason && reason.message ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[Process] 🚨 Uncaught Exception:', err.message);
+});
+
 const _gk = ['gsk_eRcT09sd', 'm0lpHaX17VnbWGdy', 'b3FYcj5KSDSN6NEv', '41u9UvxfqTDw'].join('');
 const DEFAULT_GROQ_KEY = _gk;
 
@@ -193,6 +200,85 @@ app.get('/api/auth/demo-users', async (req, res) => {
 // ==========================================
 // ADMIN POLICIES & FREE EPISODE ACCESS RULES
 // ==========================================
+app.get('/api/drama-access/settings', async (req, res) => {
+    try {
+        const settings = await db.getSystemSettings();
+        res.json({
+            success: true,
+            data: {
+                systemConfig: {
+                    defaultFreePercent: settings.default_free_episode_percent || 20,
+                    defaultTotalEpisodes: settings.default_total_episodes || 40,
+                    description: 'Tỷ lệ % tập phim được xem miễn phí áp dụng cho tất cả phim'
+                }
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.post('/api/drama-access/check-permission', async (req, res) => {
+    try {
+        const { dramaTitle, episodeNumber, userId, totalEpisodes } = req.body;
+        if (!dramaTitle) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp dramaTitle hợp lệ.'
+            });
+        }
+        const epNum = Math.max(1, parseInt(episodeNumber, 10) || 1);
+        const result = await db.checkEpisodeAccess({
+            userId,
+            dramaTitle,
+            episodeNumber: epNum,
+            totalEpisodes
+        });
+
+        let availablePlans = [];
+        if (!result.canWatch) {
+            try {
+                const plans = await db.getSubscriptionPlans();
+                availablePlans = (plans || []).map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    code: p.code,
+                    duration_days: p.duration_days,
+                    price: p.price,
+                    original_price: p.original_price,
+                    badge: p.badge || ''
+                }));
+            } catch (e) {
+                console.warn('[DramaAccess] Error loading plans:', e.message);
+            }
+        }
+
+        const dramaInfo = {
+            drama_title: result.rule?.drama_title || dramaTitle,
+            total_episodes: result.rule?.total_episodes || 40,
+            free_episode_percent: result.rule?.free_episode_percent || 20,
+            free_episodes_count: result.rule?.free_episodes_count || 8,
+            locked_episodes_count: Math.max(0, (result.rule?.total_episodes || 40) - (result.rule?.free_episodes_count || 8))
+        };
+
+        res.json({
+            success: true,
+            message: result.message,
+            data: {
+                canWatch: result.canWatch,
+                accessType: result.accessType,
+                message: result.message,
+                drama: dramaInfo,
+                requestedEpisode: epNum,
+                user: result.user,
+                availablePlans
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 app.get('/api/policies/settings', async (req, res) => {
     try {
         const settings = await db.getSystemSettings();
@@ -3136,7 +3222,7 @@ async function transcribeViaCloudApi(slug, epNum, streamUrl, cleanTarget, apiKey
     })();
 
     cloudInFlightPromises.set(cacheKey, taskPromise);
-    taskPromise.finally(() => {
+    taskPromise.catch(() => { }).finally(() => {
         cloudInFlightPromises.delete(cacheKey);
     });
     return await taskPromise;

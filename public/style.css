@@ -10118,34 +10118,182 @@ body.theme-light .dock-item.active i,
 }
 
 /* =======================================================
-   EPISODE BUTTON VIP BADGES IN DRAWER
+   AVAILABLE PLANS SECTION INSIDE EPISODE LOCK MODAL
 ======================================================= */
-.ep-btn.vip-locked {
-    border-color: rgba(245, 158, 11, 0.35);
-    color: #fbbf24;
-    position: relative;
+.ep-lock-plans-section {
+    margin: 14px 0 16px;
+    text-align: left;
 }
 
-.ep-btn.vip-locked::after {
-    content: '🔒';
-    position: absolute;
-    top: 2px;
-    right: 3px;
+.ep-lock-plans-heading {
+    font-size: 13px;
+    font-weight: 750;
+    color: #e2e8f0;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.ep-lock-plans-list {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.ep-lock-plan-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ep-lock-plan-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(245, 158, 11, 0.45);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.ep-lock-plan-info {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+
+.ep-lock-plan-top {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 3px;
+    flex-wrap: wrap;
+}
+
+.ep-lock-plan-top .plan-name {
+    font-size: 13.5px;
+    color: #ffffff;
+    font-weight: 750;
+}
+
+.ep-lock-plan-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f59e0b, #ec4899);
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+.ep-lock-plan-sub {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.ep-lock-plan-sub .plan-price {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: #fbbf24;
+}
+
+.ep-lock-plan-sub .plan-duration {
+    color: #94a3b8;
+    font-size: 11.5px;
+}
+
+.ep-lock-plan-sub .orig-price {
+    color: #64748b;
+    text-decoration: line-through;
+    font-size: 11px;
+}
+
+.btn-lock-plan-buy {
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
+    border: none;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 750;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+    transition: all 0.18s ease;
+}
+
+.btn-lock-plan-buy:hover {
+    transform: scale(1.03);
+    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.55);
+}
+
+/* =======================================================
+   EPISODE BUTTON VIP & ACCESS STATES IN DRAWER & REELS
+======================================================= */
+.ep-btn.locked {
+    border-color: rgba(244, 63, 94, 0.4) !important;
+    background: rgba(244, 63, 94, 0.08) !important;
+    color: #fda4af !important;
+}
+
+.ep-btn.locked:hover {
+    border-color: #f43f5e !important;
+    box-shadow: 0 0 14px rgba(244, 63, 94, 0.35) !important;
+}
+
+.ep-btn.unlocked {
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.ep-btn .icon-lock {
+    font-size: 9px;
+    margin-left: 3px;
+    color: #fb7185;
+    font-style: normal;
+    display: inline-block;
+}
+
+.ep-btn .icon-play {
     font-size: 8px;
-    opacity: 0.85;
+    margin-left: 2px;
+    color: #34d399;
+    opacity: 0.75;
+    font-style: normal;
+    display: inline-block;
+}
+
+.ep-btn.vip-locked {
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #fbbf24;
 }
 
 .ep-btn.vip-unlocked {
-    border-color: rgba(245, 158, 11, 0.6);
-    position: relative;
+    border-color: rgba(245, 158, 11, 0.65);
+    color: #fde68a;
 }
 
-.ep-btn.vip-unlocked::after {
-    content: '👑';
-    position: absolute;
-    top: 1px;
-    right: 3px;
-    font-size: 9px;
+.ep-btn.vip-unlocked .icon-play {
+    color: #fbbf24;
+}
+
+.reels-ep-btn.locked {
+    border-color: rgba(244, 63, 94, 0.45) !important;
+}
+
+.reels-ep-btn.locked .ep-num {
+    color: #fda4af;
 }
 
 /* =======================================================

@@ -923,13 +923,15 @@ async function purchaseSubscription({ userId, planId, paymentMethod = 'wallet' }
 /**
  * Check whether a user has permission to watch an episode under admin policies
  */
-async function checkEpisodeAccess({ userId, dramaTitle, episodeNumber = 1, totalEpisodes = 30 }) {
+async function checkEpisodeAccess({ userId, dramaTitle, episodeNumber = 1, totalEpisodes }) {
     const epNum = Math.max(1, parseInt(episodeNumber, 10) || 1);
     const system = await getSystemSettings();
     const specificSetting = await getDramaAccessSetting(dramaTitle);
 
-    let effectiveTotal = totalEpisodes || system.default_total_episodes || 30;
-    let freePercent = system.default_free_episode_percent || 20;
+    let effectiveTotal = parseInt(totalEpisodes, 10) || (specificSetting && specificSetting.total_episodes) || system.default_total_episodes || 40;
+    let freePercent = (specificSetting && specificSetting.free_episode_percent !== undefined)
+        ? parseFloat(specificSetting.free_episode_percent)
+        : (system.default_free_episode_percent || 90);
     let isAllFree = false;
     let isVipOnly = false;
     let freeCount = 0;
@@ -937,12 +939,16 @@ async function checkEpisodeAccess({ userId, dramaTitle, episodeNumber = 1, total
 
     if (specificSetting) {
         isCustomRule = true;
-        effectiveTotal = specificSetting.total_episodes || effectiveTotal;
-        freePercent = specificSetting.free_episode_percent;
-        isAllFree = specificSetting.is_all_free;
-        isVipOnly = specificSetting.is_vip_only;
-        freeCount = specificSetting.free_episodes_count;
+        isAllFree = specificSetting.is_all_free || freePercent >= 100;
+        isVipOnly = specificSetting.is_vip_only || freePercent <= 0;
+        if (specificSetting.custom_free_episodes_count !== null && specificSetting.custom_free_episodes_count !== undefined) {
+            freeCount = parseInt(specificSetting.custom_free_episodes_count, 10);
+        } else {
+            freeCount = Math.min(effectiveTotal, Math.ceil(effectiveTotal * (freePercent / 100)));
+        }
     } else {
+        isAllFree = freePercent >= 100;
+        isVipOnly = freePercent <= 0;
         freeCount = Math.min(effectiveTotal, Math.ceil(effectiveTotal * (freePercent / 100)));
     }
 
@@ -979,7 +985,7 @@ async function checkEpisodeAccess({ userId, dramaTitle, episodeNumber = 1, total
     } else if (epNum <= freeCount) {
         canWatch = true;
         accessType = 'FREE_PREVIEW';
-        message = `Tập ${epNum} được xem miễn phí (${freeCount}/${effectiveTotal} tập đầu - tương đương ${freePercent}% phim).`;
+        message = `Tập ${epNum} nằm trong diện xem miễn phí (${freeCount}/${effectiveTotal} tập đầu - theo mức ${freePercent}% áp dụng cho tất cả phim).`;
     } else {
         if (isVip) {
             canWatch = true;
@@ -988,7 +994,7 @@ async function checkEpisodeAccess({ userId, dramaTitle, episodeNumber = 1, total
         } else {
             canWatch = false;
             accessType = 'LOCKED_BUY_PLAN';
-            message = `Tập ${epNum} bị khóa! Phim chỉ cho phép xem miễn phí ${freeCount}/${effectiveTotal} tập đầu (${freePercent}%). Vui lòng đăng ký gói VIP để xem tiếp.`;
+            message = `Tập ${epNum} bị khóa! Hệ thống cho phép xem miễn phí ${freeCount}/${effectiveTotal} tập đầu (${freePercent}%). Vui lòng đăng ký gói VIP để tiếp tục theo dõi trọn bộ.`;
         }
     }
 

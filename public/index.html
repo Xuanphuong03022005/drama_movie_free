@@ -1171,9 +1171,20 @@
                     <strong class="p-value text-rose" id="ep-lock-status">Cần nâng cấp VIP</strong>
                 </div>
             </div>
+
+            <!-- Available VIP Plans Section (Suggested from API) -->
+            <div class="ep-lock-plans-section" id="ep-lock-plans-section">
+                <div class="ep-lock-plans-heading">
+                    <i class="fa-solid fa-crown text-amber"></i> <span>Gói VIP Gợi Ý Mở Khóa Ngay:</span>
+                </div>
+                <div class="ep-lock-plans-list" id="ep-lock-plans-list">
+                    <!-- Populated dynamically via availablePlans -->
+                </div>
+            </div>
+
             <div class="ep-lock-actions">
                 <button type="button" class="btn-upgrade-vip-main" id="btn-ep-lock-upgrade">
-                    <i class="fa-solid fa-crown"></i> <span>Xem Gói Cước & Mở Khóa Ngay</span>
+                    <i class="fa-solid fa-gem"></i> <span>Xem Tất Cả Gói Cước VIP</span>
                 </button>
                 <button type="button" class="btn-login-ep-lock" id="btn-ep-lock-login">
                     <i class="fa-solid fa-right-to-bracket"></i> <span>Đã có tài khoản? Đăng nhập</span>
@@ -1246,7 +1257,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.2.0"></script>
+    <script src="/app.js?v=3.2.1"></script>
 </body>
 
 </html>
