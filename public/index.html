@@ -246,6 +246,9 @@
                             <button type="button" class="user-action-item" id="btn-open-vip-plans">
                                 <i class="fa-solid fa-crown text-amber"></i> <span>Nâng cấp Gói VIP</span>
                             </button>
+                            <button type="button" class="user-action-item" id="btn-user-open-topup">
+                                <i class="fa-solid fa-wallet text-emerald"></i> <span>Nạp Tiền Vào Ví</span>
+                            </button>
                             <a href="http://localhost:3001" target="_blank" rel="noopener" class="user-action-item admin-access-item" id="btn-admin-link" hidden>
                                 <i class="fa-solid fa-shield-halved text-rose"></i> <span>Bảng Quản Trị Admin</span>
                             </a>
@@ -1183,10 +1186,186 @@
                     <strong id="modal-wallet-balance">0 đ</strong>
                 </div>
                 <div class="wallet-right">
-                    <button type="button" class="btn-wallet-topup" id="btn-demo-topup" title="Cộng tiền test vào ví">
-                        <i class="fa-solid fa-plus"></i> Nạp thêm 100k (Test)
+                    <button type="button" class="btn-wallet-topup" id="btn-open-topup-modal" title="Nạp tiền vào tài khoản">
+                        <i class="fa-solid fa-wallet"></i> Nạp Tiền Vào Ví
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real Commercial Wallet Top-Up Modal (VietQR & Banking Gateway) -->
+    <div id="wallet-topup-modal" class="login-modal topup-modal" hidden>
+        <div class="login-modal-backdrop" id="wallet-topup-backdrop"></div>
+        <div class="login-modal-card topup-modal-card">
+            <button type="button" class="login-close-btn" id="wallet-topup-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="topup-modal-header">
+                <div class="login-badge-pro bg-emerald-glass"><i class="fa-solid fa-shield-halved text-emerald"></i> CỔNG THANH TOÁN TỰ ĐỘNG 24/7</div>
+                <h3>Nạp Tiền Vào Ví DramaFlow</h3>
+                <p>Nạp tiền tự động qua chuyển khoản VietQR Ngân hàng hoặc Ví điện tử MoMo. Không mất phí giao dịch.</p>
+            </div>
+
+            <!-- Current Balance Status Card -->
+            <div class="topup-balance-display">
+                <div class="t-balance-left">
+                    <span>Số dư ví hiện tại:</span>
+                    <strong id="topup-current-balance">0 đ</strong>
+                </div>
+                <div class="t-balance-right">
+                    <span class="user-tag" id="topup-user-tag"><i class="fa-solid fa-user-check"></i> @user</span>
+                </div>
+            </div>
+
+            <!-- Preset Amount Selection -->
+            <div class="topup-section-title">
+                <i class="fa-solid fa-coins text-amber"></i> Chọn Mệnh Giá Nạp:
+            </div>
+            <div class="topup-presets-grid" id="topup-presets-grid">
+                <button type="button" class="preset-amount-btn" data-amount="20000">20.000 đ</button>
+                <button type="button" class="preset-amount-btn active" data-amount="50000">50.000 đ</button>
+                <button type="button" class="preset-amount-btn" data-amount="100000">100.000 đ</button>
+                <button type="button" class="preset-amount-btn" data-amount="200000">200.000 đ</button>
+                <button type="button" class="preset-amount-btn" data-amount="500000">500.000 đ</button>
+            </div>
+
+            <div class="custom-amount-row">
+                <label for="custom-topup-amount">Hoặc nhập số tiền tùy ý:</label>
+                <div class="custom-amount-input-wrap">
+                    <input type="number" id="custom-topup-amount" min="10000" step="10000" placeholder="50000" value="50000">
+                    <span class="currency-tag">VNĐ</span>
+                </div>
+            </div>
+
+            <!-- Payment Method Tabs -->
+            <div class="topup-method-tabs">
+                <button type="button" class="topup-method-tab active" data-method="vietqr">
+                    <i class="fa-solid fa-qrcode"></i> Chuyển Khoản VietQR (0% Phí)
+                </button>
+                <button type="button" class="topup-method-tab" data-method="momo">
+                    <i class="fa-solid fa-mobile-screen-button"></i> Ví MoMo
+                </button>
+            </div>
+
+            <!-- VietQR Payment Details Box -->
+            <div class="vietqr-payment-box" id="vietqr-payment-box">
+                <div class="qr-code-wrapper">
+                    <img id="vietqr-image" src="" alt="Mã VietQR Chuyển Khoản" loading="lazy">
+                    <div class="qr-scan-hint"><i class="fa-solid fa-camera"></i> Mở App Ngân hàng bất kỳ để quét mã</div>
+                </div>
+                <div class="bank-details-list">
+                    <div class="bank-detail-item">
+                        <span class="b-lbl">Ngân hàng:</span>
+                        <div class="b-val-wrap">
+                            <strong id="b-bank-name">MB Bank (Quân Đội)</strong>
+                        </div>
+                    </div>
+                    <div class="bank-detail-item">
+                        <span class="b-lbl">Chủ tài khoản:</span>
+                        <div class="b-val-wrap">
+                            <strong id="b-account-holder">DRAMAFLOW MEDIA</strong>
+                        </div>
+                    </div>
+                    <div class="bank-detail-item highlight-item">
+                        <span class="b-lbl">Số tài khoản:</span>
+                        <div class="b-val-wrap">
+                            <strong id="b-account-number">0348769999</strong>
+                            <button type="button" class="btn-copy-val" data-copy="b-account-number" title="Sao chép số tài khoản"><i class="fa-regular fa-copy"></i></button>
+                        </div>
+                    </div>
+                    <div class="bank-detail-item highlight-item">
+                        <span class="b-lbl">Số tiền:</span>
+                        <div class="b-val-wrap">
+                            <strong id="b-amount-display" class="text-amber">50.000 đ</strong>
+                            <button type="button" class="btn-copy-val" data-copy="b-amount-number" title="Sao chép số tiền"><i class="fa-regular fa-copy"></i></button>
+                        </div>
+                    </div>
+                    <div class="bank-detail-item highlight-code">
+                        <span class="b-lbl">Nội dung CK:</span>
+                        <div class="b-val-wrap">
+                            <strong id="b-transfer-content">DF USER</strong>
+                            <button type="button" class="btn-copy-val" data-copy="b-transfer-content" title="Sao chép nội dung chuyển khoản"><i class="fa-regular fa-copy"></i></button>
+                        </div>
+                    </div>
+                    <div class="transfer-notice-pill">
+                        <i class="fa-solid fa-circle-info"></i> Vui lòng giữ đúng <strong>Nội dung chuyển khoản</strong> để hệ thống tự động cộng số dư vào ví trong 10-30 giây.
+                    </div>
+                </div>
+            </div>
+
+            <!-- MoMo Payment Box (Initially Hidden) -->
+            <div class="momo-payment-box" id="momo-payment-box" hidden>
+                <div class="qr-code-wrapper">
+                    <img id="momo-image" src="" alt="Mã MoMo Chuyển Tiền" loading="lazy">
+                    <div class="qr-scan-hint"><i class="fa-solid fa-mobile-screen"></i> Quét bằng ứng dụng MoMo</div>
+                </div>
+                <div class="bank-details-list">
+                    <div class="bank-detail-item">
+                        <span class="b-lbl">Ví MoMo:</span>
+                        <div class="b-val-wrap"><strong>0348769999</strong></div>
+                    </div>
+                    <div class="bank-detail-item">
+                        <span class="b-lbl">Tên người nhận:</span>
+                        <div class="b-val-wrap"><strong>DRAMAFLOW MEDIA</strong></div>
+                    </div>
+                    <div class="bank-detail-item highlight-code">
+                        <span class="b-lbl">Lời nhắn MoMo:</span>
+                        <div class="b-val-wrap">
+                            <strong id="momo-transfer-content">DF USER</strong>
+                            <button type="button" class="btn-copy-val" data-copy="momo-transfer-content" title="Sao chép lời nhắn"><i class="fa-regular fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="topup-actions-footer">
+                <button type="button" class="btn-confirm-topup" id="btn-confirm-topup">
+                    <i class="fa-solid fa-circle-check"></i> <span>Tôi Đã Chuyển Khoản Thành Công</span>
+                </button>
+                <div class="support-contact-row">
+                    <span>Hỗ trợ thanh toán 24/7:</span>
+                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener"><i class="fa-brands fa-telegram"></i> Telegram CSKH</a>
+                    <span>•</span>
+                    <a href="tel:19006868"><i class="fa-solid fa-phone"></i> Hotline 1900 6868</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Commercial Insufficient Balance Modal (Replaces browser confirm) -->
+    <div id="insufficient-modal" class="login-modal balance-warn-modal" hidden>
+        <div class="login-modal-backdrop" id="insufficient-backdrop"></div>
+        <div class="login-modal-card balance-warn-card">
+            <button type="button" class="login-close-btn" id="insufficient-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="balance-warn-icon">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+            <h3>Số Dư Ví Không Đủ</h3>
+            <p>Số dư tài khoản của bạn hiện tại chưa đủ để kích hoạt gói cước VIP này.</p>
+            <div class="balance-calc-box">
+                <div class="calc-row">
+                    <span class="c-label">Gói bạn chọn:</span>
+                    <strong class="c-val" id="warn-plan-name">Gói 1 Tháng</strong>
+                </div>
+                <div class="calc-row">
+                    <span class="c-label">Giá gói cước:</span>
+                    <strong class="c-val text-amber" id="warn-plan-price">99.000 đ</strong>
+                </div>
+                <div class="calc-row">
+                    <span class="c-label">Số dư ví hiện tại:</span>
+                    <strong class="c-val" id="warn-user-balance">0 đ</strong>
+                </div>
+                <div class="calc-row total-need">
+                    <span class="c-label">Cần nạp thêm tối thiểu:</span>
+                    <strong class="c-val text-rose" id="warn-needed-amount">99.000 đ</strong>
+                </div>
+            </div>
+            <div class="balance-warn-actions">
+                <button type="button" class="btn-topup-now-action" id="btn-warn-goto-topup">
+                    <i class="fa-solid fa-bolt"></i> <span>Nạp Tiền Ngay Bằng Mã QR</span>
+                </button>
+                <button type="button" class="btn-cancel-warn" id="btn-warn-cancel">
+                    <span>Để Sau</span>
+                </button>
             </div>
         </div>
     </div>

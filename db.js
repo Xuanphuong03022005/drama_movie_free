@@ -921,6 +921,32 @@ async function purchaseSubscription({ userId, planId, paymentMethod = 'wallet' }
 }
 
 /**
+ * Top-up user wallet balance
+ */
+async function topupWallet({ userId, amount, paymentMethod = 'vietqr', transactionCode = '' }) {
+    if (!userId) throw new Error('Cần cung cấp userId để nạp tiền');
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+        throw new Error('Số tiền nạp không hợp lệ (tối thiểu 10.000đ)');
+    }
+    const client = getPool();
+    const uRes = await client.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [userId]);
+    if (uRes.rows.length === 0) throw new Error('Không tìm thấy tài khoản người dùng');
+
+    const updateRes = await client.query(
+        'UPDATE users SET balance = balance + $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+        [numAmount, userId]
+    );
+    const updatedUser = formatUser(updateRes.rows[0]);
+    return {
+        user: updatedUser,
+        amount: numAmount,
+        paymentMethod,
+        transactionCode: transactionCode || `TOPUP_${Date.now()}`
+    };
+}
+
+/**
  * Check whether a user has permission to watch an episode under admin policies
  */
 async function checkEpisodeAccess({ userId, dramaTitle, episodeNumber = 1, totalEpisodes }) {
@@ -1042,6 +1068,7 @@ module.exports = {
     getDramaAccessSetting,
     getSubscriptionPlans,
     purchaseSubscription,
+    topupWallet,
     checkEpisodeAccess,
     getStatus: () => ({
         connected: isConnected,

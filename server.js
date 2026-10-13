@@ -349,6 +349,40 @@ app.post('/api/subscription/purchase', async (req, res) => {
 });
 
 // ==========================================
+// WALLET & VIETQR PAYMENT GATEWAY
+// ==========================================
+app.get('/api/wallet/payment-config', (req, res) => {
+    res.json({
+        ok: true,
+        bank: {
+            bankName: 'Ngân hàng TMCP Quân Đội (MB Bank)',
+            bankCode: 'MB',
+            accountNumber: '0348769999',
+            accountHolder: 'DRAMAFLOW MEDIA',
+            branch: 'Hội Sở Chính',
+            supportHotline: '1900 6868',
+            supportTelegram: '@dramaflow_support'
+        },
+        presetAmounts: [20000, 50000, 100000, 200000, 500000],
+        minTopupAmount: 10000
+    });
+});
+
+app.post('/api/wallet/topup', async (req, res) => {
+    try {
+        const { userId, amount, paymentMethod, transactionCode } = req.body;
+        const result = await db.topupWallet({ userId, amount, paymentMethod, transactionCode });
+        res.json({
+            ok: true,
+            message: `Nạp thành công ${new Intl.NumberFormat('vi-VN').format(result.amount)}đ vào tài khoản!`,
+            ...result
+        });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+// ==========================================
 // LEGAL & SERVICE POLICIES
 // ==========================================
 app.get('/api/policies/legal', (req, res) => {

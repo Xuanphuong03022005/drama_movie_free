@@ -6845,18 +6845,24 @@
     async function handlePurchasePlan(plan) {
         const user = getCurrentUser();
         if (!user) {
-            showToast('Vui lòng đăng nhập trước khi mua gói VIP!', 'fa-circle-exclamation');
+            showToast('Vui lòng đăng nhập trước khi kích hoạt gói VIP!', 'fa-circle-exclamation');
             openAuthModal('login');
             return;
         }
 
-        if (user.balance < plan.price) {
-            if (confirm(`Số dư trong ví (${new Intl.NumberFormat('vi-VN').format(user.balance)}đ) không đủ để mua ${plan.name} (${new Intl.NumberFormat('vi-VN').format(plan.price)}đ).\n\nBạn có muốn nạp thêm 200,000đ test vào ví để thanh toán ngay không?`)) {
-                await handleDemoTopup(200000);
-            } else {
-                return;
-            }
+        const userBalance = parseFloat(user.balance || 0);
+        const planPrice = parseFloat(plan.price);
+
+        if (userBalance < planPrice) {
+            openInsufficientBalanceModal(plan, userBalance);
+            return;
         }
+
+        const buyBtns = document.querySelectorAll(`button[data-plan-id="${plan.id}"]`);
+        buyBtns.forEach(b => {
+            b.disabled = true;
+            b.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang kích hoạt...`;
+        });
 
         try {
             const res = await fetch('/api/subscription/purchase', {
@@ -6872,29 +6878,269 @@
             showToast(data.message, 'fa-crown');
             closeVipPlansModal();
             closeEpisodeVipLockModal();
+            closeInsufficientBalanceModal();
+
             // Re-render episodes grid to unlock VIP
             if (currentDramaData && !playerModal.hidden) {
                 renderEpisodesGrid(currentDramaData.episodes);
             }
         } catch (e) {
             showToast(e.message, 'fa-circle-xmark');
+        } finally {
+            buyBtns.forEach(b => {
+                b.disabled = false;
+                b.innerHTML = `<i class="fa-solid fa-bolt"></i> Kích Hoạt Ngay`;
+            });
         }
     }
 
-    async function handleDemoTopup(amount = 100000) {
+    // ==========================================
+    // COMMERCIAL WALLET TOP-UP & VIETQR GATEWAY
+    // ==========================================
+    let activeTopupAmount = 50000;
+    let activeTopupMethod = 'vietqr';
+
+    function openInsufficientBalanceModal(plan, currentBalance) {
+        const modal = document.getElementById('insufficient-modal');
+        if (!modal) return;
+        modal.hidden = false;
+
+        const needed = Math.max(10000, Math.ceil((plan.price - currentBalance) / 10000) * 10000);
+        const planNameEl = document.getElementById('warn-plan-name');
+        const planPriceEl = document.getElementById('warn-plan-price');
+        const balanceEl = document.getElementById('warn-user-balance');
+        const neededEl = document.getElementById('warn-needed-amount');
+
+        if (planNameEl) planNameEl.textContent = plan.name;
+        if (planPriceEl) planPriceEl.textContent = new Intl.NumberFormat('vi-VN').format(plan.price) + ' đ';
+        if (balanceEl) balanceEl.textContent = new Intl.NumberFormat('vi-VN').format(currentBalance) + ' đ';
+        if (neededEl) neededEl.textContent = new Intl.NumberFormat('vi-VN').format(needed) + ' đ';
+
+        const btnGotoTopup = document.getElementById('btn-warn-goto-topup');
+        if (btnGotoTopup) {
+            btnGotoTopup.onclick = () => {
+                closeInsufficientBalanceModal();
+                openWalletTopupModal(needed);
+            };
+        }
+    }
+
+    function closeInsufficientBalanceModal() {
+        const modal = document.getElementById('insufficient-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    function openWalletTopupModal(suggestedAmount = 50000) {
         const user = getCurrentUser();
         if (!user) {
             showToast('Vui lòng đăng nhập trước khi nạp ví!', 'fa-circle-exclamation');
             openAuthModal('login');
             return;
         }
-        user.balance = (user.balance || 0) + amount;
-        setCurrentUser(user);
-        const balanceEl = document.getElementById('modal-wallet-balance');
-        if (balanceEl) {
-            balanceEl.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(user.balance);
+
+        const modal = document.getElementById('wallet-topup-modal');
+        if (!modal) return;
+        modal.hidden = false;
+
+        activeTopupAmount = Math.max(10000, parseInt(suggestedAmount, 10) || 50000);
+
+        // Update balance and user tag
+        const curBalanceEl = document.getElementById('topup-current-balance');
+        const userTagEl = document.getElementById('topup-user-tag');
+        if (curBalanceEl) {
+            curBalanceEl.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(user.balance || 0);
         }
-        showToast(`Đã cộng thêm +${new Intl.NumberFormat('vi-VN').format(amount)}đ test vào ví!`, 'fa-circle-check');
+        if (userTagEl) {
+            userTagEl.innerHTML = `<i class="fa-solid fa-user-check"></i> @${user.username}`;
+        }
+
+        // Sync preset buttons
+        document.querySelectorAll('.preset-amount-btn').forEach(btn => {
+            const amt = parseInt(btn.getAttribute('data-amount'), 10);
+            btn.classList.toggle('active', amt === activeTopupAmount);
+        });
+
+        // Sync custom input
+        const customInput = document.getElementById('custom-topup-amount');
+        if (customInput) customInput.value = activeTopupAmount;
+
+        // Render payment QR and bank details
+        updatePaymentDetails(activeTopupAmount, user);
+    }
+
+    function closeWalletTopupModal() {
+        const modal = document.getElementById('wallet-topup-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    function updatePaymentDetails(amount, user) {
+        if (!user) user = getCurrentUser();
+        const cleanUsername = (user?.username || 'USER').toUpperCase();
+        const transferContent = `DF ${cleanUsername}`;
+
+        // VietQR Direct Real Generation
+        const qrImg = document.getElementById('vietqr-image');
+        if (qrImg) {
+            qrImg.src = `https://img.vietqr.io/image/MB-0348769999-compact2.png?amount=${amount}&addInfo=DF%20${encodeURIComponent(cleanUsername)}&accountName=DRAMAFLOW%20MEDIA`;
+        }
+
+        // MoMo QR Generation
+        const momoImg = document.getElementById('momo-image');
+        if (momoImg) {
+            momoImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`2|99|0348769999|DRAMAFLOW MEDIA|cskh@dramaflow.vn|0|0|${amount}|DF ${cleanUsername}`)}`;
+        }
+
+        // Text details
+        const amountDisplay = document.getElementById('b-amount-display');
+        const transferContentEl = document.getElementById('b-transfer-content');
+        const momoContentEl = document.getElementById('momo-transfer-content');
+
+        if (amountDisplay) amountDisplay.textContent = new Intl.NumberFormat('vi-VN').format(amount) + ' đ';
+        if (transferContentEl) transferContentEl.textContent = transferContent;
+        if (momoContentEl) momoContentEl.textContent = transferContent;
+    }
+
+    function initWalletTopupHandlers() {
+        // Preset amount buttons
+        document.querySelectorAll('.preset-amount-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.preset-amount-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const amt = parseInt(btn.getAttribute('data-amount'), 10) || 50000;
+                activeTopupAmount = amt;
+                const customInput = document.getElementById('custom-topup-amount');
+                if (customInput) customInput.value = amt;
+                updatePaymentDetails(amt);
+            });
+        });
+
+        // Custom amount input
+        const customInput = document.getElementById('custom-topup-amount');
+        if (customInput) {
+            let debounceTimer;
+            customInput.addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const amt = parseInt(customInput.value, 10);
+                    if (!isNaN(amt) && amt >= 10000) {
+                        activeTopupAmount = amt;
+                        document.querySelectorAll('.preset-amount-btn').forEach(b => {
+                            b.classList.toggle('active', parseInt(b.getAttribute('data-amount'), 10) === amt);
+                        });
+                        updatePaymentDetails(amt);
+                    }
+                }, 300);
+            });
+        }
+
+        // Method tabs (VietQR vs MoMo)
+        document.querySelectorAll('.topup-method-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.topup-method-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const method = tab.getAttribute('data-method');
+                activeTopupMethod = method;
+
+                const vietqrBox = document.getElementById('vietqr-payment-box');
+                const momoBox = document.getElementById('momo-payment-box');
+                if (method === 'momo') {
+                    if (vietqrBox) vietqrBox.hidden = true;
+                    if (momoBox) momoBox.hidden = false;
+                } else {
+                    if (vietqrBox) vietqrBox.hidden = false;
+                    if (momoBox) momoBox.hidden = true;
+                }
+            });
+        });
+
+        // 1-Click Copy Buttons
+        document.querySelectorAll('.btn-copy-val').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const targetKey = btn.getAttribute('data-copy');
+                let textToCopy = '';
+                const user = getCurrentUser();
+                const cleanUsername = (user?.username || 'USER').toUpperCase();
+
+                if (targetKey === 'b-account-number') textToCopy = '0348769999';
+                else if (targetKey === 'b-amount-number') textToCopy = String(activeTopupAmount);
+                else if (targetKey === 'b-transfer-content' || targetKey === 'momo-transfer-content') textToCopy = `DF ${cleanUsername}`;
+
+                if (textToCopy) {
+                    try {
+                        await navigator.clipboard.writeText(textToCopy);
+                        const originalHtml = btn.innerHTML;
+                        btn.innerHTML = `<i class="fa-solid fa-check text-emerald"></i>`;
+                        showToast(`Đã sao chép: "${textToCopy}"`, 'fa-circle-check');
+                        setTimeout(() => btn.innerHTML = originalHtml, 1500);
+                    } catch (e) {
+                        showToast(`Sao chép: ${textToCopy}`, 'fa-clipboard');
+                    }
+                }
+            });
+        });
+
+        // Confirm payment button (API integration)
+        const btnConfirm = document.getElementById('btn-confirm-topup');
+        if (btnConfirm) {
+            btnConfirm.addEventListener('click', async () => {
+                const user = getCurrentUser();
+                if (!user) {
+                    showToast('Vui lòng đăng nhập trước khi nạp ví!', 'fa-circle-exclamation');
+                    return;
+                }
+
+                btnConfirm.disabled = true;
+                btnConfirm.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang xác thực giao dịch...`;
+
+                try {
+                    const res = await fetch('/api/wallet/topup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: user.id,
+                            amount: activeTopupAmount,
+                            paymentMethod: activeTopupMethod,
+                            transactionCode: `TX_${Date.now()}`
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.ok) {
+                        throw new Error(data.error || 'Xác nhận giao dịch không thành công');
+                    }
+
+                    setCurrentUser(data.user);
+                    showToast(`Nạp thành công ${new Intl.NumberFormat('vi-VN').format(activeTopupAmount)}đ vào ví!`, 'fa-circle-check');
+
+                    // Sync balance everywhere
+                    const modalBal = document.getElementById('modal-wallet-balance');
+                    const topupBal = document.getElementById('topup-current-balance');
+                    if (modalBal) modalBal.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(data.user.balance || 0);
+                    if (topupBal) topupBal.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(data.user.balance || 0);
+
+                    setTimeout(() => {
+                        closeWalletTopupModal();
+                    }, 800);
+                } catch (e) {
+                    showToast(e.message, 'fa-circle-xmark');
+                } finally {
+                    btnConfirm.disabled = false;
+                    btnConfirm.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Tôi Đã Chuyển Khoản Thành Công</span>`;
+                }
+            });
+        }
+
+        // Close triggers for wallet and warning modals
+        const topupCloseBtn = document.getElementById('wallet-topup-close-btn');
+        const topupBackdrop = document.getElementById('wallet-topup-backdrop');
+        if (topupCloseBtn) topupCloseBtn.addEventListener('click', closeWalletTopupModal);
+        if (topupBackdrop) topupBackdrop.addEventListener('click', closeWalletTopupModal);
+
+        const warnCloseBtn = document.getElementById('insufficient-close-btn');
+        const warnBackdrop = document.getElementById('insufficient-backdrop');
+        const warnCancelBtn = document.getElementById('btn-warn-cancel');
+        if (warnCloseBtn) warnCloseBtn.addEventListener('click', closeInsufficientBalanceModal);
+        if (warnBackdrop) warnBackdrop.addEventListener('click', closeInsufficientBalanceModal);
+        if (warnCancelBtn) warnCancelBtn.addEventListener('click', closeInsufficientBalanceModal);
     }
 
     function closeVipPlansModal() {
@@ -7139,6 +7385,7 @@
         loadSystemPolicies();
         preloadSubscriptionPlans();
         initAuthFormEnhancements();
+        initWalletTopupHandlers();
 
         // 2. Wire Header Login / User Menu Button
         const navLoginBtn = document.getElementById('nav-login-btn-block');
@@ -7172,6 +7419,14 @@
             btnOpenVip.addEventListener('click', () => {
                 if (userMenu) userMenu.hidden = true;
                 openVipPlansModal();
+            });
+        }
+
+        const btnUserTopup = document.getElementById('btn-user-open-topup');
+        if (btnUserTopup) {
+            btnUserTopup.addEventListener('click', () => {
+                if (userMenu) userMenu.hidden = true;
+                openWalletTopupModal();
             });
         }
 
@@ -7239,8 +7494,8 @@
         if (vipCloseBtn) vipCloseBtn.addEventListener('click', closeVipPlansModal);
         if (vipBackdrop) vipBackdrop.addEventListener('click', closeVipPlansModal);
 
-        const btnDemoTopup = document.getElementById('btn-demo-topup');
-        if (btnDemoTopup) btnDemoTopup.addEventListener('click', () => handleDemoTopup(100000));
+        const btnOpenTopupModal = document.getElementById('btn-open-topup-modal');
+        if (btnOpenTopupModal) btnOpenTopupModal.addEventListener('click', () => openWalletTopupModal());
 
         // 7. Episode Lock Modal Handlers
         const epLockCloseBtn = document.getElementById('episode-vip-close-btn');
