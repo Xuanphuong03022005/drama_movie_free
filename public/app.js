@@ -958,11 +958,15 @@
     }
 
     function openReelsEpisodesSheet() {
-        if (!reelsEpisodesSheet || !currentDramaData || !currentDramaData.episodes) return;
-        renderReelsEpisodesSheet();
+        if (!reelsEpisodesSheet) return;
         reelsEpisodesSheet.removeAttribute('hidden');
         reelsEpisodesSheet.hidden = false;
         reelsEpisodesSheet.style.display = 'flex';
+        try {
+            renderReelsEpisodesSheet();
+        } catch (err) {
+            console.error('[ReelsEpisodesSheet] Error rendering sheet:', err);
+        }
     }
 
     function closeReelsEpisodesSheet() {
@@ -1027,6 +1031,7 @@
             ? Number(currentDramaPolicy.free_episode_percent)
             : Number(systemPolicySettings?.default_free_episode_percent || localStorage.getItem('dramaflow_free_percent') || 90);
 
+        const isVipUser = Boolean(typeof currentUser !== 'undefined' && currentUser && currentUser.is_vip);
         const freeCount = (currentDramaPolicy && currentDramaPolicy.custom_free_episodes_count != null)
             ? Number(currentDramaPolicy.custom_free_episodes_count)
             : Math.min(totalEpisodes, Math.ceil(totalEpisodes * (freePercent / 100)));
