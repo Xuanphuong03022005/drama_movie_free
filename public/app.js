@@ -7111,6 +7111,49 @@
             btnZalo.href = 'https://zalo.me/0378423195';
         }
 
+        // Configure wallet balance quick pay if user has enough balance
+        const walletPayBox = document.getElementById('banking-wallet-pay-box');
+        const walletBalEl = document.getElementById('banking-wallet-bal');
+        const btnPayWallet = document.getElementById('btn-pay-by-wallet');
+        const userBalance = parseFloat(user?.balance || 0);
+
+        if (walletPayBox) {
+            if (user && userBalance >= planPrice && activeBankingPlan.id) {
+                walletPayBox.hidden = false;
+                walletPayBox.style.display = 'block';
+                if (walletBalEl) walletBalEl.textContent = new Intl.NumberFormat('vi-VN').format(userBalance) + ' đ';
+                if (btnPayWallet) {
+                    btnPayWallet.onclick = async () => {
+                        btnPayWallet.disabled = true;
+                        btnPayWallet.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang kích hoạt...`;
+                        try {
+                            const res = await fetch('/api/subscription/purchase', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: user.id, planId: activeBankingPlan.id, paymentMethod: 'wallet' })
+                            });
+                            const data = await res.json();
+                            if (!res.ok || !data.ok) throw new Error(data.error || 'Giao dịch không thành công');
+                            setCurrentUser(data.user);
+                            showToast(data.message || 'Kích hoạt gói VIP thành công!', 'fa-crown');
+                            closeBankingPaymentModal();
+                            if (currentDramaData && !playerModal.hidden) {
+                                renderEpisodesGrid(currentDramaData.episodes);
+                            }
+                        } catch (e) {
+                            showToast(e.message, 'fa-circle-xmark');
+                        } finally {
+                            btnPayWallet.disabled = false;
+                            btnPayWallet.innerHTML = `<i class="fa-solid fa-bolt"></i> Thanh toán bằng số dư ví`;
+                        }
+                    };
+                }
+            } else {
+                walletPayBox.hidden = true;
+                walletPayBox.style.display = 'none';
+            }
+        }
+
         modal.hidden = false;
         modal.style.display = 'flex';
     }
@@ -7126,56 +7169,20 @@
     async function handlePurchasePlan(plan) {
         const user = getCurrentUser();
         if (!user) {
+            // Chưa login -> Lưu gói đã chọn, thông báo và chuyển đến màn login
             pendingAuthAction = { type: 'purchase_plan', plan: plan };
-            showToast('Vui lòng tạo tài khoản để kích hoạt gói VIP!', 'fa-user-plus');
+            showToast('Vui lòng đăng nhập để tiến hành thanh toán!', 'fa-right-to-bracket');
             closeVipPlansModal();
             closeEpisodeVipLockModal();
-            openAuthModal('register');
+            openAuthModal('login');
             return;
         }
 
-        const userBalance = parseFloat(user.balance || 0);
-        const planPrice = parseFloat(plan.price);
-
-        if (userBalance < planPrice) {
-            openBankingPaymentModal(plan);
-            return;
-        }
-
-        const buyBtns = document.querySelectorAll(`button[data-plan-id="${plan.id}"]`);
-        buyBtns.forEach(b => {
-            b.disabled = true;
-            b.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang kích hoạt...`;
-        });
-
-        try {
-            const res = await fetch('/api/subscription/purchase', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, planId: plan.id, paymentMethod: 'wallet' })
-            });
-            const data = await res.json();
-            if (!res.ok || !data.ok) {
-                throw new Error(data.error || 'Giao dịch không thành công');
-            }
-            setCurrentUser(data.user);
-            showToast(data.message, 'fa-crown');
-            closeVipPlansModal();
-            closeEpisodeVipLockModal();
-            closeInsufficientBalanceModal();
-
-            // Re-render episodes grid to unlock VIP
-            if (currentDramaData && !playerModal.hidden) {
-                renderEpisodesGrid(currentDramaData.episodes);
-            }
-        } catch (e) {
-            showToast(e.message, 'fa-circle-xmark');
-        } finally {
-            buyBtns.forEach(b => {
-                b.disabled = false;
-                b.innerHTML = `<i class="fa-solid fa-bolt"></i> Kích Hoạt Ngay`;
-            });
-        }
+        // Đã login -> Chuyển trực tiếp đến màn thanh toán
+        closeVipPlansModal();
+        closeEpisodeVipLockModal();
+        closeInsufficientBalanceModal();
+        openBankingPaymentModal(plan);
     }
 
     // ==========================================
@@ -7197,10 +7204,10 @@
         const user = getCurrentUser();
         if (!user) {
             pendingAuthAction = { type: 'topup', amount: suggestedAmount };
-            showToast('Vui lòng tạo tài khoản để nạp ví!', 'fa-user-plus');
+            showToast('Vui lòng đăng nhập để tiến hành thanh toán!', 'fa-right-to-bracket');
             closeVipPlansModal();
             closeEpisodeVipLockModal();
-            openAuthModal('register');
+            openAuthModal('login');
             return;
         }
 
@@ -7805,7 +7812,20 @@
         if (vipBackdrop) vipBackdrop.addEventListener('click', closeVipPlansModal);
 
         const btnOpenTopupModal = document.getElementById('btn-open-topup-modal');
-        if (btnOpenTopupModal) btnOpenTopupModal.addEventListener('click', () => openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: 50000 }));
+        if (btnOpenTopupModal) {
+            btnOpenTopupModal.addEventListener('click', () => {
+                const user = getCurrentUser();
+                if (!user) {
+                    pendingAuthAction = { type: 'topup', amount: 50000 };
+                    showToast('Vui lòng đăng nhập để tiến hành thanh toán!', 'fa-right-to-bracket');
+                    closeVipPlansModal();
+                    openAuthModal('login');
+                    return;
+                }
+                closeVipPlansModal();
+                openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: 50000 });
+            });
+        }
 
         // 7. Episode Lock Modal Handlers
         const epLockCloseBtn = document.getElementById('episode-vip-close-btn');

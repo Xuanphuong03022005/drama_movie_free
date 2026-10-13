@@ -21,7 +21,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.9.9">
+    <link rel="stylesheet" href="/style.css?v=3.9.10">
     <style id="critical-vip-modal-override">
         /* Critical overrides: ensure all modals with [hidden] are strictly hidden and not forced open */
         [hidden],
@@ -1432,6 +1432,17 @@
                     <span class="banking-plan-price-tag" id="banking-plan-price">(19.000đ)</span>
                 </div>
 
+                <!-- Wallet Pay Option (If user has sufficient wallet balance) -->
+                <div class="banking-wallet-pay-box" id="banking-wallet-pay-box" hidden>
+                    <div class="wallet-pay-info">
+                        <span><i class="fa-solid fa-wallet text-amber"></i> Số dư ví của bạn: <strong id="banking-wallet-bal">0 đ</strong></span>
+                    </div>
+                    <button type="button" class="btn-pay-by-wallet" id="btn-pay-by-wallet">
+                        <i class="fa-solid fa-bolt"></i> Thanh toán bằng số dư ví
+                    </button>
+                    <div class="banking-or-divider"><span>HOẶC CHUYỂN KHOẢN QUA VIETQR / ZALOPAY</span></div>
+                </div>
+
                 <!-- Information Notice Card -->
                 <div class="banking-notice-card">
                     <div class="notice-card-title">
@@ -1788,7 +1799,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.9.9"></script>
+    <script src="/app.js?v=3.9.10"></script>
 </body>
 
 </html>
