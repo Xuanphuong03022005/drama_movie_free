@@ -6589,6 +6589,14 @@ video::cue {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease;
+}
+
+.reels-ep-badge:active {
+    opacity: 0.75;
 }
 
 .reels-swipe-hint {
@@ -6777,13 +6785,19 @@ video::cue {
    ========================================================================== */
 
 .reels-episodes-sheet {
-    position: absolute;
-    inset: 0;
-    z-index: 100;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     animation: fadeInSheetBackdrop 0.25s ease;
+}
+
+.reels-episodes-sheet[hidden] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
 
 .reels-sheet-backdrop {
@@ -6800,10 +6814,10 @@ video::cue {
     background: #090d16;
     border-top: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 22px 22px 0 0;
-    max-height: 68vh;
+    max-height: 72vh;
     display: flex;
     flex-direction: column;
-    padding: 8px 16px 20px;
+    padding: 8px 16px max(24px, env(safe-area-inset-bottom, 20px));
     box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.85);
     animation: slideUpSheet 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

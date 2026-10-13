@@ -960,11 +960,17 @@
     function openReelsEpisodesSheet() {
         if (!reelsEpisodesSheet || !currentDramaData || !currentDramaData.episodes) return;
         renderReelsEpisodesSheet();
+        reelsEpisodesSheet.removeAttribute('hidden');
         reelsEpisodesSheet.hidden = false;
+        reelsEpisodesSheet.style.display = 'flex';
     }
 
     function closeReelsEpisodesSheet() {
-        if (reelsEpisodesSheet) reelsEpisodesSheet.hidden = true;
+        if (reelsEpisodesSheet) {
+            reelsEpisodesSheet.setAttribute('hidden', '');
+            reelsEpisodesSheet.hidden = true;
+            reelsEpisodesSheet.style.display = 'none';
+        }
     }
 
     function renderReelsEpisodesSheet() {
@@ -990,13 +996,17 @@
                     const start = b * SHEET_BATCH_SIZE + 1;
                     const end = Math.min((b + 1) * SHEET_BATCH_SIZE, total);
                     const tab = document.createElement('button');
+                    tab.type = 'button';
                     tab.className = `reels-batch-tab ${b === currentBatchIdx ? 'active' : ''}`;
                     tab.textContent = `${start}-${end}`;
-                    tab.addEventListener('click', () => {
+                    const selectBatch = (e) => {
+                        if (e) { e.preventDefault(); e.stopPropagation(); }
                         reelsSheetBatches.querySelectorAll('.reels-batch-tab').forEach(t => t.classList.remove('active'));
                         tab.classList.add('active');
                         renderReelsSheetGrid(b * SHEET_BATCH_SIZE, Math.min((b + 1) * SHEET_BATCH_SIZE, total));
-                    });
+                    };
+                    tab.addEventListener('click', selectBatch);
+                    tab.addEventListener('touchend', selectBatch);
                     reelsSheetBatches.appendChild(tab);
                 }
 
@@ -1035,12 +1045,20 @@
             const isEpVip = !isFree;
 
             const btn = document.createElement('button');
+            btn.type = 'button';
             const accessClass = canPlay ? 'unlocked' : 'locked';
             const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
             btn.className = `reels-ep-btn ${accessClass} ${i === currentEpisodeIndex ? 'active' : ''} ${vipClass}`;
             const vipTag = !canPlay ? ' <span style="font-size:9px;color:#fb7185;">🔒</span>' : (isEpVip ? ' <span style="font-size:9px;color:#fbbf24;">👑</span>' : '');
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
+            btn.innerHTML = `<span class="ep-num">${epNum}${vipTag}</span><span class="ep-lbl">${t('ep_prefix') || 'Tập'}</span>`;
+            btn.setAttribute('data-ep-index', i);
+            btn.setAttribute('data-ep-num', epNum);
+
+            const handleEpClick = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
                 if (!canPlay || btn.classList.contains('locked') || btn.classList.contains('vip-locked')) {
                     if (mainVideo && !mainVideo.paused) {
                         try { mainVideo.pause(); } catch (err) {}
@@ -1049,9 +1067,12 @@
                     openVipPlansModalForEpisode(epNum);
                     return;
                 }
-                switchEpisode(i);
                 closeReelsEpisodesSheet();
-            });
+                switchEpisode(i);
+            };
+
+            btn.addEventListener('click', handleEpClick);
+            btn.addEventListener('touchend', handleEpClick);
             reelsSheetGrid.appendChild(btn);
 
             if (i === currentEpisodeIndex) {
@@ -1583,11 +1604,18 @@
         if (reelsFeedToggleBtn) reelsFeedToggleBtn.addEventListener('click', () => toggleReelsFeedMode());
         if (reelsExitBtn) reelsExitBtn.addEventListener('click', () => toggleReelsFeedMode(false));
         if (reelsLikeBtn) reelsLikeBtn.addEventListener('click', () => { if (!currentDramaData) return; toggleFavorite(currentDramaData); syncModalFavBtn(); syncReelsUI(); });
-        if (reelsEpisodesBtn) reelsEpisodesBtn.addEventListener('click', openReelsEpisodesSheet);
+        if (reelsEpisodesBtn) {
+            reelsEpisodesBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openReelsEpisodesSheet(); });
+        }
+        const reelsEpBadge = document.getElementById('reels-ep-badge');
+        if (reelsEpBadge) {
+            reelsEpBadge.style.cursor = 'pointer';
+            reelsEpBadge.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openReelsEpisodesSheet(); });
+        }
         if (reelsShareBtn) reelsShareBtn.addEventListener('click', shareCurrentDrama);
         if (reelsSpeedBtn) reelsSpeedBtn.addEventListener('click', cycleReelsPlaybackSpeed);
-        if (reelsSheetClose) reelsSheetClose.addEventListener('click', closeReelsEpisodesSheet);
-        if (reelsSheetBackdrop) reelsSheetBackdrop.addEventListener('click', closeReelsEpisodesSheet);
+        if (reelsSheetClose) reelsSheetClose.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeReelsEpisodesSheet(); });
+        if (reelsSheetBackdrop) reelsSheetBackdrop.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeReelsEpisodesSheet(); });
 
         // Wheel navigation on video viewport for Reels mode (mouse scroll up/down)
         if (videoViewport) {
