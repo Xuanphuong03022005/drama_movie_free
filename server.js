@@ -362,10 +362,11 @@ app.get('/api/wallet/payment-config', (req, res) => {
         bank: {
             bankName: 'Ngân hàng TMCP Quân Đội (MB Bank)',
             bankCode: 'MB',
-            accountNumber: '0348769999',
-            accountHolder: 'DRAMAFLOW MEDIA',
+            accountNumber: '0378423195',
+            accountHolder: 'ADMIN DRAMAFLOW',
             branch: 'Hội Sở Chính',
-            supportHotline: '1900 6868',
+            supportHotline: '0378423195',
+            supportZalo: '0378423195',
             supportTelegram: '@dramaflow_support'
         },
         presetAmounts: [20000, 50000, 100000, 200000, 500000],

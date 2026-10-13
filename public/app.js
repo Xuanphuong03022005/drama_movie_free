@@ -6552,10 +6552,9 @@
 
         setTimeout(() => {
             if (action.type === 'purchase_plan' && action.plan) {
-                openVipPlansModal();
-                handlePurchasePlan(action.plan);
+                openBankingPaymentModal(action.plan);
             } else if (action.type === 'topup') {
-                openWalletTopupModal(action.amount || 50000);
+                openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: action.amount || 50000 });
             }
         }, 350);
     }
@@ -6928,6 +6927,62 @@
         });
     }
 
+    // ==========================================
+    // BANKING PAYMENT & ZALO QR MODAL HANDLER
+    // ==========================================
+    let activeBankingPlan = null;
+
+    function openBankingPaymentModal(plan) {
+        activeBankingPlan = plan || { name: 'VIP Tuần', price: 19000 };
+        const modal = document.getElementById('banking-payment-modal');
+        if (!modal) return;
+
+        closeVipPlansModal();
+        closeEpisodeVipLockModal();
+        closeInsufficientBalanceModal();
+
+        const user = getCurrentUser();
+        const cleanUsername = (user?.username || 'KHACH').toUpperCase();
+        const planName = activeBankingPlan.name || 'VIP Tuần';
+        const planPrice = parseInt(activeBankingPlan.price, 10) || 19000;
+        const priceFormatted = new Intl.NumberFormat('vi-VN').format(planPrice) + ' đ';
+
+        const planNameEl = document.getElementById('banking-plan-name');
+        const planPriceEl = document.getElementById('banking-plan-price');
+        const amountValEl = document.getElementById('banking-amount-val');
+        const memoValEl = document.getElementById('banking-memo-val');
+        const qrImgEl = document.getElementById('banking-qr-img');
+        const btnZalo = document.getElementById('btn-banking-zalo');
+
+        if (planNameEl) planNameEl.textContent = planName;
+        if (planPriceEl) planPriceEl.textContent = `(${priceFormatted})`;
+        if (amountValEl) amountValEl.textContent = priceFormatted;
+
+        const memoText = `VIP ${cleanUsername}`;
+        if (memoValEl) memoValEl.textContent = memoText;
+
+        // Dynamic VietQR Image with phone/STK 0378423195
+        if (qrImgEl) {
+            const qrUrl = `https://img.vietqr.io/image/MB-0378423195-compact2.png?amount=${planPrice}&addInfo=${encodeURIComponent(memoText)}&accountName=ADMIN%20DRAMAFLOW`;
+            qrImgEl.src = qrUrl;
+        }
+
+        if (btnZalo) {
+            btnZalo.href = 'https://zalo.me/0378423195';
+        }
+
+        modal.hidden = false;
+        modal.style.display = 'flex';
+    }
+
+    function closeBankingPaymentModal() {
+        const modal = document.getElementById('banking-payment-modal');
+        if (modal) {
+            modal.hidden = true;
+            modal.style.display = 'none';
+        }
+    }
+
     async function handlePurchasePlan(plan) {
         const user = getCurrentUser();
         if (!user) {
@@ -6943,7 +6998,7 @@
         const planPrice = parseFloat(plan.price);
 
         if (userBalance < planPrice) {
-            openInsufficientBalanceModal(plan, userBalance);
+            openBankingPaymentModal(plan);
             return;
         }
 
@@ -6990,28 +7045,7 @@
     let activeTopupMethod = 'vietqr';
 
     function openInsufficientBalanceModal(plan, currentBalance) {
-        const modal = document.getElementById('insufficient-modal');
-        if (!modal) return;
-        modal.hidden = false;
-
-        const needed = Math.max(10000, Math.ceil((plan.price - currentBalance) / 10000) * 10000);
-        const planNameEl = document.getElementById('warn-plan-name');
-        const planPriceEl = document.getElementById('warn-plan-price');
-        const balanceEl = document.getElementById('warn-user-balance');
-        const neededEl = document.getElementById('warn-needed-amount');
-
-        if (planNameEl) planNameEl.textContent = plan.name;
-        if (planPriceEl) planPriceEl.textContent = new Intl.NumberFormat('vi-VN').format(plan.price) + ' đ';
-        if (balanceEl) balanceEl.textContent = new Intl.NumberFormat('vi-VN').format(currentBalance) + ' đ';
-        if (neededEl) neededEl.textContent = new Intl.NumberFormat('vi-VN').format(needed) + ' đ';
-
-        const btnGotoTopup = document.getElementById('btn-warn-goto-topup');
-        if (btnGotoTopup) {
-            btnGotoTopup.onclick = () => {
-                closeInsufficientBalanceModal();
-                openWalletTopupModal(needed);
-            };
-        }
+        openBankingPaymentModal(plan);
     }
 
     function closeInsufficientBalanceModal() {
@@ -7073,13 +7107,13 @@
         // VietQR Direct Real Generation
         const qrImg = document.getElementById('vietqr-image');
         if (qrImg) {
-            qrImg.src = `https://img.vietqr.io/image/MB-0348769999-compact2.png?amount=${amount}&addInfo=DF%20${encodeURIComponent(cleanUsername)}&accountName=DRAMAFLOW%20MEDIA`;
+            qrImg.src = `https://img.vietqr.io/image/MB-0378423195-compact2.png?amount=${amount}&addInfo=DF%20${encodeURIComponent(cleanUsername)}&accountName=ADMIN%20DRAMAFLOW`;
         }
 
         // MoMo QR Generation
         const momoImg = document.getElementById('momo-image');
         if (momoImg) {
-            momoImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`2|99|0348769999|DRAMAFLOW MEDIA|cskh@dramaflow.vn|0|0|${amount}|DF ${cleanUsername}`)}`;
+            momoImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`2|99|0378423195|ADMIN DRAMAFLOW|cskh@dramaflow.vn|0|0|${amount}|DF ${cleanUsername}`)}`;
         }
 
         // Text details
@@ -7153,7 +7187,7 @@
                 const user = getCurrentUser();
                 const cleanUsername = (user?.username || 'USER').toUpperCase();
 
-                if (targetKey === 'b-account-number') textToCopy = '0348769999';
+                if (targetKey === 'b-account-number') textToCopy = '0378423195';
                 else if (targetKey === 'b-amount-number') textToCopy = String(activeTopupAmount);
                 else if (targetKey === 'b-transfer-content' || targetKey === 'momo-transfer-content') textToCopy = `DF ${cleanUsername}`;
 
@@ -7233,6 +7267,47 @@
         if (warnCloseBtn) warnCloseBtn.addEventListener('click', closeInsufficientBalanceModal);
         if (warnBackdrop) warnBackdrop.addEventListener('click', closeInsufficientBalanceModal);
         if (warnCancelBtn) warnCancelBtn.addEventListener('click', closeInsufficientBalanceModal);
+
+        // Close and back triggers for Banking Payment Modal
+        const bankingCloseBtn = document.getElementById('banking-close-btn');
+        const bankingBackdrop = document.getElementById('banking-modal-backdrop');
+        const btnBankingBack = document.getElementById('btn-banking-back');
+        if (bankingCloseBtn) bankingCloseBtn.addEventListener('click', closeBankingPaymentModal);
+        if (bankingBackdrop) bankingBackdrop.addEventListener('click', closeBankingPaymentModal);
+        if (btnBankingBack) {
+            btnBankingBack.addEventListener('click', () => {
+                closeBankingPaymentModal();
+                openVipPlansModal();
+            });
+        }
+
+        // Copy actions inside Banking modal (Phone / STK Zalo 0378423195 and Memo)
+        document.querySelectorAll('.btn-copy-chip').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const copyVal = btn.getAttribute('data-copy') || document.getElementById('banking-memo-val')?.textContent || '0378423195';
+                if (copyVal) {
+                    try {
+                        await navigator.clipboard.writeText(copyVal);
+                        showToast(`Đã sao chép: "${copyVal}"`, 'fa-circle-check');
+                    } catch (e) {
+                        showToast(`Sao chép: ${copyVal}`, 'fa-clipboard');
+                    }
+                }
+            });
+        });
+
+        const btnCopyMemo = document.getElementById('btn-copy-memo');
+        if (btnCopyMemo) {
+            btnCopyMemo.addEventListener('click', async () => {
+                const memoText = document.getElementById('banking-memo-val')?.textContent || 'VIP';
+                try {
+                    await navigator.clipboard.writeText(memoText);
+                    showToast(`Đã sao chép nội dung: "${memoText}"`, 'fa-circle-check');
+                } catch (e) {
+                    showToast(`Sao chép: ${memoText}`, 'fa-clipboard');
+                }
+            });
+        }
     }
 
     function closeVipPlansModal() {
@@ -7521,7 +7596,7 @@
         if (btnUserTopup) {
             btnUserTopup.addEventListener('click', () => {
                 if (userMenu) userMenu.hidden = true;
-                openWalletTopupModal();
+                openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: 50000 });
             });
         }
 
@@ -7590,7 +7665,7 @@
         if (vipBackdrop) vipBackdrop.addEventListener('click', closeVipPlansModal);
 
         const btnOpenTopupModal = document.getElementById('btn-open-topup-modal');
-        if (btnOpenTopupModal) btnOpenTopupModal.addEventListener('click', () => openWalletTopupModal());
+        if (btnOpenTopupModal) btnOpenTopupModal.addEventListener('click', () => openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: 50000 }));
 
         // 7. Episode Lock Modal Handlers
         const epLockCloseBtn = document.getElementById('episode-vip-close-btn');

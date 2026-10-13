@@ -21,7 +21,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.8.0">
+    <link rel="stylesheet" href="/style.css?v=3.9.0">
     <style id="critical-vip-modal-override">
         /* Critical overrides: ensure modals are strictly above all players and compact */
         #vip-plans-modal,
@@ -1420,6 +1420,87 @@
                 </div>
             </div>
         </div>
+    <!-- Real Banking & Zalo QR Payment Modal (According to user specification) -->
+    <div id="banking-payment-modal" class="login-modal banking-modal" hidden>
+        <div class="login-modal-backdrop" id="banking-modal-backdrop"></div>
+        <div class="modal-dialog-wrapper">
+            <button type="button" class="login-close-btn modal-outside-close-btn" id="banking-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="login-modal-card banking-modal-card">
+                <!-- Modal Header -->
+                <div class="banking-modal-header">
+                    <h3 class="banking-title">Thanh toán qua Banking</h3>
+                </div>
+
+                <!-- Selected Plan Badge Box -->
+                <div class="banking-plan-box">
+                    <span>Gói:</span> <strong id="banking-plan-name" class="highlight-orange">VIP Tuần</strong>
+                    <span class="banking-plan-price-tag" id="banking-plan-price">(19.000đ)</span>
+                </div>
+
+                <!-- Information Notice Card -->
+                <div class="banking-notice-card">
+                    <div class="notice-card-title">
+                        <i class="fa-solid fa-building-columns"></i> Thanh toán qua Banking
+                    </div>
+                    <p class="notice-card-text">
+                        Vui lòng liên hệ <strong>Quản trị viên</strong> qua một trong các kênh bên dưới để nhận thông tin chuyển khoản ngân hàng.
+                    </p>
+                    <p class="notice-card-sub">
+                        Sau khi chuyển khoản, gửi ảnh xác nhận → VIP sẽ được kích hoạt trong vòng 24 giờ.
+                    </p>
+                </div>
+
+                <!-- QR Code & Bank Information Card -->
+                <div class="banking-qr-card">
+                    <div class="banking-qr-wrapper">
+                        <img id="banking-qr-img" src="https://img.vietqr.io/image/MB-0378423195-compact2.png?amount=19000&addInfo=VIP&accountName=ADMIN" alt="Mã QR Chuyển Khoản" loading="lazy">
+                        <div class="qr-scan-guide"><i class="fa-solid fa-qrcode"></i> Quét mã VietQR bằng App Ngân Hàng hoặc ZaloPay</div>
+                    </div>
+                    
+                    <div class="banking-info-rows">
+                        <div class="bank-row">
+                            <span class="b-label">Số ĐT Zalo / STK:</span>
+                            <div class="b-value-copy">
+                                <strong id="banking-phone-val" class="highlight-val">0378423195</strong>
+                                <button type="button" class="btn-copy-chip" data-copy="0378423195" title="Sao chép số điện thoại Zalo"><i class="fa-regular fa-copy"></i> Sao chép</button>
+                            </div>
+                        </div>
+                        <div class="bank-row">
+                            <span class="b-label">Chủ tài khoản / Zalo:</span>
+                            <strong class="b-value">ADMIN DRAMAFLOW</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span class="b-label">Ngân hàng:</span>
+                            <strong class="b-value">MB Bank (Quân Đội) / ZaloPay</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span class="b-label">Số tiền cần thanh toán:</span>
+                            <strong id="banking-amount-val" class="b-value text-amber">19.000 đ</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span class="b-label">Nội dung chuyển khoản:</span>
+                            <div class="b-value-copy">
+                                <strong id="banking-memo-val" class="highlight-val">VIP USER</strong>
+                                <button type="button" class="btn-copy-chip" id="btn-copy-memo" title="Sao chép nội dung CK"><i class="fa-regular fa-copy"></i> Sao chép</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direct Contact Action Buttons -->
+                <div class="banking-actions-group">
+                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener" class="btn-banking-contact btn-telegram" id="btn-banking-telegram">
+                        <i class="fa-solid fa-comment-dots"></i> <span>Liên hệ qua Telegram</span>
+                    </a>
+                    <a href="https://zalo.me/0378423195" target="_blank" rel="noopener" class="btn-banking-contact btn-zalo" id="btn-banking-zalo">
+                        <i class="fa-solid fa-comment-dots"></i> <span>Liên hệ qua Zalo</span>
+                    </a>
+                    <button type="button" class="btn-banking-back" id="btn-banking-back">
+                        <span>← Quay lại</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Real Commercial Wallet Top-Up Modal (VietQR & Banking Gateway) -->
@@ -1491,13 +1572,13 @@
                     <div class="bank-detail-item">
                         <span class="b-lbl">Chủ tài khoản:</span>
                         <div class="b-val-wrap">
-                            <strong id="b-account-holder">DRAMAFLOW MEDIA</strong>
+                            <strong id="b-account-holder">ADMIN DRAMAFLOW</strong>
                         </div>
                     </div>
                     <div class="bank-detail-item highlight-item">
-                        <span class="b-lbl">Số tài khoản:</span>
+                        <span class="b-lbl">Số tài khoản / Zalo:</span>
                         <div class="b-val-wrap">
-                            <strong id="b-account-number">0348769999</strong>
+                            <strong id="b-account-number">0378423195</strong>
                             <button type="button" class="btn-copy-val" data-copy="b-account-number" title="Sao chép số tài khoản"><i class="fa-regular fa-copy"></i></button>
                         </div>
                     </div>
@@ -1529,12 +1610,12 @@
                 </div>
                 <div class="bank-details-list">
                     <div class="bank-detail-item">
-                        <span class="b-lbl">Ví MoMo:</span>
-                        <div class="b-val-wrap"><strong>0348769999</strong></div>
+                        <span class="b-lbl">Ví MoMo / ZaloPay:</span>
+                        <div class="b-val-wrap"><strong>0378423195</strong></div>
                     </div>
                     <div class="bank-detail-item">
                         <span class="b-lbl">Tên người nhận:</span>
-                        <div class="b-val-wrap"><strong>DRAMAFLOW MEDIA</strong></div>
+                        <div class="b-val-wrap"><strong>ADMIN DRAMAFLOW</strong></div>
                     </div>
                     <div class="bank-detail-item highlight-code">
                         <span class="b-lbl">Lời nhắn MoMo:</span>
@@ -1712,7 +1793,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.8.0"></script>
+    <script src="/app.js?v=3.9.0"></script>
 </body>
 
 </html>
