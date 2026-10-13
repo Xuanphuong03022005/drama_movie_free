@@ -5,6 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DramaFlow PRO - Premier HD Short Drama Streaming Platform</title>
+    <!-- Brand Favicon & Identity -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/favicon.svg">
+    <meta name="theme-color" content="#0f172a">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +21,40 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.2.0">
+    <link rel="stylesheet" href="/style.css?v=3.4.0">
+    <style id="critical-vip-modal-override">
+        /* Critical overrides: ensure modals are strictly above all players and compact */
+        #vip-plans-modal,
+        .vip-modal,
+        .login-modal {
+            z-index: 999999 !important;
+            position: fixed !important;
+            inset: 0 !important;
+        }
+        #vip-plans-modal[hidden],
+        .login-modal[hidden] {
+            display: none !important;
+        }
+        .vip-modal-card {
+            max-width: 660px !important;
+            width: 92% !important;
+            padding: 18px 18px 14px !important;
+            border-radius: 18px !important;
+            max-height: calc(100vh - 36px) !important;
+            max-height: calc(100dvh - 36px) !important;
+            overflow-y: auto !important;
+        }
+        .vip-plans-grid {
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            gap: 8px !important;
+        }
+        @media (max-width: 680px) {
+            .vip-plans-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+    </style>
     <script>
         (function() {
             try {
@@ -36,9 +74,9 @@
     <header class="navbar" id="site-header">
         <div class="nav-container">
             <!-- Brand Logo -->
-            <a href="#" class="brand-logo" id="logo-btn">
+            <a href="#" class="brand-logo" id="logo-btn" title="DramaFlow PRO">
                 <div class="brand-icon">
-                    <i class="fa-solid fa-play"></i>
+                    <img src="/favicon.svg" alt="DramaFlow Logo" class="brand-logo-img">
                 </div>
                 <div class="brand-name">
                     Drama<span>Flow</span>
@@ -841,7 +879,9 @@
         <div class="footer-container">
             <div class="footer-brand-column">
                 <div class="brand-logo footer-logo">
-                    <div class="brand-icon"><i class="fa-solid fa-play"></i></div>
+                    <div class="brand-icon footer-brand-icon">
+                        <img src="/favicon.svg" alt="DramaFlow Logo" class="brand-logo-img">
+                    </div>
                     <div class="brand-name">Drama<span>Flow</span> <span class="pro-tag">PRO</span></div>
                 </div>
                 <p class="footer-desc">The modern high-definition streaming gateway for trending short dramas worldwide.
@@ -1482,7 +1522,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.2.1"></script>
+    <script src="/app.js?v=3.4.0"></script>
 </body>
 
 </html>

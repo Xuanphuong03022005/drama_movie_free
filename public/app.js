@@ -1034,9 +1034,12 @@
             const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
             btn.className = `reels-ep-btn ${accessClass} ${i === currentEpisodeIndex ? 'active' : ''} ${vipClass}`;
             const vipTag = !canPlay ? ' <span style="font-size:9px;color:#fb7185;">🔒</span>' : (isEpVip ? ' <span style="font-size:9px;color:#fbbf24;">👑</span>' : '');
-            btn.innerHTML = `<span class="ep-num">${epNum}${vipTag}</span><span class="ep-lbl">${t('ep_prefix')}</span>`;
-            btn.addEventListener('click', () => {
-                if (!canPlay) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!canPlay || btn.classList.contains('locked') || btn.classList.contains('vip-locked')) {
+                    if (mainVideo && !mainVideo.paused) {
+                        try { mainVideo.pause(); } catch (err) {}
+                    }
                     closeReelsEpisodesSheet();
                     openVipPlansModalForEpisode(epNum);
                     return;
@@ -5206,9 +5209,12 @@
             btn.innerHTML = `<span>${epNum}</span>${!canPlay ? '<i class="icon-lock">🔒</i>' : '<i class="icon-play">▶</i>'}`;
             btn.title = (ep.title || `Tập ${epNum}`) + vipTag;
             btn.setAttribute('data-ep-index', absIndex);
-            if (isInProgress) btn.style.setProperty('--ep-progress-w', pct + '%');
-            btn.addEventListener('click', () => {
-                if (!canPlay) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!canPlay || btn.classList.contains('locked') || btn.classList.contains('vip-locked')) {
+                    if (mainVideo && !mainVideo.paused) {
+                        try { mainVideo.pause(); } catch (err) {}
+                    }
                     openVipPlansModalForEpisode(epNum);
                     return;
                 }
@@ -6455,12 +6461,16 @@
         const modal = document.getElementById('login-modal');
         if (!modal) return;
         modal.hidden = false;
+        modal.style.display = 'flex';
         switchAuthTab(activeTab);
     }
 
     function closeAuthModal() {
         const modal = document.getElementById('login-modal');
-        if (modal) modal.hidden = true;
+        if (modal) {
+            modal.hidden = true;
+            modal.style.display = 'none';
+        }
     }
 
     function switchAuthTab(tab) {
@@ -6746,6 +6756,9 @@
         const modal = document.getElementById('vip-plans-modal');
         if (!modal) return;
         modal.hidden = false;
+        modal.style.display = 'flex';
+        modal.style.zIndex = '999999';
+        modal.style.position = 'fixed';
 
         // Context Episode Banner handling
         const banner = document.getElementById('vip-modal-ep-banner');
@@ -6792,6 +6805,11 @@
         const modal = document.getElementById('vip-plans-modal');
         if (!modal) return;
 
+        // Pause video immediately without closing player
+        if (mainVideo && !mainVideo.paused) {
+            try { mainVideo.pause(); } catch (e) {}
+        }
+
         const banner = document.getElementById('vip-modal-ep-banner');
         const epTitleEl = document.getElementById('vip-banner-ep-title');
         const epDescEl = document.getElementById('vip-banner-ep-desc');
@@ -6815,7 +6833,9 @@
             const badgeHtml = plan.badge ? `<span class="vip-plan-badge">${escapeHtml(plan.badge)}</span>` : '';
             const origPriceHtml = plan.original_price ? `<span class="vip-plan-original-price">${new Intl.NumberFormat('vi-VN').format(plan.original_price)}đ</span>` : '';
 
-            const featuresList = (plan.features || []).map(f => `<li><i class="fa-solid fa-check"></i> ${escapeHtml(f)}</li>`).join('');
+            // Pick up to 3 most important features for compact, elegant card layout
+            const features = Array.isArray(plan.features) ? plan.features.slice(0, 3) : [];
+            const featuresList = features.map(f => `<li><i class="fa-solid fa-check"></i> ${escapeHtml(f)}</li>`).join('');
 
             card.innerHTML = `
                 ${badgeHtml}
@@ -7145,7 +7165,10 @@
 
     function closeVipPlansModal() {
         const modal = document.getElementById('vip-plans-modal');
-        if (modal) modal.hidden = true;
+        if (modal) {
+            modal.hidden = true;
+            modal.style.display = 'none';
+        }
         const banner = document.getElementById('vip-modal-ep-banner');
         if (banner) banner.hidden = true;
     }
