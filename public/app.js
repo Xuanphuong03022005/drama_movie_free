@@ -1678,8 +1678,12 @@
         if (shortcutsCloseBtn) shortcutsCloseBtn.addEventListener('click', () => shortcutsModal.hidden = true);
         if (shortcutsBackdrop) shortcutsBackdrop.addEventListener('click', () => shortcutsModal.hidden = true);
 
-        // Video Fit Mode Handler (Cover / Fullscreen Fit vs Contain)
-        let currentFitMode = localStorage.getItem('df_video_fit') || 'cover';
+        // Video Fit Mode Handler (Contain = Tỉ lệ khung hình gốc chuẩn, sắc nét, không bị dãn ngang mờ)
+        let currentFitMode = localStorage.getItem('df_video_fit');
+        if (!currentFitMode || currentFitMode === 'cover') {
+            currentFitMode = 'contain';
+            localStorage.setItem('df_video_fit', 'contain');
+        }
 
         function applyVideoFitMode(mode) {
             currentFitMode = mode;
@@ -1693,11 +1697,11 @@
                 if (mode === 'cover') {
                     btn.classList.add('active');
                     btn.innerHTML = `<i class="fa-solid fa-up-right-and-down-left-from-center"></i>`;
-                    btn.title = 'Đang bật: Vừa y màn hình (Phím W để đổi Tỉ lệ gốc)';
+                    btn.title = 'Đang bật: Phóng to tràn viền (Phím W để về Tỉ lệ gốc)';
                 } else {
                     btn.classList.remove('active');
-                    btn.innerHTML = `<i class="fa-solid fa-down-left-and-up-right-to-center"></i>`;
-                    btn.title = 'Đang bật: Tỉ lệ gốc (Phím W để đổi Vừa y màn hình)';
+                    btn.innerHTML = `<i class="fa-solid fa-expand"></i>`;
+                    btn.title = 'Đang bật: Tỉ lệ gốc chuẩn (Phím W để phóng to)';
                 }
             }
         }
@@ -1705,9 +1709,9 @@
         function toggleVideoFitMode() {
             const newMode = currentFitMode === 'cover' ? 'contain' : 'cover';
             applyVideoFitMode(newMode);
-            showToast(newMode === 'cover' ? 'Chế độ phát: Vừa y màn hình (Lấp đầy)' : 'Chế độ phát: Tỉ lệ gốc (Toàn khung)', 'fa-up-right-and-down-left-from-center');
+            showToast(newMode === 'cover' ? 'Chế độ phát: Phóng to tràn viền' : 'Chế độ phát: Tỉ lệ gốc chuẩn (Sắc nét)', 'fa-expand');
             if (typeof showPlayerHud === 'function') {
-                showPlayerHud(newMode === 'cover' ? 'fa-up-right-and-down-left-from-center' : 'fa-down-left-and-up-right-to-center', newMode === 'cover' ? 'Vừa y màn hình' : 'Tỉ lệ gốc');
+                showPlayerHud(newMode === 'cover' ? 'fa-up-right-and-down-left-from-center' : 'fa-expand', newMode === 'cover' ? 'Tràn viền' : 'Tỉ lệ gốc');
             }
         }
 
@@ -3018,14 +3022,26 @@
         if (!text || typeof text !== 'string' || !text.trim()) return text;
         const clean = text.trim();
         const short = (targetLang || 'vi').toLowerCase().split('-')[0];
-        if (short === 'en') return clean;
+        if (short === 'en' || short === 'all') return clean;
         const cacheKey = `${short}:${clean}`;
         if (dynamicTranslationCache.has(cacheKey)) {
             return dynamicTranslationCache.get(cacheKey);
         }
 
+        // Method 1: Server API endpoint with multi-engine backend pool & server cache
         try {
-            // Method 1: Direct Google Translate gtx from client (fast, CORS enabled, residential IP)
+            const res2 = await fetch(`/api/translate?text=${encodeURIComponent(clean)}&target=${encodeURIComponent(short)}`);
+            if (res2.ok) {
+                const j2 = await res2.json();
+                if (j2.ok && j2.translated && j2.translated.trim()) {
+                    dynamicTranslationCache.set(cacheKey, j2.translated.trim());
+                    return j2.translated.trim();
+                }
+            }
+        } catch (e) { }
+
+        // Method 2: Direct Google Translate gtx fallback from client
+        try {
             const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(short)}&dt=t&q=${encodeURIComponent(clean)}`;
             const res = await fetch(gUrl);
             if (res.ok) {
@@ -3040,19 +3056,45 @@
             }
         } catch (e) { }
 
-        // Method 2: Server API endpoint fallback
-        try {
-            const res2 = await fetch(`/api/translate?text=${encodeURIComponent(clean)}&target=${encodeURIComponent(short)}`);
-            if (res2.ok) {
-                const j2 = await res2.json();
-                if (j2.ok && j2.translated) {
-                    dynamicTranslationCache.set(cacheKey, j2.translated);
-                    return j2.translated;
-                }
-            }
-        } catch (e) { }
-
         return clean;
+    }
+
+    async function getTranslatedDramaTitle(rawTitle, lang = currentLang) {
+        if (!rawTitle || typeof rawTitle !== 'string' || !rawTitle.trim()) return rawTitle;
+        const clean = rawTitle.replace(/\s*-\s*(Free\s*Streaming|Streaming\s*Gratis|Full\s*Episodes?|Episode\s*\d+|Tập\s*\d+).*$/i, '').trim();
+        const short = (lang || 'vi').toLowerCase().split('-')[0];
+        if (short === 'en' || short === 'all') return clean;
+        return await translateDynamicText(clean, short);
+    }
+
+    function applyTitleTranslationToElement(el, originalTitle, targetLang = currentLang) {
+        if (!el || !originalTitle || typeof originalTitle !== 'string') return;
+        const raw = originalTitle.trim();
+        if (!raw) return;
+
+        el.setAttribute('data-original-title', raw);
+        const short = (targetLang || 'vi').toLowerCase().split('-')[0];
+        if (short === 'en' || short === 'all') {
+            el.textContent = raw;
+            if (el.hasAttribute('title')) el.setAttribute('title', raw);
+            return;
+        }
+
+        const cleanForTrans = raw.replace(/\s*-\s*(Free\s*Streaming|Streaming\s*Gratis|Full\s*Episodes?|Episode\s*\d+|Tập\s*\d+).*$/i, '').trim();
+        const cacheKey = `${short}:${cleanForTrans || raw}`;
+        if (dynamicTranslationCache.has(cacheKey)) {
+            const trans = dynamicTranslationCache.get(cacheKey);
+            el.textContent = trans;
+            if (el.hasAttribute('title')) el.setAttribute('title', trans);
+            return;
+        }
+
+        translateDynamicText(cleanForTrans || raw, short).then(trans => {
+            if (trans && el && el.getAttribute('data-original-title') === raw) {
+                el.textContent = trans;
+                if (el.hasAttribute('title')) el.setAttribute('title', trans);
+            }
+        });
     }
 
     function applyTranslations(langCode = currentLang) {
@@ -3451,6 +3493,33 @@
         // Re-render local rails to update card labels
         renderHistoryRail();
         renderFavoritesRail();
+
+        // Re-translate all rendered drama titles across cards, rails, and active player
+        const targetShortLang = (langCode || currentLang || 'vi').toLowerCase().split('-')[0];
+        document.querySelectorAll('[data-original-title]').forEach(el => {
+            const orig = el.getAttribute('data-original-title');
+            if (orig) {
+                applyTitleTranslationToElement(el, orig, targetShortLang);
+            }
+        });
+
+        // Active Player Drama Title re-translation
+        if (currentDramaData && !playerModal.hidden) {
+            const orig = currentDramaData.original_title || currentDramaData.title;
+            if (orig) {
+                getTranslatedDramaTitle(orig, targetShortLang).then(trans => {
+                    if (trans) {
+                        currentDramaData.title = trans;
+                        const epNum = currentDramaData.episodes?.[currentEpisodeIndex]?.number || (currentEpisodeIndex + 1);
+                        if (modalDramaTitle) modalDramaTitle.textContent = trans;
+                        if (detailDramaTitle) detailDramaTitle.textContent = trans;
+                        if (reelsDramaTitle) reelsDramaTitle.textContent = trans;
+                        if (miniplayerTitle) miniplayerTitle.textContent = trans;
+                        document.title = `${trans} - ${t('ep_prefix')} ${epNum} | DramaFlow`;
+                    }
+                });
+            }
+        }
     }
 
     function initLanguageSelector() {
@@ -4202,7 +4271,12 @@
         }
 
         const applyContent = () => {
-            if (heroTitle) heroTitle.textContent = item.title || 'Featured Drama Series';
+            if (heroTitle) {
+                const rawHeroTitle = item.title || 'Featured Drama Series';
+                heroTitle.textContent = rawHeroTitle;
+                heroTitle.setAttribute('data-original-title', rawHeroTitle);
+                applyTitleTranslationToElement(heroTitle, rawHeroTitle);
+            }
             if (heroDesc) {
                 const rawHeroDesc = item.description || 'Watch all episodes of trending short dramas in full HD without ads.';
                 heroDesc.textContent = rawHeroDesc;
@@ -4343,11 +4417,12 @@
                         </div>
                     </div>
                     <div class="card-info-block">
-                        <h4 class="card-title-text" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h4>
+                        <h4 class="card-title-text" data-original-title="${escapeHtml(item.title)}" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h4>
                         <div class="card-meta-text">${item.category_name || 'Exclusive Series'}</div>
                     </div>
                 </div>
             `;
+            applyTitleTranslationToElement(wrap.querySelector('.card-title-text'), item.title);
             wrap.addEventListener('click', () => openDrama(item));
             top10Rail.appendChild(wrap);
         });
@@ -4386,10 +4461,11 @@
                     </div>
                 </div>
                 <div class="card-info-block">
-                    <h3 class="card-title-text" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+                    <h3 class="card-title-text" data-original-title="${escapeHtml(item.title)}" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
                     <div class="card-meta-text">${escapeHtml(tagsText)}</div>
                 </div>
             `;
+            applyTitleTranslationToElement(card.querySelector('.card-title-text'), item.title);
             card.addEventListener('click', () => openDrama(item));
             dramaGrid.appendChild(card);
         });
@@ -5028,10 +5104,11 @@
                 row.innerHTML = `
                     <img class="search-thumb" src="${posterSrc}" alt="${escapeHtml(item.title)}" onerror="this.onerror=null;this.src='${DEFAULT_FALLBACK_POSTER}';">
                     <div class="search-item-info">
-                        <div class="search-item-title">${escapeHtml(item.title)}</div>
+                        <div class="search-item-title" data-original-title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
                         <div class="search-item-meta">${item.category_name || 'Short Drama Series'}</div>
                     </div>
                 `;
+                applyTitleTranslationToElement(row.querySelector('.search-item-title'), item.title);
                 row.addEventListener('click', () => {
                     searchDropdown.hidden = true;
                     openDrama(item);
@@ -5067,6 +5144,9 @@
         const cleanTitle = decodeHtml(item.title || item.slug || 'Đang tải...');
         modalDramaTitle.textContent = cleanTitle;
         detailDramaTitle.textContent = cleanTitle;
+        applyTitleTranslationToElement(modalDramaTitle, cleanTitle);
+        applyTitleTranslationToElement(detailDramaTitle, cleanTitle);
+        if (reelsDramaTitle) applyTitleTranslationToElement(reelsDramaTitle, cleanTitle);
         const rawInitialDesc = item.description || '';
         detailDramaDesc.textContent = decodeHtml(rawInitialDesc || t('synopsis_loading'));
         const initShortLang = (currentLang || 'vi').split('-')[0];
@@ -5141,8 +5221,13 @@
             };
 
             const loadedTitle = decodeHtml(data.title || item.title);
+            const origTitle = decodeHtml(data.original_title || item.title || loadedTitle);
             modalDramaTitle.textContent = loadedTitle;
             detailDramaTitle.textContent = loadedTitle;
+            if (reelsDramaTitle) reelsDramaTitle.textContent = loadedTitle;
+            applyTitleTranslationToElement(modalDramaTitle, origTitle);
+            applyTitleTranslationToElement(detailDramaTitle, origTitle);
+            if (reelsDramaTitle) applyTitleTranslationToElement(reelsDramaTitle, origTitle);
             if (data.description) {
                 const rawDesc = decodeHtml(data.description);
                 detailDramaDesc.textContent = rawDesc;
@@ -5295,8 +5380,23 @@
         updateDramaUrl(dramaSlug, epNum, replaceState);
 
         const loadedTitle = decodeHtml(currentDramaData.title || dramaSlug);
-        document.title = `${loadedTitle} - ${t('ep_prefix')} ${epNum} | DramaFlow`;
+        const origTitle = decodeHtml(currentDramaData.original_title || currentDramaData.title || dramaSlug);
+        const targetShortLang = (currentLang || 'vi').toLowerCase().split('-')[0];
 
+        if (targetShortLang !== 'en' && targetShortLang !== 'all') {
+            getTranslatedDramaTitle(origTitle, targetShortLang).then(trans => {
+                if (trans) {
+                    currentDramaData.title = trans;
+                    document.title = `${trans} - ${t('ep_prefix')} ${epNum} | DramaFlow`;
+                    if (modalDramaTitle) modalDramaTitle.textContent = trans;
+                    if (detailDramaTitle) detailDramaTitle.textContent = trans;
+                    if (reelsDramaTitle) reelsDramaTitle.textContent = trans;
+                    if (miniplayerTitle) miniplayerTitle.textContent = trans;
+                }
+            });
+        }
+
+        document.title = `${loadedTitle} - ${t('ep_prefix')} ${epNum} | DramaFlow`;
         modalEpisodeTitle.textContent = `${t('ep_prefix')} ${epNum}`;
         prevEpBtn.disabled = index === 0;
         nextEpBtn.disabled = index === currentDramaData.episodes.length - 1;
@@ -5982,10 +6082,11 @@
                     </div>
                 </div>
                 <div class="history-card-body">
-                    <div class="history-card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+                    <div class="history-card-title" data-original-title="${escapeHtml(item.title)}" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
                     <div class="history-card-ep"><i class="fa-solid fa-play"></i> ${t('resume_ep_prefix')} ${item.last_episode || 1}</div>
                 </div>
             `;
+            applyTitleTranslationToElement(card.querySelector('.history-card-title'), item.title);
             card.addEventListener('click', () => openDrama(item));
             historyRail.appendChild(card);
         });
@@ -6068,10 +6169,11 @@
                     </div>
                 </div>
                 <div class="card-info-block">
-                    <h3 class="card-title-text" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+                    <h3 class="card-title-text" data-original-title="${escapeHtml(item.title)}" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
                     <div class="card-meta-text">${escapeHtml(item.category_name || 'My List')}</div>
                 </div>
             `;
+            applyTitleTranslationToElement(card.querySelector('.card-title-text'), item.title);
             card.addEventListener('click', () => openDrama(item));
             favoritesRail.appendChild(card);
         });

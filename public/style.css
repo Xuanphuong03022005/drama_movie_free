@@ -3209,7 +3209,9 @@ body {
 .video-viewport video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain !important;
     outline: none;
     transition: object-fit 0.25s ease;
 }
@@ -4549,7 +4551,9 @@ body {
     .video-viewport video {
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain !important;
     }
 
     /* Floating Episodes button on mobile: ONLY appears on hover / touch */
@@ -4765,8 +4769,9 @@ body {
     .player-modal:not(.miniplayer-mode) .video-viewport video {
         width: 100% !important;
         height: 100% !important;
+        max-width: 100% !important;
         max-height: 100% !important;
-        object-fit: cover !important;
+        object-fit: contain !important;
     }
 
     .player-modal:not(.miniplayer-mode) .media-control-strip {

@@ -21,7 +21,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.9.0">
+    <link rel="stylesheet" href="/style.css?v=3.9.2">
     <style id="critical-vip-modal-override">
         /* Critical overrides: ensure modals are strictly above all players and compact */
         #vip-plans-modal,
@@ -135,7 +135,7 @@
                 max-width: 1360px !important;
                 height: calc(100vh - 24px) !important;
                 height: calc(100dvh - 24px) !important;
-                max-height: 840px !important;
+                max-height: 94vh !important;
                 display: flex !important;
                 flex-direction: column !important;
                 overflow: hidden !important;
@@ -183,8 +183,9 @@
             .video-viewport video {
                 width: 100% !important;
                 height: 100% !important;
+                max-width: 100% !important;
                 max-height: 100% !important;
-                object-fit: cover !important;
+                object-fit: contain !important;
                 transition: object-fit 0.25s ease, transform 0.25s ease;
             }
             .video-viewport[data-fit="contain"] video,
@@ -914,8 +915,8 @@
                         </div>
 
                         <div class="media-settings-group">
-                            <button type="button" id="btn-fit-mode" class="ctrl-icon-btn active" title="Chế độ vừa y màn hình (W)"><i
-                                    class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                            <button type="button" id="btn-fit-mode" class="ctrl-icon-btn" title="Chế độ hiển thị: Tỉ lệ gốc chuẩn (Nhấn để phóng to)"><i
+                                    class="fa-solid fa-expand"></i></button>
                             <button type="button" id="btn-pip" class="ctrl-icon-btn" title="Picture-in-Picture (I)"><i
                                     class="fa-solid fa-arrow-up-right-from-square"></i></button>
                             <button type="button" id="btn-shortcuts-hint" class="ctrl-icon-btn"
@@ -1793,7 +1794,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.9.0"></script>
+    <script src="/app.js?v=3.9.2"></script>
 </body>
 
 </html>

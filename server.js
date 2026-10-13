@@ -1228,10 +1228,41 @@ app.get('/api/drama', async (req, res) => {
                 }
             }
             let isOk = cleanEpisodes.length > 0 && cleanEpisodes.some(e => e.play_url || e.direct_play_url);
+            const targetLang = (lang || 'vi').toLowerCase().split('-')[0];
+            const originalTitle = title;
+
+            // Auto-translate drama title & description if target language is not English
+            if (targetLang !== 'en' && targetLang !== 'all' && title) {
+                try {
+                    const cleanForTrans = title.replace(/\s*-\s*(Free\s*Streaming|Streaming\s*Gratis|Full\s*Episodes?|Episode\s*\d+|Tập\s*\d+).*$/i, '').replace(/Episode\s*\d+/i, '').trim();
+                    const transTitle = await translateText(cleanForTrans || title, 'auto', targetLang);
+                    if (transTitle && transTitle.trim()) {
+                        title = transTitle.trim();
+                    }
+                } catch (e) {
+                    console.warn('[DramaTitleTranslate] Failed to translate title:', e.message);
+                }
+            }
+
+            if (targetLang !== 'en' && targetLang !== 'all' && description) {
+                try {
+                    const transDesc = await translateText(description, 'auto', targetLang);
+                    if (transDesc && transDesc.trim()) {
+                        description = transDesc.trim();
+                    }
+                } catch (e) { }
+            }
+
             if (!isOk) {
                 const fb = fbDrama || findFallbackDrama(dramaSlug || candidateKey, watchUrl, title || req.query.title);
                 if (fb) {
                     console.log(`[Fallback] Zero playable episodes from upstream, serving guaranteed fallback for ${dramaSlug || candidateKey || watchUrl}`);
+                    if (targetLang !== 'en' && targetLang !== 'all' && fb.title) {
+                        try {
+                            const transFb = await translateText(fb.title, 'auto', targetLang);
+                            if (transFb) fb.title = transFb;
+                        } catch (e) { }
+                    }
                     return fb;
                 }
             }
@@ -1240,6 +1271,7 @@ app.get('/api/drama', async (req, res) => {
                 ok: isOk,
                 slug: dramaSlug,
                 title,
+                original_title: originalTitle,
                 description,
                 poster,
                 final_url: finalUrl,
