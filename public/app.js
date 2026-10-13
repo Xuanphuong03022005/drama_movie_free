@@ -1664,6 +1664,7 @@
                     case 'p': if (currentEpisodeIndex > 0) { switchEpisode(currentEpisodeIndex - 1); showPlayerHud('fa-backward-step', 'Tập trước'); } break;
                     case 'i': if (isMiniplayer) restoreFromMiniplayer(); else minimizeToMiniplayer(); break;
                     case 'k': e.preventDefault(); if (mainVideo.paused) { mainVideo.play(); showPlayerHud('fa-play', 'Phát'); } else { mainVideo.pause(); showPlayerHud('fa-pause', 'Dừng'); } break;
+                    case 'w': toggleVideoFitMode(); break;
                     case '?': const sm = document.getElementById('shortcuts-modal'); if (sm) sm.hidden = false; break;
                 }
             }
@@ -1676,6 +1677,52 @@
         if (btnShortcutsHint && shortcutsModal) btnShortcutsHint.addEventListener('click', () => shortcutsModal.hidden = false);
         if (shortcutsCloseBtn) shortcutsCloseBtn.addEventListener('click', () => shortcutsModal.hidden = true);
         if (shortcutsBackdrop) shortcutsBackdrop.addEventListener('click', () => shortcutsModal.hidden = true);
+
+        // Video Fit Mode Handler (Cover / Fullscreen Fit vs Contain)
+        let currentFitMode = localStorage.getItem('df_video_fit') || 'cover';
+
+        function applyVideoFitMode(mode) {
+            currentFitMode = mode;
+            localStorage.setItem('df_video_fit', mode);
+            const viewport = document.getElementById('video-viewport');
+            if (viewport) {
+                viewport.setAttribute('data-fit', mode);
+            }
+            const btn = document.getElementById('btn-fit-mode');
+            if (btn) {
+                if (mode === 'cover') {
+                    btn.classList.add('active');
+                    btn.innerHTML = `<i class="fa-solid fa-up-right-and-down-left-from-center"></i>`;
+                    btn.title = 'Đang bật: Vừa y màn hình (Phím W để đổi Tỉ lệ gốc)';
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerHTML = `<i class="fa-solid fa-down-left-and-up-right-to-center"></i>`;
+                    btn.title = 'Đang bật: Tỉ lệ gốc (Phím W để đổi Vừa y màn hình)';
+                }
+            }
+        }
+
+        function toggleVideoFitMode() {
+            const newMode = currentFitMode === 'cover' ? 'contain' : 'cover';
+            applyVideoFitMode(newMode);
+            showToast(newMode === 'cover' ? 'Chế độ phát: Vừa y màn hình (Lấp đầy)' : 'Chế độ phát: Tỉ lệ gốc (Toàn khung)', 'fa-up-right-and-down-left-from-center');
+            if (typeof showPlayerHud === 'function') {
+                showPlayerHud(newMode === 'cover' ? 'fa-up-right-and-down-left-from-center' : 'fa-down-left-and-up-right-to-center', newMode === 'cover' ? 'Vừa y màn hình' : 'Tỉ lệ gốc');
+            }
+        }
+
+        const btnFitMode = document.getElementById('btn-fit-mode');
+        if (btnFitMode) {
+            btnFitMode.addEventListener('click', toggleVideoFitMode);
+        }
+        applyVideoFitMode(currentFitMode);
+
+        if (mainVideo) {
+            mainVideo.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                toggleVideoFitMode();
+            });
+        }
 
         const btnPip = document.getElementById('btn-pip');
         if (btnPip) btnPip.addEventListener('click', togglePiP);
@@ -5011,11 +5058,10 @@
         if (pMain) pMain.scrollTop = 0;
 
         if (theaterToggleBtn) {
-            if (window.innerWidth <= 1150 && window.innerWidth > 720) {
-                theaterToggleBtn.classList.add('active');
-            } else {
-                theaterToggleBtn.classList.remove('active');
-            }
+            theaterToggleBtn.classList.remove('active');
+        }
+        if (playerModal) {
+            playerModal.classList.remove('layout-medium');
         }
 
         const cleanTitle = decodeHtml(item.title || item.slug || 'Đang tải...');
@@ -6496,6 +6542,24 @@
         }
     }
 
+    // Pending action after authentication (e.g. purchasing a plan or topping up wallet)
+    let pendingAuthAction = null;
+
+    function executePendingAuthAction() {
+        if (!pendingAuthAction) return;
+        const action = pendingAuthAction;
+        pendingAuthAction = null;
+
+        setTimeout(() => {
+            if (action.type === 'purchase_plan' && action.plan) {
+                openVipPlansModal();
+                handlePurchasePlan(action.plan);
+            } else if (action.type === 'topup') {
+                openWalletTopupModal(action.amount || 50000);
+            }
+        }, 350);
+    }
+
     async function handleLogin({ identifier, password = '' }) {
         if (!identifier || !identifier.trim()) {
             showToast('Vui lòng nhập Email hoặc Tên tài khoản', 'fa-circle-exclamation');
@@ -6525,6 +6589,7 @@
             if (currentDramaData && !playerModal.hidden) {
                 renderEpisodesGrid(currentDramaData.episodes);
             }
+            executePendingAuthAction();
         } catch (err) {
             showToast(err.message, 'fa-circle-xmark');
         } finally {
@@ -6599,6 +6664,7 @@
             if (currentDramaData && !playerModal.hidden) {
                 renderEpisodesGrid(currentDramaData.episodes);
             }
+            executePendingAuthAction();
         } catch (err) {
             showToast(err.message, 'fa-circle-xmark');
         } finally {
@@ -6865,8 +6931,11 @@
     async function handlePurchasePlan(plan) {
         const user = getCurrentUser();
         if (!user) {
-            showToast('Vui lòng đăng nhập trước khi kích hoạt gói VIP!', 'fa-circle-exclamation');
-            openAuthModal('login');
+            pendingAuthAction = { type: 'purchase_plan', plan: plan };
+            showToast('Vui lòng tạo tài khoản để kích hoạt gói VIP!', 'fa-user-plus');
+            closeVipPlansModal();
+            closeEpisodeVipLockModal();
+            openAuthModal('register');
             return;
         }
 
@@ -6953,8 +7022,11 @@
     function openWalletTopupModal(suggestedAmount = 50000) {
         const user = getCurrentUser();
         if (!user) {
-            showToast('Vui lòng đăng nhập trước khi nạp ví!', 'fa-circle-exclamation');
-            openAuthModal('login');
+            pendingAuthAction = { type: 'topup', amount: suggestedAmount };
+            showToast('Vui lòng tạo tài khoản để nạp ví!', 'fa-user-plus');
+            closeVipPlansModal();
+            closeEpisodeVipLockModal();
+            openAuthModal('register');
             return;
         }
 

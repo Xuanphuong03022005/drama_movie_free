@@ -21,7 +21,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.4.0">
+    <link rel="stylesheet" href="/style.css?v=3.8.0">
     <style id="critical-vip-modal-override">
         /* Critical overrides: ensure modals are strictly above all players and compact */
         #vip-plans-modal,
@@ -30,10 +30,77 @@
             z-index: 999999 !important;
             position: fixed !important;
             inset: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         #vip-plans-modal[hidden],
         .login-modal[hidden] {
             display: none !important;
+        }
+
+        /* Modal outside close button & dialog wrapper */
+        .modal-dialog-wrapper {
+            position: relative !important;
+            z-index: 10 !important;
+            width: 92% !important;
+            max-width: 440px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            margin: auto !important;
+            box-sizing: border-box !important;
+        }
+        .vip-modal .modal-dialog-wrapper {
+            max-width: 660px !important;
+        }
+        .topup-modal .modal-dialog-wrapper {
+            max-width: 480px !important;
+        }
+        .modal-dialog-wrapper .login-modal-card {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* Nút dấu X nằm HOÀN TOÀN RA NGOÀI KHUNG, không đè lên tab hay nội dung */
+        .modal-outside-close-btn,
+        .modal-dialog-wrapper > .login-close-btn {
+            position: absolute !important;
+            top: -46px !important;
+            right: 0 !important;
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 50% !important;
+            background: rgba(30, 41, 59, 0.95) !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.25) !important;
+            color: #f1f5f9 !important;
+            font-size: 15px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            z-index: 9999 !important;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .modal-outside-close-btn:hover,
+        .modal-dialog-wrapper > .login-close-btn:hover {
+            background: rgba(244, 63, 94, 0.4) !important;
+            color: #ffffff !important;
+            border-color: rgba(244, 63, 94, 0.8) !important;
+            transform: scale(1.1) rotate(90deg) !important;
+        }
+        @media (max-width: 480px) {
+            .modal-outside-close-btn,
+            .modal-dialog-wrapper > .login-close-btn {
+                top: -44px !important;
+                right: 2px !important;
+                width: 34px !important;
+                height: 34px !important;
+                font-size: 14px !important;
+            }
         }
         .vip-modal-card {
             max-width: 660px !important;
@@ -52,6 +119,121 @@
         @media (max-width: 680px) {
             .vip-plans-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+
+        /* Critical Player Layout: 2-column side-by-side, 100% in viewport, ZERO scrolling required */
+        @media (min-width: 768px) {
+            .player-modal:not(.miniplayer-mode) {
+                padding: 12px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .player-modal:not(.miniplayer-mode) .player-stage-container {
+                width: 100% !important;
+                max-width: 1360px !important;
+                height: calc(100vh - 24px) !important;
+                height: calc(100dvh - 24px) !important;
+                max-height: 840px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                overflow: hidden !important;
+                border-radius: 18px !important;
+            }
+            .player-modal:not(.miniplayer-mode) .player-top-bar {
+                flex-shrink: 0 !important;
+                padding: 10px 18px !important;
+                height: 48px !important;
+                box-sizing: border-box !important;
+            }
+            .player-modal:not(.miniplayer-mode) .player-main-split {
+                display: grid !important;
+                grid-template-columns: 1fr 320px !important;
+                flex: 1 !important;
+                min-height: 0 !important;
+                height: calc(100% - 48px) !important;
+                overflow: hidden !important;
+            }
+            .player-modal:not(.miniplayer-mode) .screen-column {
+                display: flex !important;
+                flex-direction: column !important;
+                flex: 1 !important;
+                min-height: 0 !important;
+                height: 100% !important;
+                padding: 10px 14px 10px !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+            }
+            .player-modal:not(.miniplayer-mode) .video-viewport {
+                position: relative !important;
+                flex: 1 !important;
+                min-height: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                max-height: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                background: #000 !important;
+                border-radius: 12px !important;
+                overflow: hidden !important;
+            }
+            .player-modal:not(.miniplayer-mode) .video-viewport video,
+            .video-viewport video {
+                width: 100% !important;
+                height: 100% !important;
+                max-height: 100% !important;
+                object-fit: cover !important;
+                transition: object-fit 0.25s ease, transform 0.25s ease;
+            }
+            .video-viewport[data-fit="contain"] video,
+            .video-viewport.fit-contain video {
+                object-fit: contain !important;
+            }
+            .video-viewport[data-fit="cover"] video,
+            .video-viewport.fit-cover video {
+                object-fit: cover !important;
+            }
+            .video-viewport[data-fit="fill"] video,
+            .video-viewport.fit-fill video {
+                object-fit: fill !important;
+            }
+            .player-modal:not(.miniplayer-mode) .media-control-strip {
+                flex-shrink: 0 !important;
+                margin-top: 8px !important;
+                padding: 6px 14px !important;
+                border-radius: 12px !important;
+            }
+            /* Hide duplicate synopsis in viewer modal so video fills 100% of the screen height */
+            .player-modal:not(.miniplayer-mode) .drama-synopsis-panel {
+                display: none !important;
+            }
+            .player-modal:not(.miniplayer-mode) .episodes-drawer {
+                width: 320px !important;
+                height: 100% !important;
+                min-height: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                overflow: hidden !important;
+                border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+                border-top: none !important;
+                padding: 0 !important;
+                background: rgba(10, 14, 24, 0.95) !important;
+            }
+            .player-modal:not(.miniplayer-mode) .drawer-header {
+                padding: 10px 14px !important;
+                flex-shrink: 0 !important;
+            }
+            .player-modal:not(.miniplayer-mode) .batch-tabs-row {
+                padding: 6px 14px !important;
+                flex-shrink: 0 !important;
+            }
+            .player-modal:not(.miniplayer-mode) .episodes-grid {
+                flex: 1 !important;
+                min-height: 0 !important;
+                overflow-y: auto !important;
+                padding: 10px 14px !important;
             }
         }
     </style>
@@ -732,6 +914,8 @@
                         </div>
 
                         <div class="media-settings-group">
+                            <button type="button" id="btn-fit-mode" class="ctrl-icon-btn active" title="Chế độ vừa y màn hình (W)"><i
+                                    class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                             <button type="button" id="btn-pip" class="ctrl-icon-btn" title="Picture-in-Picture (I)"><i
                                     class="fa-solid fa-arrow-up-right-from-square"></i></button>
                             <button type="button" id="btn-shortcuts-hint" class="ctrl-icon-btn"
@@ -1071,18 +1255,19 @@
     <!-- Comprehensive User Auth Modal (Login & Gmail Registration) -->
     <div id="login-modal" class="login-modal auth-modal" hidden>
         <div class="login-modal-backdrop" id="login-modal-backdrop"></div>
-        <div class="login-modal-card auth-modal-card">
-            <button type="button" class="login-close-btn" id="login-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+        <div class="modal-dialog-wrapper">
+            <button type="button" class="login-close-btn modal-outside-close-btn" id="login-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="login-modal-card auth-modal-card">
 
-            <!-- Auth Navigation Tabs -->
-            <div class="auth-tabs-row">
-                <button type="button" class="auth-tab-btn active" id="tab-login-btn" data-tab="login">
-                    <i class="fa-solid fa-right-to-bracket"></i> Đăng Nhập
-                </button>
-                <button type="button" class="auth-tab-btn" id="tab-register-btn" data-tab="register">
-                    <i class="fa-solid fa-user-plus"></i> Đăng Ký
-                </button>
-            </div>
+                <!-- Auth Navigation Tabs -->
+                <div class="auth-tabs-row">
+                    <button type="button" class="auth-tab-btn active" id="tab-login-btn" data-tab="login">
+                        <i class="fa-solid fa-right-to-bracket"></i> Đăng Nhập
+                    </button>
+                    <button type="button" class="auth-tab-btn" id="tab-register-btn" data-tab="register">
+                        <i class="fa-solid fa-user-plus"></i> Đăng Ký
+                    </button>
+                </div>
 
             <!-- TAB 1: LOGIN FORM -->
             <div class="auth-tab-pane active" id="pane-login">
@@ -1189,46 +1374,49 @@
                 </form>
             </div>
         </div>
+        </div>
     </div>
 
     <!-- VIP Subscription Plans Modal (Synced from Admin) -->
     <div id="vip-plans-modal" class="login-modal vip-modal" hidden>
         <div class="login-modal-backdrop" id="vip-plans-backdrop"></div>
-        <div class="login-modal-card vip-modal-card">
-            <button type="button" class="login-close-btn" id="vip-plans-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+        <div class="modal-dialog-wrapper">
+            <button type="button" class="login-close-btn modal-outside-close-btn" id="vip-plans-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="login-modal-card vip-modal-card">
 
-            <!-- Locked Episode Notice Context Banner (Shown when opened from locked episode) -->
-            <div class="vip-modal-ep-banner" id="vip-modal-ep-banner" hidden>
-                <div class="vip-ep-banner-icon">
-                    <i class="fa-solid fa-lock"></i>
+                <!-- Locked Episode Notice Context Banner (Shown when opened from locked episode) -->
+                <div class="vip-modal-ep-banner" id="vip-modal-ep-banner" hidden>
+                    <div class="vip-ep-banner-icon">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <div class="vip-ep-banner-content">
+                        <div class="vip-ep-banner-title" id="vip-banner-ep-title">Tập Phim Này Yêu Cầu Tài Khoản VIP</div>
+                        <div class="vip-ep-banner-desc" id="vip-banner-ep-desc">Chọn một gói cước ưu đãi bên dưới để mở khóa xem ngay trọn bộ phim!</div>
+                    </div>
                 </div>
-                <div class="vip-ep-banner-content">
-                    <div class="vip-ep-banner-title" id="vip-banner-ep-title">Tập Phim Này Yêu Cầu Tài Khoản VIP</div>
-                    <div class="vip-ep-banner-desc" id="vip-banner-ep-desc">Chọn một gói cước ưu đãi bên dưới để mở khóa xem ngay trọn bộ phim!</div>
-                </div>
-            </div>
 
-            <div class="vip-modal-header">
-                <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> GÓI CƯỚC XEM PHIM VIP</div>
-                <h3 id="vip-modal-title">Mở Khóa Toàn Bộ Kho Phim VIP</h3>
-                <p id="vip-modal-desc">Xem phim không giới hạn, chuẩn nét 4K Ultra HD, không quảng cáo và âm thanh vòm sống động.</p>
-            </div>
-            <div class="vip-plans-grid" id="vip-plans-grid">
-                <!-- Dynamically loaded plans from Supabase -->
-                <div class="plans-loading-placeholder">
-                    <div class="mini-spinner"></div>
-                    <span>Đang đồng bộ gói cước từ Admin...</span>
+                <div class="vip-modal-header">
+                    <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> GÓI CƯỚC XEM PHIM VIP</div>
+                    <h3 id="vip-modal-title">Mở Khóa Toàn Bộ Kho Phim VIP</h3>
+                    <p id="vip-modal-desc">Xem phim không giới hạn, chuẩn nét 4K Ultra HD, không quảng cáo và âm thanh vòm sống động.</p>
                 </div>
-            </div>
-            <div class="vip-wallet-status-bar" id="vip-wallet-status-bar">
-                <div class="wallet-left">
-                    <span>Số dư ví của bạn:</span>
-                    <strong id="modal-wallet-balance">0 đ</strong>
+                <div class="vip-plans-grid" id="vip-plans-grid">
+                    <!-- Dynamically loaded plans from Supabase -->
+                    <div class="plans-loading-placeholder">
+                        <div class="mini-spinner"></div>
+                        <span>Đang đồng bộ gói cước từ Admin...</span>
+                    </div>
                 </div>
-                <div class="wallet-right">
-                    <button type="button" class="btn-wallet-topup" id="btn-open-topup-modal" title="Nạp tiền vào tài khoản">
-                        <i class="fa-solid fa-wallet"></i> Nạp Tiền Vào Ví
-                    </button>
+                <div class="vip-wallet-status-bar" id="vip-wallet-status-bar">
+                    <div class="wallet-left">
+                        <span>Số dư ví của bạn:</span>
+                        <strong id="modal-wallet-balance">0 đ</strong>
+                    </div>
+                    <div class="wallet-right">
+                        <button type="button" class="btn-wallet-topup" id="btn-open-topup-modal" title="Nạp tiền vào tài khoản">
+                            <i class="fa-solid fa-wallet"></i> Nạp Tiền Vào Ví
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1237,13 +1425,14 @@
     <!-- Real Commercial Wallet Top-Up Modal (VietQR & Banking Gateway) -->
     <div id="wallet-topup-modal" class="login-modal topup-modal" hidden>
         <div class="login-modal-backdrop" id="wallet-topup-backdrop"></div>
-        <div class="login-modal-card topup-modal-card">
-            <button type="button" class="login-close-btn" id="wallet-topup-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
-            <div class="topup-modal-header">
-                <div class="login-badge-pro bg-emerald-glass"><i class="fa-solid fa-shield-halved text-emerald"></i> CỔNG THANH TOÁN TỰ ĐỘNG 24/7</div>
-                <h3>Nạp Tiền Vào Ví DramaFlow</h3>
-                <p>Nạp tiền tự động qua chuyển khoản VietQR Ngân hàng hoặc Ví điện tử MoMo. Không mất phí giao dịch.</p>
-            </div>
+        <div class="modal-dialog-wrapper">
+            <button type="button" class="login-close-btn modal-outside-close-btn" id="wallet-topup-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+            <div class="login-modal-card topup-modal-card">
+                <div class="topup-modal-header">
+                    <div class="login-badge-pro bg-emerald-glass"><i class="fa-solid fa-shield-halved text-emerald"></i> CỔNG THANH TOÁN TỰ ĐỘNG 24/7</div>
+                    <h3>Nạp Tiền Vào Ví DramaFlow</h3>
+                    <p>Nạp tiền tự động qua chuyển khoản VietQR Ngân hàng hoặc Ví điện tử MoMo. Không mất phí giao dịch.</p>
+                </div>
 
             <!-- Current Balance Status Card -->
             <div class="topup-balance-display">
@@ -1368,6 +1557,7 @@
                     <a href="tel:19006868"><i class="fa-solid fa-phone"></i> Hotline 1900 6868</a>
                 </div>
             </div>
+        </div>
         </div>
     </div>
 
@@ -1522,7 +1712,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.4.0"></script>
+    <script src="/app.js?v=3.8.0"></script>
 </body>
 
 </html>
