@@ -21,22 +21,30 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.9.5">
+    <link rel="stylesheet" href="/style.css?v=3.9.6">
     <style id="critical-vip-modal-override">
-        /* Critical overrides: ensure modals are strictly above all players and compact */
-        #vip-plans-modal,
-        .vip-modal,
-        .login-modal {
+        /* Critical overrides: ensure all modals with [hidden] are strictly hidden and not forced open */
+        [hidden],
+        #player-modal[hidden],
+        .player-modal[hidden],
+        #vip-plans-modal[hidden],
+        .vip-modal[hidden],
+        .login-modal[hidden],
+        .topup-modal[hidden] {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        #vip-plans-modal:not([hidden]),
+        .vip-modal:not([hidden]),
+        .login-modal:not([hidden]) {
             z-index: 999999 !important;
             position: fixed !important;
             inset: 0 !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-        }
-        #vip-plans-modal[hidden],
-        .login-modal[hidden] {
-            display: none !important;
         }
 
         /* Modal outside close button & dialog wrapper */
@@ -124,7 +132,7 @@
 
         /* Critical Player Layout for Desktop (>= 1151px): 2-column side-by-side, 100% in viewport, ZERO scrolling required */
         @media (min-width: 1151px) {
-            .player-modal:not(.miniplayer-mode) {
+            .player-modal:not(.miniplayer-mode):not([hidden]) {
                 padding: 12px !important;
                 display: flex !important;
                 align-items: center !important;
@@ -1780,7 +1788,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.9.5"></script>
+    <script src="/app.js?v=3.9.6"></script>
 </body>
 
 </html>

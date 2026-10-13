@@ -382,6 +382,11 @@
     }
 
     async function init() {
+        if (playerModal) {
+            playerModal.setAttribute('hidden', '');
+            playerModal.hidden = true;
+            playerModal.style.display = 'none';
+        }
         initTheme();
         trackVisit();
         initLanguageSelector();
@@ -1517,19 +1522,13 @@
     // ==========================================
     function bindPlayerEvents() {
         if (modalMinimizeBtn) modalMinimizeBtn.addEventListener('click', minimizeToMiniplayer);
-        modalCloseBtn.addEventListener('click', () => {
-            if (currentDramaData && (mainVideo.src || hls)) {
-                minimizeToMiniplayer();
-            } else {
-                closeModal();
-            }
+        modalCloseBtn.addEventListener('click', (e) => {
+            if (e) e.preventDefault();
+            closeModal();
         });
-        modalBackdrop.addEventListener('click', () => {
-            if (currentDramaData && (mainVideo.src || hls)) {
-                minimizeToMiniplayer();
-            } else {
-                closeModal();
-            }
+        modalBackdrop.addEventListener('click', (e) => {
+            if (e) e.preventDefault();
+            closeModal();
         });
 
         // Miniplayer Interaction Controls
@@ -5125,7 +5124,9 @@
     // ==========================================
     async function openDrama(item, initialEpNum = 1) {
         if (isMiniplayer) restoreFromMiniplayer();
+        playerModal.removeAttribute('hidden');
         playerModal.hidden = false;
+        playerModal.style.display = '';
         document.body.classList.add('player-active');
         document.body.classList.remove('miniplayer-active');
         document.body.style.overflow = 'hidden';
@@ -5940,7 +5941,9 @@
         if (!isMiniplayer) return;
         isMiniplayer = false;
         playerModal.classList.remove('miniplayer-mode');
+        playerModal.removeAttribute('hidden');
         playerModal.hidden = false;
+        playerModal.style.display = '';
         document.body.classList.add('player-active');
         document.body.classList.remove('miniplayer-active');
         document.body.style.overflow = 'hidden';
@@ -5955,7 +5958,9 @@
         isMiniplayer = false;
         closeReelsEpisodesSheet();
         playerModal.classList.remove('miniplayer-mode');
+        playerModal.setAttribute('hidden', '');
         playerModal.hidden = true;
+        playerModal.style.display = 'none';
         document.body.classList.remove('player-active', 'miniplayer-active');
         document.body.style.overflow = '';
         mainVideo.pause();

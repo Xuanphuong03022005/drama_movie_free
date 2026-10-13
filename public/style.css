@@ -2681,6 +2681,13 @@ body {
     padding: 16px;
 }
 
+.player-modal[hidden],
+#player-modal[hidden] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 .modal-backdrop {
     position: absolute;
     inset: 0;
