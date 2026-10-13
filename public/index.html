@@ -21,7 +21,7 @@
     <base href="/">
     <!-- Hls.js for HLS streaming (.m3u8) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
-    <link rel="stylesheet" href="/style.css?v=3.9.2">
+    <link rel="stylesheet" href="/style.css?v=3.9.5">
     <style id="critical-vip-modal-override">
         /* Critical overrides: ensure modals are strictly above all players and compact */
         #vip-plans-modal,
@@ -122,8 +122,8 @@
             }
         }
 
-        /* Critical Player Layout: 2-column side-by-side, 100% in viewport, ZERO scrolling required */
-        @media (min-width: 768px) {
+        /* Critical Player Layout for Desktop (>= 1151px): 2-column side-by-side, 100% in viewport, ZERO scrolling required */
+        @media (min-width: 1151px) {
             .player-modal:not(.miniplayer-mode) {
                 padding: 12px !important;
                 display: flex !important;
@@ -179,26 +179,12 @@
                 border-radius: 12px !important;
                 overflow: hidden !important;
             }
-            .player-modal:not(.miniplayer-mode) .video-viewport video,
-            .video-viewport video {
+            .player-modal:not(.miniplayer-mode) .video-viewport video {
                 width: 100% !important;
                 height: 100% !important;
                 max-width: 100% !important;
                 max-height: 100% !important;
                 object-fit: contain !important;
-                transition: object-fit 0.25s ease, transform 0.25s ease;
-            }
-            .video-viewport[data-fit="contain"] video,
-            .video-viewport.fit-contain video {
-                object-fit: contain !important;
-            }
-            .video-viewport[data-fit="cover"] video,
-            .video-viewport.fit-cover video {
-                object-fit: cover !important;
-            }
-            .video-viewport[data-fit="fill"] video,
-            .video-viewport.fit-fill video {
-                object-fit: fill !important;
             }
             .player-modal:not(.miniplayer-mode) .media-control-strip {
                 flex-shrink: 0 !important;
@@ -1794,7 +1780,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.9.2"></script>
+    <script src="/app.js?v=3.9.5"></script>
 </body>
 
 </html>
