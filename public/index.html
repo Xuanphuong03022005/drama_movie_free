@@ -1037,7 +1037,7 @@
                     <i class="fa-solid fa-right-to-bracket"></i> Đăng Nhập
                 </button>
                 <button type="button" class="auth-tab-btn" id="tab-register-btn" data-tab="register">
-                    <i class="fa-solid fa-user-plus"></i> Đăng Ký Gmail
+                    <i class="fa-solid fa-user-plus"></i> Đăng Ký
                 </button>
             </div>
 
@@ -1046,69 +1046,103 @@
                 <div class="login-modal-header">
                     <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> THÀNH VIÊN VIP</div>
                     <h3 id="login-modal-title">Đăng Nhập Tài Khoản</h3>
-                    <p>Truy cập trải nghiệm xem phim không quảng cáo, mở khóa tập VIP và đồng bộ thiết bị.</p>
+                    <p>Truy cập trải nghiệm xem phim không quảng cáo, mở khóa tập VIP và đồng bộ đa thiết bị.</p>
                 </div>
                 <form class="login-form" id="login-form">
                     <div class="login-input-group">
                         <label for="login-identifier"><i class="fa-solid fa-envelope"></i> Email hoặc Tên tài khoản</label>
-                        <input type="text" id="login-identifier" placeholder="Ví dụ: admin@drama.vn hoặc hoang_minh" required autocomplete="username">
+                        <div class="auth-input-wrapper">
+                            <input type="text" id="login-identifier" placeholder="Ví dụ: yourname@gmail.com hoặc username" required autocomplete="username">
+                        </div>
                     </div>
                     <div class="login-input-group">
-                        <label for="login-password"><i class="fa-solid fa-lock"></i> Mật khẩu (Nếu có)</label>
-                        <input type="password" id="login-password" placeholder="Nhập mật khẩu (hoặc để trống)" autocomplete="current-password">
+                        <label for="login-password"><i class="fa-solid fa-lock"></i> Mật khẩu</label>
+                        <div class="auth-input-wrapper">
+                            <input type="password" id="login-password" placeholder="Nhập mật khẩu của bạn" autocomplete="current-password">
+                            <button type="button" class="btn-pwd-toggle" data-target="login-password" title="Hiện/Ẩn mật khẩu">
+                                <i class="fa-regular fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                     <button type="submit" class="btn-submit-login" id="login-submit-btn">
                         <i class="fa-solid fa-right-to-bracket"></i> <span>Đăng Nhập Ngay</span>
                     </button>
+                    <div class="auth-switch-link">
+                        <span>Chưa có tài khoản?</span>
+                        <button type="button" class="btn-text-link" id="link-goto-register">
+                            Đăng ký ngay <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
                 </form>
-
-                <!-- Quick One-Click Demo Accounts for Testing -->
-                <div class="demo-accounts-wrap">
-                    <div class="demo-accounts-title">
-                        <span><i class="fa-solid fa-bolt text-amber"></i> Đăng nhập nhanh tài khoản mẫu:</span>
-                    </div>
-                    <div class="demo-chips-grid" id="demo-chips-container">
-                        <!-- Loaded dynamically or static fallback -->
-                        <button type="button" class="demo-chip-btn" data-id="admin@drama.vn">
-                            <i class="fa-solid fa-shield-halved text-rose"></i> Admin (Toàn quyền)
-                        </button>
-                        <button type="button" class="demo-chip-btn" data-id="hoangminh@gmail.com">
-                            <i class="fa-solid fa-crown text-amber"></i> Hoàng Minh (VIP 14 ngày)
-                        </button>
-                        <button type="button" class="demo-chip-btn" data-id="lananh.drama@gmail.com">
-                            <i class="fa-solid fa-user text-muted"></i> Lan Anh (User Free)
-                        </button>
-                    </div>
-                </div>
             </div>
 
-            <!-- TAB 2: REGISTER WITH GMAIL -->
+            <!-- TAB 2: REGISTER FORM (PROFESSIONAL & SECURE) -->
             <div class="auth-tab-pane" id="pane-register" hidden>
                 <div class="login-modal-header">
-                    <div class="login-badge-pro bg-emerald-glass"><i class="fa-brands fa-google text-rose"></i> ĐĂNG KÝ GMAIL</div>
+                    <div class="login-badge-pro bg-emerald-glass"><i class="fa-solid fa-user-shield"></i> THÀNH VIÊN MỚI</div>
                     <h3>Tạo Tài Khoản Mới</h3>
-                    <p>Đăng ký bằng địa chỉ Gmail. Tài khoản sẽ được tự động đồng bộ sang Bảng Quản Trị Admin.</p>
+                    <p>Đăng ký tài khoản để lưu lịch sử xem phim, phim yêu thích và mở khóa các tập VIP đặc sắc.</p>
                 </div>
-                <form class="login-form" id="register-form">
-                    <div class="login-input-group">
-                        <label for="reg-email"><i class="fa-solid fa-envelope"></i> Địa chỉ Gmail (*)</label>
-                        <input type="email" id="reg-email" placeholder="example@gmail.com" required autocomplete="email">
-                    </div>
+                <form class="login-form" id="register-form" novalidate>
                     <div class="login-input-group">
                         <label for="reg-name"><i class="fa-solid fa-id-card"></i> Họ và tên / Tên hiển thị</label>
-                        <input type="text" id="reg-name" placeholder="Ví dụ: Nguyễn Văn A" autocomplete="name">
+                        <div class="auth-input-wrapper">
+                            <input type="text" id="reg-name" placeholder="Ví dụ: Nguyễn Minh Khang" autocomplete="name" required>
+                        </div>
                     </div>
                     <div class="login-input-group">
-                        <label for="reg-password"><i class="fa-solid fa-lock"></i> Mật khẩu</label>
-                        <input type="password" id="reg-password" placeholder="Tạo mật khẩu đăng nhập" autocomplete="new-password">
+                        <label for="reg-email"><i class="fa-solid fa-envelope"></i> Địa chỉ Email (*)</label>
+                        <div class="auth-input-wrapper">
+                            <input type="email" id="reg-email" placeholder="example@gmail.com" required autocomplete="email">
+                        </div>
+                        <div class="auth-field-hint" id="reg-email-hint"></div>
                     </div>
-                    <div class="auth-notice-card">
-                        <i class="fa-solid fa-circle-info text-primary"></i>
-                        <span>Sau khi đăng ký, bạn có thể xem các tập phim miễn phí. Quyền truy cập Bảng Quản Trị User sẽ ở trạng thái chờ Admin phê duyệt.</span>
+                    <div class="login-input-group">
+                        <label for="reg-password"><i class="fa-solid fa-lock"></i> Mật khẩu (*)</label>
+                        <div class="auth-input-wrapper">
+                            <input type="password" id="reg-password" placeholder="Tối thiểu 6 ký tự" required autocomplete="new-password">
+                            <button type="button" class="btn-pwd-toggle" data-target="reg-password" title="Hiện/Ẩn mật khẩu">
+                                <i class="fa-regular fa-eye"></i>
+                            </button>
+                        </div>
+                        <!-- Password Strength Indicator -->
+                        <div class="pwd-strength-container" id="pwd-strength-container" hidden>
+                            <div class="pwd-strength-bars">
+                                <span class="strength-bar" id="str-bar-1"></span>
+                                <span class="strength-bar" id="str-bar-2"></span>
+                                <span class="strength-bar" id="str-bar-3"></span>
+                            </div>
+                            <span class="pwd-strength-text" id="pwd-strength-text">Độ mạnh: Chưa nhập</span>
+                        </div>
                     </div>
+                    <div class="login-input-group">
+                        <label for="reg-password-confirm"><i class="fa-solid fa-shield-halved"></i> Xác nhận mật khẩu (*)</label>
+                        <div class="auth-input-wrapper">
+                            <input type="password" id="reg-password-confirm" placeholder="Nhập lại mật khẩu" required autocomplete="new-password">
+                            <button type="button" class="btn-pwd-toggle" data-target="reg-password-confirm" title="Hiện/Ẩn mật khẩu">
+                                <i class="fa-regular fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="auth-field-hint" id="reg-match-hint"></div>
+                    </div>
+
+                    <div class="auth-terms-group">
+                        <label class="auth-terms-checkbox">
+                            <input type="checkbox" id="reg-agree-terms" checked>
+                            <span>Tôi đồng ý với <a href="javascript:void(0)" id="link-terms-in-auth">Điều khoản dịch vụ</a> và <a href="javascript:void(0)" id="link-privacy-in-auth">Chính sách bảo mật</a> của DramaFlow.</span>
+                        </label>
+                    </div>
+
                     <button type="submit" class="btn-submit-login btn-register-submit" id="register-submit-btn">
-                        <i class="fa-solid fa-user-check"></i> <span>Tạo Tài Khoản Ngay</span>
+                        <i class="fa-solid fa-user-plus"></i> <span>Tạo Tài Khoản Ngay</span>
                     </button>
+
+                    <div class="auth-switch-link">
+                        <span>Đã có tài khoản?</span>
+                        <button type="button" class="btn-text-link" id="link-goto-login">
+                            Đăng nhập ngay <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -1119,10 +1153,22 @@
         <div class="login-modal-backdrop" id="vip-plans-backdrop"></div>
         <div class="login-modal-card vip-modal-card">
             <button type="button" class="login-close-btn" id="vip-plans-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+
+            <!-- Locked Episode Notice Context Banner (Shown when opened from locked episode) -->
+            <div class="vip-modal-ep-banner" id="vip-modal-ep-banner" hidden>
+                <div class="vip-ep-banner-icon">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <div class="vip-ep-banner-content">
+                    <div class="vip-ep-banner-title" id="vip-banner-ep-title">Tập Phim Này Yêu Cầu Tài Khoản VIP</div>
+                    <div class="vip-ep-banner-desc" id="vip-banner-ep-desc">Chọn một gói cước ưu đãi bên dưới để mở khóa xem ngay trọn bộ phim!</div>
+                </div>
+            </div>
+
             <div class="vip-modal-header">
                 <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> GÓI CƯỚC XEM PHIM VIP</div>
-                <h3>Mở Khóa Toàn Bộ Kho Phim VIP</h3>
-                <p>Xem phim không giới hạn, chuẩn nét 4K Ultra HD, không quảng cáo và âm thanh vòm sống động.</p>
+                <h3 id="vip-modal-title">Mở Khóa Toàn Bộ Kho Phim VIP</h3>
+                <p id="vip-modal-desc">Xem phim không giới hạn, chuẩn nét 4K Ultra HD, không quảng cáo và âm thanh vòm sống động.</p>
             </div>
             <div class="vip-plans-grid" id="vip-plans-grid">
                 <!-- Dynamically loaded plans from Supabase -->

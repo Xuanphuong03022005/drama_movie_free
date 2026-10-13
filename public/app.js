@@ -1036,6 +1036,11 @@
             const vipTag = !canPlay ? ' <span style="font-size:9px;color:#fb7185;">🔒</span>' : (isEpVip ? ' <span style="font-size:9px;color:#fbbf24;">👑</span>' : '');
             btn.innerHTML = `<span class="ep-num">${epNum}${vipTag}</span><span class="ep-lbl">${t('ep_prefix')}</span>`;
             btn.addEventListener('click', () => {
+                if (!canPlay) {
+                    closeReelsEpisodesSheet();
+                    openVipPlansModalForEpisode(epNum);
+                    return;
+                }
                 switchEpisode(i);
                 closeReelsEpisodesSheet();
             });
@@ -5202,7 +5207,13 @@
             btn.title = (ep.title || `Tập ${epNum}`) + vipTag;
             btn.setAttribute('data-ep-index', absIndex);
             if (isInProgress) btn.style.setProperty('--ep-progress-w', pct + '%');
-            btn.addEventListener('click', () => switchEpisode(absIndex));
+            btn.addEventListener('click', () => {
+                if (!canPlay) {
+                    openVipPlansModalForEpisode(epNum);
+                    return;
+                }
+                switchEpisode(absIndex);
+            });
             episodesGrid.appendChild(btn);
         });
     }
@@ -5221,13 +5232,7 @@
             if (mainVideo && !mainVideo.paused) {
                 try { mainVideo.pause(); } catch (e) {}
             }
-            showVipUpgradeModal({
-                message: permission.message,
-                episodeNumber: epNum,
-                plans: permission.availablePlans || [],
-                drama: permission.drama || currentDramaPolicy,
-                accessType: permission.accessType
-            });
+            openVipPlansModalForEpisode(epNum, permission.message);
             return;
         }
 
@@ -6442,30 +6447,8 @@
     }
 
     async function loadDemoAccounts() {
-        try {
-            const container = document.getElementById('demo-chips-container');
-            if (!container) return;
-            const res = await fetch('/api/auth/demo-users');
-            const data = await res.json();
-            if (data.ok && Array.isArray(data.users) && data.users.length > 0) {
-                container.innerHTML = '';
-                data.users.forEach(u => {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'demo-chip-btn';
-                    btn.setAttribute('data-id', u.email || u.username);
-                    const icon = u.role === 'admin' ? '<i class="fa-solid fa-shield-halved text-rose"></i>' : (u.is_vip ? '<i class="fa-solid fa-crown text-amber"></i>' : '<i class="fa-solid fa-user text-muted"></i>');
-                    const label = u.role === 'admin' ? `${u.username} (Admin)` : (u.is_vip ? `${u.username} (VIP)` : `${u.username}`);
-                    btn.innerHTML = `${icon} ${escapeHtml(label)}`;
-                    btn.addEventListener('click', () => {
-                        const idInput = document.getElementById('login-identifier');
-                        if (idInput) idInput.value = u.email || u.username;
-                        handleLogin({ identifier: u.email || u.username });
-                    });
-                    container.appendChild(btn);
-                });
-            }
-        } catch (e) {}
+        // Demo accounts disabled for clean, production-grade interface
+        return;
     }
 
     function openAuthModal(activeTab = 'login') {
@@ -6473,7 +6456,6 @@
         if (!modal) return;
         modal.hidden = false;
         switchAuthTab(activeTab);
-        loadDemoAccounts();
     }
 
     function closeAuthModal() {
@@ -6492,17 +6474,23 @@
             if (regPane) regPane.hidden = false;
             if (loginTabBtn) loginTabBtn.classList.remove('active');
             if (regTabBtn) regTabBtn.classList.add('active');
+            const regNameInput = document.getElementById('reg-name');
+            if (regNameInput) setTimeout(() => regNameInput.focus(), 80);
         } else {
             if (loginPane) loginPane.hidden = false;
             if (regPane) regPane.hidden = true;
             if (loginTabBtn) loginTabBtn.classList.add('active');
             if (regTabBtn) regTabBtn.classList.remove('active');
+            const loginIdInput = document.getElementById('login-identifier');
+            if (loginIdInput) setTimeout(() => loginIdInput.focus(), 80);
         }
     }
 
     async function handleLogin({ identifier, password = '' }) {
         if (!identifier || !identifier.trim()) {
             showToast('Vui lòng nhập Email hoặc Tên tài khoản', 'fa-circle-exclamation');
+            const idInput = document.getElementById('login-identifier');
+            if (idInput) idInput.focus();
             return;
         }
         const submitBtn = document.getElementById('login-submit-btn');
@@ -6537,21 +6525,59 @@
         }
     }
 
-    async function handleRegister({ email, full_name, password }) {
-        if (!email || !email.trim()) {
-            showToast('Vui lòng nhập địa chỉ Gmail', 'fa-circle-exclamation');
+    async function handleRegister({ email, full_name, password, passwordConfirm, agreeTerms }) {
+        const emailVal = (email || '').trim().toLowerCase();
+        const nameVal = (full_name || '').trim();
+        const pwdVal = password || '';
+        const pwdConfVal = passwordConfirm || '';
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailVal) {
+            showToast('Vui lòng nhập địa chỉ Email', 'fa-circle-exclamation');
+            const emailInput = document.getElementById('reg-email');
+            if (emailInput) emailInput.focus();
             return;
         }
+        if (!emailRegex.test(emailVal)) {
+            showToast('Định dạng email không hợp lệ (Ví dụ: yourname@gmail.com)', 'fa-circle-exclamation');
+            const emailInput = document.getElementById('reg-email');
+            if (emailInput) emailInput.focus();
+            return;
+        }
+
+        // Validate password
+        if (!pwdVal || pwdVal.length < 6) {
+            showToast('Mật khẩu phải chứa ít nhất 6 ký tự', 'fa-circle-exclamation');
+            const pwdInput = document.getElementById('reg-password');
+            if (pwdInput) pwdInput.focus();
+            return;
+        }
+
+        // Validate password confirmation
+        if (pwdVal !== pwdConfVal) {
+            showToast('Mật khẩu xác nhận không trùng khớp!', 'fa-circle-exclamation');
+            const confInput = document.getElementById('reg-password-confirm');
+            if (confInput) confInput.focus();
+            return;
+        }
+
+        // Validate Terms of Service
+        if (!agreeTerms) {
+            showToast('Vui lòng đồng ý với Điều khoản và Chính sách bảo mật', 'fa-circle-exclamation');
+            return;
+        }
+
         const submitBtn = document.getElementById('register-submit-btn');
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang tạo tài khoản...`;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang khởi tạo tài khoản...`;
         }
         try {
             const res = await fetch('/api/auth/register-gmail', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email.trim(), full_name, password })
+                body: JSON.stringify({ email: emailVal, full_name: nameVal, password: pwdVal })
             });
             const data = await res.json();
             if (!res.ok || !data.ok) {
@@ -6559,7 +6585,7 @@
             }
             setCurrentUser(data.user);
             closeAuthModal();
-            showToast(data.message || 'Đăng ký Gmail thành công!', 'fa-circle-check');
+            showToast(data.message || `Đăng ký thành công! Chào mừng @${data.user.username}`, 'fa-circle-check');
             if (currentDramaData && !playerModal.hidden) {
                 renderEpisodesGrid(currentDramaData.episodes);
             }
@@ -6568,15 +6594,164 @@
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = `<i class="fa-solid fa-user-check"></i> <span>Tạo Tài Khoản Ngay</span>`;
+                submitBtn.innerHTML = `<i class="fa-solid fa-user-plus"></i> <span>Tạo Tài Khoản Ngay</span>`;
             }
         }
     }
 
-    async function openVipPlansModal() {
+    function initAuthFormEnhancements() {
+        // 1. Password Visibility Toggle Buttons
+        document.querySelectorAll('.btn-pwd-toggle').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetId = btn.getAttribute('data-target');
+                const input = document.getElementById(targetId);
+                if (!input) return;
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                btn.innerHTML = isPassword ? '<i class="fa-regular fa-eye-slash"></i>' : '<i class="fa-regular fa-eye"></i>';
+                btn.setAttribute('title', isPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+            });
+        });
+
+        // 2. Real-time Password Strength Meter
+        const regPwdInput = document.getElementById('reg-password');
+        const strContainer = document.getElementById('pwd-strength-container');
+        const strBar1 = document.getElementById('str-bar-1');
+        const strBar2 = document.getElementById('str-bar-2');
+        const strBar3 = document.getElementById('str-bar-3');
+        const strText = document.getElementById('pwd-strength-text');
+
+        if (regPwdInput && strContainer) {
+            regPwdInput.addEventListener('input', () => {
+                const val = regPwdInput.value;
+                if (!val) {
+                    strContainer.hidden = true;
+                    return;
+                }
+                strContainer.hidden = false;
+
+                let score = 0;
+                if (val.length >= 6) score++;
+                if (val.length >= 8 && (/[A-Z]/.test(val) || /[0-9]/.test(val))) score++;
+                if (val.length >= 10 && /[A-Z]/.test(val) && /[0-9]/.test(val) && /[^A-Za-z0-9]/.test(val)) score++;
+
+                // Reset bars
+                [strBar1, strBar2, strBar3].forEach(b => {
+                    if (b) {
+                        b.className = 'strength-bar';
+                    }
+                });
+
+                if (score <= 1) {
+                    if (strBar1) strBar1.className = 'strength-bar weak';
+                    if (strText) {
+                        strText.textContent = 'Độ mạnh: Yếu (Nên thêm chữ hoa, số hoặc trên 8 ký tự)';
+                        strText.style.color = '#ef4444';
+                    }
+                } else if (score === 2) {
+                    if (strBar1) strBar1.className = 'strength-bar medium';
+                    if (strBar2) strBar2.className = 'strength-bar medium';
+                    if (strText) {
+                        strText.textContent = 'Độ mạnh: Khá tốt';
+                        strText.style.color = '#f59e0b';
+                    }
+                } else {
+                    if (strBar1) strBar1.className = 'strength-bar strong';
+                    if (strBar2) strBar2.className = 'strength-bar strong';
+                    if (strBar3) strBar3.className = 'strength-bar strong';
+                    if (strText) {
+                        strText.textContent = 'Độ mạnh: Rất an toàn 🔥';
+                        strText.style.color = '#10b981';
+                    }
+                }
+            });
+        }
+
+        // 3. Real-time Password Confirmation Match Check
+        const regConfInput = document.getElementById('reg-password-confirm');
+        const matchHint = document.getElementById('reg-match-hint');
+
+        function checkPasswordMatch() {
+            if (!regConfInput || !matchHint) return;
+            const pwdVal = regPwdInput ? regPwdInput.value : '';
+            const confVal = regConfInput.value;
+            if (!confVal) {
+                matchHint.className = 'auth-field-hint';
+                matchHint.textContent = '';
+                return;
+            }
+            if (pwdVal === confVal) {
+                matchHint.className = 'auth-field-hint show success';
+                matchHint.innerHTML = '<i class="fa-solid fa-check-circle"></i> Mật khẩu xác nhận trùng khớp';
+            } else {
+                matchHint.className = 'auth-field-hint show error';
+                matchHint.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Mật khẩu xác nhận chưa trùng khớp';
+            }
+        }
+
+        if (regConfInput) regConfInput.addEventListener('input', checkPasswordMatch);
+        if (regPwdInput) regPwdInput.addEventListener('input', checkPasswordMatch);
+
+        // 4. Real-time Email Format Check
+        const regEmailInput = document.getElementById('reg-email');
+        const emailHint = document.getElementById('reg-email-hint');
+        if (regEmailInput && emailHint) {
+            regEmailInput.addEventListener('input', () => {
+                const val = regEmailInput.value.trim();
+                if (!val) {
+                    emailHint.className = 'auth-field-hint';
+                    emailHint.textContent = '';
+                    return;
+                }
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (emailRegex.test(val)) {
+                    emailHint.className = 'auth-field-hint show success';
+                    emailHint.innerHTML = '<i class="fa-solid fa-check-circle"></i> Địa chỉ email hợp lệ';
+                } else {
+                    emailHint.className = 'auth-field-hint show error';
+                    emailHint.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Vui lòng nhập đúng định dạng email (VD: name@gmail.com)';
+                }
+            });
+        }
+
+        // 5. Quick Switch Links inside Form
+        const linkGotoReg = document.getElementById('link-goto-register');
+        const linkGotoLog = document.getElementById('link-goto-login');
+        if (linkGotoReg) linkGotoReg.addEventListener('click', () => switchAuthTab('register'));
+        if (linkGotoLog) linkGotoLog.addEventListener('click', () => switchAuthTab('login'));
+
+        // 6. Policy Modal Links from Auth
+        const linkTerms = document.getElementById('link-terms-in-auth');
+        const linkPriv = document.getElementById('link-privacy-in-auth');
+        if (linkTerms) linkTerms.addEventListener('click', () => openLegalPolicyModal('terms'));
+        if (linkPriv) linkPriv.addEventListener('click', () => openLegalPolicyModal('privacy'));
+    }
+
+    async function preloadSubscriptionPlans() {
+        if (cachedSubscriptionPlans && cachedSubscriptionPlans.length > 0) return cachedSubscriptionPlans;
+        try {
+            const res = await fetch('/api/subscription/plans');
+            const data = await res.json();
+            if (data.ok && Array.isArray(data.plans) && data.plans.length > 0) {
+                cachedSubscriptionPlans = data.plans;
+                return cachedSubscriptionPlans;
+            }
+        } catch (e) {}
+        return [];
+    }
+
+    async function openVipPlansModal(isEpisodeContext = false) {
         const modal = document.getElementById('vip-plans-modal');
         if (!modal) return;
         modal.hidden = false;
+
+        // Context Episode Banner handling
+        const banner = document.getElementById('vip-modal-ep-banner');
+        if (banner && !isEpisodeContext) {
+            banner.hidden = true;
+        }
 
         const balanceEl = document.getElementById('modal-wallet-balance');
         const user = getCurrentUser();
@@ -6586,24 +6761,47 @@
 
         const grid = document.getElementById('vip-plans-grid');
         if (grid) {
-            grid.innerHTML = `
-                <div class="plans-loading-placeholder" style="grid-column: 1/-1; text-align:center; padding: 24px; color:#94a3b8;">
-                    <i class="fa-solid fa-spinner fa-spin"></i> Đang tải các gói VIP từ Quản trị...
-                </div>
-            `;
+            // Instant render if cached
+            if (cachedSubscriptionPlans && cachedSubscriptionPlans.length > 0) {
+                renderVipPlans(cachedSubscriptionPlans);
+            } else {
+                grid.innerHTML = `
+                    <div class="plans-loading-placeholder" style="grid-column: 1/-1; text-align:center; padding: 24px; color:#94a3b8;">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Đang tải các gói VIP từ Quản trị...
+                    </div>
+                `;
+            }
             try {
                 const res = await fetch('/api/subscription/plans');
                 const data = await res.json();
                 if (data.ok && Array.isArray(data.plans) && data.plans.length > 0) {
                     cachedSubscriptionPlans = data.plans;
                     renderVipPlans(data.plans);
-                } else {
+                } else if (!cachedSubscriptionPlans || cachedSubscriptionPlans.length === 0) {
                     grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color:#f43f5e;">Hiện chưa có gói cước nào hoạt động.</div>';
                 }
             } catch (e) {
-                grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:#f43f5e;">Lỗi tải gói cước: ${e.message}</div>`;
+                if (!cachedSubscriptionPlans || cachedSubscriptionPlans.length === 0) {
+                    grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:#f43f5e;">Lỗi tải gói cước: ${e.message}</div>`;
+                }
             }
         }
+    }
+
+    function openVipPlansModalForEpisode(epNum, customMsg = '') {
+        const modal = document.getElementById('vip-plans-modal');
+        if (!modal) return;
+
+        const banner = document.getElementById('vip-modal-ep-banner');
+        const epTitleEl = document.getElementById('vip-banner-ep-title');
+        const epDescEl = document.getElementById('vip-banner-ep-desc');
+        if (banner) {
+            banner.hidden = false;
+            if (epTitleEl) epTitleEl.textContent = `Tập ${epNum} Bị Khóa (Yêu Cầu VIP)`;
+            if (epDescEl) epDescEl.textContent = customMsg || `Tập ${epNum} yêu cầu gói VIP. Mở khóa toàn bộ kho phim không giới hạn chỉ từ 9.000đ!`;
+        }
+
+        openVipPlansModal(true);
     }
 
     function renderVipPlans(plans) {
@@ -6702,6 +6900,8 @@
     function closeVipPlansModal() {
         const modal = document.getElementById('vip-plans-modal');
         if (modal) modal.hidden = true;
+        const banner = document.getElementById('vip-modal-ep-banner');
+        if (banner) banner.hidden = true;
     }
 
     function showVipUpgradeModal({ message, episodeNumber, plans = [], drama = null, accessType = 'LOCKED_BUY_PLAN' }) {
@@ -6937,6 +7137,8 @@
         renderUserHeaderUI();
         refreshUserProfile();
         loadSystemPolicies();
+        preloadSubscriptionPlans();
+        initAuthFormEnhancements();
 
         // 2. Wire Header Login / User Menu Button
         const navLoginBtn = document.getElementById('nav-login-btn-block');
@@ -7019,10 +7221,14 @@
                 const emailInput = document.getElementById('reg-email');
                 const nameInput = document.getElementById('reg-name');
                 const pwdInput = document.getElementById('reg-password');
+                const confInput = document.getElementById('reg-password-confirm');
+                const agreeInput = document.getElementById('reg-agree-terms');
                 handleRegister({
                     email: emailInput ? emailInput.value : '',
                     full_name: nameInput ? nameInput.value : '',
-                    password: pwdInput ? pwdInput.value : ''
+                    password: pwdInput ? pwdInput.value : '',
+                    passwordConfirm: confInput ? confInput.value : '',
+                    agreeTerms: agreeInput ? agreeInput.checked : true
                 });
             });
         }
@@ -7045,8 +7251,10 @@
         const btnEpLockUpgrade = document.getElementById('btn-ep-lock-upgrade');
         if (btnEpLockUpgrade) {
             btnEpLockUpgrade.addEventListener('click', () => {
+                const epNumText = document.getElementById('ep-lock-num')?.textContent || '';
+                const epNum = parseInt(epNumText.replace(/\D/g, ''), 10) || 1;
                 closeEpisodeVipLockModal();
-                openVipPlansModal();
+                openVipPlansModalForEpisode(epNum);
             });
         }
 
