@@ -9468,7 +9468,8 @@ body.theme-light .dock-item.active i,
     position: absolute;
     top: calc(100% + 10px);
     right: 0;
-    width: 290px;
+    width: 310px;
+    max-width: calc(100vw - 24px);
     background: rgba(14, 18, 30, 0.97);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -9563,6 +9564,11 @@ body.theme-light .dock-item.active i,
     font-weight: 600;
 }
 
+.user-stat-item:last-child {
+    align-items: flex-end;
+    text-align: right;
+}
+
 .user-stat-item .stat-value {
     font-size: 13.5px;
     color: #ffffff;
@@ -9572,6 +9578,28 @@ body.theme-light .dock-item.active i,
 
 .user-stat-item .stat-value.highlight {
     color: #fbbf24;
+}
+
+.vip-expiry-datetime {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fbbf24;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+
+.vip-expiry-countdown {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #38bdf8;
+    margin-top: 2px;
+    white-space: nowrap;
+}
+
+.vip-expiry-countdown.text-rose {
+    color: #f43f5e;
 }
 
 .user-profile-actions {

@@ -6401,6 +6401,8 @@
         }
     }
 
+    let vipCountdownInterval = null;
+
     function renderUserHeaderUI() {
         const user = getCurrentUser();
         const navLoginBtn = document.getElementById('nav-login-btn-block');
@@ -6414,6 +6416,11 @@
         const expiryVal = document.getElementById('user-vip-expiry-value');
         const adminLink = document.getElementById('btn-admin-link');
         const adminPending = document.getElementById('user-admin-pending');
+
+        if (vipCountdownInterval) {
+            clearInterval(vipCountdownInterval);
+            vipCountdownInterval = null;
+        }
 
         if (!navLoginBtn) return;
 
@@ -6432,25 +6439,78 @@
             if (nameEl) nameEl.textContent = user.full_name || user.username;
             if (emailEl) emailEl.textContent = user.email || `@${user.username}`;
 
-            if (vipStatusBadge && vipBadgeText) {
-                if (user.is_vip) {
-                    vipStatusBadge.classList.remove('free');
-                    vipBadgeText.textContent = `VIP (còn ${user.vip_remaining_days || 0} ngày)`;
-                } else {
-                    vipStatusBadge.classList.add('free');
-                    vipBadgeText.textContent = 'Thành viên Free';
-                }
-            }
-
             if (balanceVal) {
                 balanceVal.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(user.balance || 0);
             }
-            if (expiryVal) {
-                if (user.is_vip && user.subscription_expires_at) {
-                    const expDate = new Date(user.subscription_expires_at);
-                    expiryVal.textContent = expDate.toLocaleDateString('vi-VN') + ` (${user.vip_remaining_days} ngày)`;
+
+            if (user.is_vip && user.subscription_expires_at) {
+                const expDate = new Date(user.subscription_expires_at);
+                if (!isNaN(expDate.getTime())) {
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const expHours = pad(expDate.getHours());
+                    const expMins = pad(expDate.getMinutes());
+                    const expSecs = pad(expDate.getSeconds());
+                    const expDay = pad(expDate.getDate());
+                    const expMonth = pad(expDate.getMonth() + 1);
+                    const expYear = expDate.getFullYear();
+                    const exactExpiryStr = `${expHours}:${expMins}:${expSecs} - ${expDay}/${expMonth}/${expYear}`;
+
+                    const updateVipCountdown = () => {
+                        const diff = expDate.getTime() - Date.now();
+                        if (diff <= 0) {
+                            if (vipStatusBadge && vipBadgeText) {
+                                vipStatusBadge.classList.add('free');
+                                vipBadgeText.textContent = 'Hết hạn VIP';
+                            }
+                            if (expiryVal) {
+                                expiryVal.innerHTML = `<span class="vip-expiry-datetime">${exactExpiryStr}</span><span class="vip-expiry-countdown text-rose">(Đã hết hạn)</span>`;
+                            }
+                            if (vipCountdownInterval) {
+                                clearInterval(vipCountdownInterval);
+                                vipCountdownInterval = null;
+                            }
+                            return;
+                        }
+
+                        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+                        const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+                        let cdText = '';
+                        if (d > 0) {
+                            cdText = `Còn ${d} ngày ${pad(h)}:${pad(m)}:${pad(s)}`;
+                        } else {
+                            cdText = `Còn ${pad(h)}:${pad(m)}:${pad(s)}`;
+                        }
+
+                        if (vipStatusBadge && vipBadgeText) {
+                            vipStatusBadge.classList.remove('free');
+                            const badgeRemaining = d > 0 ? `${d} ngày ${h}h` : `${pad(h)}:${pad(m)}:${pad(s)}`;
+                            vipBadgeText.textContent = `VIP (còn ${badgeRemaining})`;
+                        }
+
+                        if (expiryVal) {
+                            expiryVal.innerHTML = `<span class="vip-expiry-datetime">${exactExpiryStr}</span><span class="vip-expiry-countdown">${cdText}</span>`;
+                        }
+                    };
+
+                    updateVipCountdown();
+                    vipCountdownInterval = setInterval(updateVipCountdown, 1000);
                 } else {
-                    expiryVal.textContent = 'Chưa kích hoạt VIP';
+                    if (vipStatusBadge && vipBadgeText) {
+                        vipStatusBadge.classList.remove('free');
+                        vipBadgeText.textContent = 'VIP';
+                    }
+                    if (expiryVal) expiryVal.textContent = 'Đang kích hoạt';
+                }
+            } else {
+                if (vipStatusBadge && vipBadgeText) {
+                    vipStatusBadge.classList.add('free');
+                    vipBadgeText.textContent = 'Thành viên Free';
+                }
+                if (expiryVal) {
+                    expiryVal.textContent = 'Chưa kích hoạt';
                 }
             }
 
