@@ -1449,25 +1449,25 @@
                 <!-- QR Code & Bank Information Card -->
                 <div class="banking-qr-card">
                     <div class="banking-qr-wrapper">
-                        <img id="banking-qr-img" src="https://img.vietqr.io/image/MB-0378423195-compact2.png?amount=19000&addInfo=VIP&accountName=ADMIN" alt="Mã QR Chuyển Khoản" loading="lazy">
-                        <div class="qr-scan-guide"><i class="fa-solid fa-qrcode"></i> Quét mã VietQR bằng App Ngân Hàng hoặc ZaloPay</div>
+                        <img id="banking-qr-img" src="/tpbank-qr.png" alt="Mã QR Chuyển Khoản" loading="lazy">
+                        <div class="qr-scan-guide"><i class="fa-solid fa-qrcode"></i> Quét mã VietQR bằng App Ngân Hàng</div>
                     </div>
                     
                     <div class="banking-info-rows">
                         <div class="bank-row">
-                            <span class="b-label">Số ĐT Zalo / STK:</span>
-                            <div class="b-value-copy">
-                                <strong id="banking-phone-val" class="highlight-val">0378423195</strong>
-                                <button type="button" class="btn-copy-chip" data-copy="0378423195" title="Sao chép số điện thoại Zalo"><i class="fa-regular fa-copy"></i> Sao chép</button>
-                            </div>
-                        </div>
-                        <div class="bank-row">
-                            <span class="b-label">Chủ tài khoản / Zalo:</span>
-                            <strong class="b-value">ADMIN DRAMAFLOW</strong>
-                        </div>
-                        <div class="bank-row">
                             <span class="b-label">Ngân hàng:</span>
-                            <strong class="b-value">MB Bank (Quân Đội) / ZaloPay</strong>
+                            <strong id="banking-bank-name-val" class="b-value">Ngân hàng TMCP Tiên Phong (TPBank)</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span class="b-label">Chủ tài khoản:</span>
+                            <strong id="banking-holder-val" class="b-value">PHAM XUAN PHUONG</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span class="b-label">Số tài khoản:</span>
+                            <div class="b-value-copy">
+                                <strong id="banking-phone-val" class="highlight-val">18888030205</strong>
+                                <button type="button" class="btn-copy-chip" id="btn-copy-bank-acc" data-copy="18888030205" title="Sao chép số tài khoản"><i class="fa-regular fa-copy"></i> Sao chép</button>
+                            </div>
                         </div>
                         <div class="bank-row">
                             <span class="b-label">Số tiền cần thanh toán:</span>
@@ -1508,7 +1508,7 @@
                 <div class="topup-modal-header">
                     <div class="login-badge-pro bg-emerald-glass"><i class="fa-solid fa-shield-halved text-emerald"></i> CỔNG THANH TOÁN TỰ ĐỘNG 24/7</div>
                     <h3>Nạp Tiền Vào Ví DramaFlow</h3>
-                    <p>Nạp tiền tự động qua chuyển khoản VietQR Ngân hàng hoặc Ví điện tử MoMo. Không mất phí giao dịch.</p>
+                    <p>Chuyển khoản qua quét mã VietQR TPBank. Số dư được cộng tự động vào tài khoản.</p>
                 </div>
 
             <!-- Current Balance Status Card -->
@@ -1535,46 +1535,36 @@
             </div>
 
             <div class="custom-amount-row">
-                <label for="custom-topup-amount">Hoặc nhập số tiền tùy ý:</label>
+                <label for="custom-topup-amount">Hoặc nhập số tiền cần nạp:</label>
                 <div class="custom-amount-input-wrap">
-                    <input type="number" id="custom-topup-amount" min="10000" step="10000" placeholder="50000" value="50000">
+                    <input type="number" id="custom-topup-amount" min="10000" step="10000" placeholder="Nhập số tiền..." value="50000">
                     <span class="currency-tag">VNĐ</span>
                 </div>
-            </div>
-
-            <!-- Payment Method Tabs -->
-            <div class="topup-method-tabs">
-                <button type="button" class="topup-method-tab active" data-method="vietqr">
-                    <i class="fa-solid fa-qrcode"></i> Chuyển Khoản VietQR (0% Phí)
-                </button>
-                <button type="button" class="topup-method-tab" data-method="momo">
-                    <i class="fa-solid fa-mobile-screen-button"></i> Ví MoMo
-                </button>
             </div>
 
             <!-- VietQR Payment Details Box -->
             <div class="vietqr-payment-box" id="vietqr-payment-box">
                 <div class="qr-code-wrapper">
-                    <img id="vietqr-image" src="" alt="Mã VietQR Chuyển Khoản" loading="lazy">
+                    <img id="vietqr-image" src="/tpbank-qr.png" alt="Mã VietQR Chuyển Khoản" loading="lazy">
                     <div class="qr-scan-hint"><i class="fa-solid fa-camera"></i> Mở App Ngân hàng bất kỳ để quét mã</div>
                 </div>
                 <div class="bank-details-list">
                     <div class="bank-detail-item">
                         <span class="b-lbl">Ngân hàng:</span>
                         <div class="b-val-wrap">
-                            <strong id="b-bank-name">MB Bank (Quân Đội)</strong>
+                            <strong id="b-bank-name">Ngân hàng TMCP Tiên Phong (TPBank)</strong>
                         </div>
                     </div>
                     <div class="bank-detail-item">
                         <span class="b-lbl">Chủ tài khoản:</span>
                         <div class="b-val-wrap">
-                            <strong id="b-account-holder">ADMIN DRAMAFLOW</strong>
+                            <strong id="b-account-holder">PHAM XUAN PHUONG</strong>
                         </div>
                     </div>
                     <div class="bank-detail-item highlight-item">
-                        <span class="b-lbl">Số tài khoản / Zalo:</span>
+                        <span class="b-lbl">Số tài khoản:</span>
                         <div class="b-val-wrap">
-                            <strong id="b-account-number">0378423195</strong>
+                            <strong id="b-account-number">18888030205</strong>
                             <button type="button" class="btn-copy-val" data-copy="b-account-number" title="Sao chép số tài khoản"><i class="fa-regular fa-copy"></i></button>
                         </div>
                     </div>
@@ -1598,41 +1588,19 @@
                 </div>
             </div>
 
-            <!-- MoMo Payment Box (Initially Hidden) -->
-            <div class="momo-payment-box" id="momo-payment-box" hidden>
-                <div class="qr-code-wrapper">
-                    <img id="momo-image" src="" alt="Mã MoMo Chuyển Tiền" loading="lazy">
-                    <div class="qr-scan-hint"><i class="fa-solid fa-mobile-screen"></i> Quét bằng ứng dụng MoMo</div>
-                </div>
-                <div class="bank-details-list">
-                    <div class="bank-detail-item">
-                        <span class="b-lbl">Ví MoMo / ZaloPay:</span>
-                        <div class="b-val-wrap"><strong>0378423195</strong></div>
-                    </div>
-                    <div class="bank-detail-item">
-                        <span class="b-lbl">Tên người nhận:</span>
-                        <div class="b-val-wrap"><strong>ADMIN DRAMAFLOW</strong></div>
-                    </div>
-                    <div class="bank-detail-item highlight-code">
-                        <span class="b-lbl">Lời nhắn MoMo:</span>
-                        <div class="b-val-wrap">
-                            <strong id="momo-transfer-content">DF USER</strong>
-                            <button type="button" class="btn-copy-val" data-copy="momo-transfer-content" title="Sao chép lời nhắn"><i class="fa-regular fa-copy"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div class="topup-actions-footer">
                 <button type="button" class="btn-confirm-topup" id="btn-confirm-topup">
                     <i class="fa-solid fa-circle-check"></i> <span>Tôi Đã Chuyển Khoản Thành Công</span>
                 </button>
                 <div class="support-contact-row">
                     <span>Hỗ trợ thanh toán 24/7:</span>
-                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener"><i class="fa-brands fa-telegram"></i> Telegram CSKH</a>
+                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener" id="topup-tele-link"><i class="fa-brands fa-telegram"></i> Telegram CSKH</a>
                     <span>•</span>
-                    <a href="tel:19006868"><i class="fa-solid fa-phone"></i> Hotline 1900 6868</a>
+                    <a href="https://zalo.me/0378423195" target="_blank" rel="noopener" id="topup-zalo-link"><i class="fa-solid fa-comment-dots"></i> Zalo CSKH</a>
+                    <span>•</span>
+                    <a href="tel:0378423195" id="topup-hotline-link"><i class="fa-solid fa-phone"></i> Hotline <span id="topup-hotline-val">0378423195</span></a>
                 </div>
+            </div>
             </div>
         </div>
         </div>
@@ -1789,7 +1757,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.9.15"></script>
+    <script src="/app.js?v=3.9.16"></script>
 </body>
 
 </html>

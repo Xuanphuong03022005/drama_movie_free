@@ -353,22 +353,53 @@ app.post('/api/subscription/purchase', async (req, res) => {
     }
 });
 
-// ==========================================
-// WALLET & VIETQR PAYMENT GATEWAY
-// ==========================================
+function getPaymentEnvConfig() {
+    try {
+        const envPath = path.join(__dirname, '.env');
+        if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, 'utf8');
+            envContent.split(/\r?\n/).forEach(line => {
+                const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+                if (m) {
+                    let v = m[2] || '';
+                    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+                    process.env[m[1]] = v.trim();
+                }
+            });
+        }
+    } catch (e) { }
+
+    const bankName = process.env.BANK_NAME || 'Ngân hàng TMCP Tiên Phong (TPBank)';
+    const bankCode = process.env.BANK_CODE || 'TPB';
+    const bankBin = process.env.BANK_BIN || '970423';
+    const accountNumber = process.env.BANK_ACCOUNT || process.env.BANK_ACCOUNT_NUMBER || '18888030205';
+    const accountHolder = process.env.BANK_ACCOUNT_NAME || process.env.BANK_ACCOUNT_HOLDER || 'PHAM XUAN PHUONG';
+    
+    const zaloPhone = process.env.ADMIN_ZALO_PHONE || process.env.SUPPORT_ZALO || '0378423195';
+    const telegram = process.env.ADMIN_TELEGRAM || process.env.SUPPORT_TELEGRAM || 'dramaflow_support';
+    const cleanTele = telegram.replace(/^@/, '');
+    const telegramUrl = process.env.ADMIN_TELEGRAM_URL || (cleanTele.startsWith('http') ? cleanTele : `https://t.me/${cleanTele}`);
+    const hotline = process.env.HOTLINE || process.env.SUPPORT_HOTLINE || zaloPhone;
+
+    return {
+        bankName,
+        bankCode,
+        bankBin,
+        accountNumber,
+        accountHolder,
+        supportHotline: hotline,
+        supportZalo: zaloPhone,
+        supportTelegram: `@${cleanTele}`,
+        telegramUrl,
+        zaloUrl: `https://zalo.me/${zaloPhone.replace(/[^0-9]/g, '')}`,
+        qrStaticUrl: '/tpbank-qr.png'
+    };
+}
+
 app.get('/api/wallet/payment-config', (req, res) => {
     res.json({
         ok: true,
-        bank: {
-            bankName: 'Ngân hàng TMCP Quân Đội (MB Bank)',
-            bankCode: 'MB',
-            accountNumber: '0378423195',
-            accountHolder: 'ADMIN DRAMAFLOW',
-            branch: 'Hội Sở Chính',
-            supportHotline: '0378423195',
-            supportZalo: '0378423195',
-            supportTelegram: '@dramaflow_support'
-        },
+        bank: getPaymentEnvConfig(),
         presetAmounts: [20000, 50000, 100000, 200000, 500000],
         minTopupAmount: 10000
     });

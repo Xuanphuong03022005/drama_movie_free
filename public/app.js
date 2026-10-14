@@ -6750,8 +6750,10 @@
         setTimeout(() => {
             if (action.type === 'purchase_plan' && action.plan) {
                 openBankingPaymentModal(action.plan);
+            } else if (action.type === 'open_vip') {
+                openVipPlansModal();
             } else if (action.type === 'topup') {
-                openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: action.amount || 50000 });
+                openWalletTopupModal(action.amount || 50000);
             }
         }, 350);
     }
@@ -7125,11 +7127,41 @@
     }
 
     // ==========================================
-    // BANKING PAYMENT & ZALO QR MODAL HANDLER
+    // BANKING PAYMENT & TPBANK VIETQR GATEWAY
     // ==========================================
     let activeBankingPlan = null;
+    let cachedPaymentConfig = null;
 
-    function openBankingPaymentModal(plan) {
+    async function loadPaymentConfig() {
+        if (cachedPaymentConfig) return cachedPaymentConfig;
+        try {
+            const res = await fetch('/api/wallet/payment-config');
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.bank) {
+                    cachedPaymentConfig = data.bank;
+                    return cachedPaymentConfig;
+                }
+            }
+        } catch (e) {
+            console.warn('[PaymentConfig] Load failed, fallback to defaults:', e);
+        }
+        return {
+            bankName: 'Ngân hàng TMCP Tiên Phong (TPBank)',
+            bankCode: 'TPB',
+            bankBin: '970423',
+            accountNumber: '18888030205',
+            accountHolder: 'PHAM XUAN PHUONG',
+            supportHotline: '0378423195',
+            supportZalo: '0378423195',
+            supportTelegram: '@dramaflow_support',
+            telegramUrl: 'https://t.me/dramaflow_support',
+            zaloUrl: 'https://zalo.me/0378423195',
+            qrStaticUrl: '/tpbank-qr.png'
+        };
+    }
+
+    async function openBankingPaymentModal(plan) {
         activeBankingPlan = plan || { name: 'VIP Tuần', price: 19000 };
         const modal = document.getElementById('banking-payment-modal');
         if (!modal) return;
@@ -7150,6 +7182,11 @@
         const memoValEl = document.getElementById('banking-memo-val');
         const qrImgEl = document.getElementById('banking-qr-img');
         const btnZalo = document.getElementById('btn-banking-zalo');
+        const btnTele = document.getElementById('btn-banking-telegram');
+        const bankNameEl = document.getElementById('banking-bank-name-val');
+        const bankHolderEl = document.getElementById('banking-holder-val');
+        const bankPhoneEl = document.getElementById('banking-phone-val');
+        const btnCopyBankAcc = document.getElementById('btn-copy-bank-acc');
 
         if (planNameEl) planNameEl.textContent = planName;
         if (planPriceEl) planPriceEl.textContent = `(${priceFormatted})`;
@@ -7158,14 +7195,27 @@
         const memoText = `VIP ${cleanUsername}`;
         if (memoValEl) memoValEl.textContent = memoText;
 
-        // Dynamic VietQR Image with phone/STK 0378423195
-        if (qrImgEl) {
-            const qrUrl = `https://img.vietqr.io/image/MB-0378423195-compact2.png?amount=${planPrice}&addInfo=${encodeURIComponent(memoText)}&accountName=ADMIN%20DRAMAFLOW`;
-            qrImgEl.src = qrUrl;
-        }
+        const cfg = await loadPaymentConfig();
+        if (bankNameEl) bankNameEl.textContent = cfg.bankName || 'Ngân hàng TMCP Tiên Phong (TPBank)';
+        if (bankHolderEl) bankHolderEl.textContent = cfg.accountHolder || 'PHAM XUAN PHUONG';
+        if (bankPhoneEl) bankPhoneEl.textContent = cfg.accountNumber || '18888030205';
+        if (btnCopyBankAcc) btnCopyBankAcc.setAttribute('data-copy', cfg.accountNumber || '18888030205');
 
-        if (btnZalo) {
-            btnZalo.href = 'https://zalo.me/0378423195';
+        if (btnZalo) btnZalo.href = cfg.zaloUrl || `https://zalo.me/${cfg.supportZalo || '0378423195'}`;
+        if (btnTele) btnTele.href = cfg.telegramUrl || 'https://t.me/dramaflow_support';
+
+        // Dynamic VietQR TPBank Image
+        if (qrImgEl) {
+            const bin = cfg.bankBin || '970423';
+            const acc = cfg.accountNumber || '18888030205';
+            const accName = encodeURIComponent(cfg.accountHolder || 'PHAM XUAN PHUONG');
+            const memoEnc = encodeURIComponent(memoText);
+            const dynamicQr = `https://img.vietqr.io/image/${bin}-${acc}-compact2.png?amount=${planPrice}&addInfo=${memoEnc}&accountName=${accName}`;
+            qrImgEl.onerror = () => {
+                qrImgEl.onerror = null;
+                qrImgEl.src = cfg.qrStaticUrl || '/tpbank-qr.png';
+            };
+            qrImgEl.src = dynamicQr;
         }
 
         // Configure wallet balance quick pay if user has enough balance
@@ -7243,7 +7293,7 @@
     }
 
     // ==========================================
-    // COMMERCIAL WALLET TOP-UP & VIETQR GATEWAY
+    // COMMERCIAL WALLET TOP-UP & TPBANK VIETQR GATEWAY
     // ==========================================
     let activeTopupAmount = 50000;
     let activeTopupMethod = 'vietqr';
@@ -7261,7 +7311,7 @@
         const user = getCurrentUser();
         if (!user) {
             pendingAuthAction = { type: 'topup', amount: suggestedAmount };
-            showToast('Vui lòng đăng nhập để tiến hành thanh toán!', 'fa-right-to-bracket');
+            showToast('Vui lòng đăng nhập để tiến hành nạp tiền!', 'fa-right-to-bracket');
             closeVipPlansModal();
             closeEpisodeVipLockModal();
             openAuthModal('login');
@@ -7303,31 +7353,50 @@
         if (modal) modal.hidden = true;
     }
 
-    function updatePaymentDetails(amount, user) {
+    async function updatePaymentDetails(amount, user) {
         if (!user) user = getCurrentUser();
         const cleanUsername = (user?.username || 'USER').toUpperCase();
         const transferContent = `DF ${cleanUsername}`;
+        const cfg = await loadPaymentConfig();
 
-        // VietQR Direct Real Generation
-        const qrImg = document.getElementById('vietqr-image');
-        if (qrImg) {
-            qrImg.src = `https://img.vietqr.io/image/MB-0378423195-compact2.png?amount=${amount}&addInfo=DF%20${encodeURIComponent(cleanUsername)}&accountName=ADMIN%20DRAMAFLOW`;
-        }
-
-        // MoMo QR Generation
-        const momoImg = document.getElementById('momo-image');
-        if (momoImg) {
-            momoImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`2|99|0378423195|ADMIN DRAMAFLOW|cskh@dramaflow.vn|0|0|${amount}|DF ${cleanUsername}`)}`;
-        }
-
-        // Text details
+        // Bank details
+        const bNameEl = document.getElementById('b-bank-name');
+        const bHolderEl = document.getElementById('b-account-holder');
+        const bAccEl = document.getElementById('b-account-number');
         const amountDisplay = document.getElementById('b-amount-display');
         const transferContentEl = document.getElementById('b-transfer-content');
-        const momoContentEl = document.getElementById('momo-transfer-content');
 
+        if (bNameEl) bNameEl.textContent = cfg.bankName || 'Ngân hàng TMCP Tiên Phong (TPBank)';
+        if (bHolderEl) bHolderEl.textContent = cfg.accountHolder || 'PHAM XUAN PHUONG';
+        if (bAccEl) bAccEl.textContent = cfg.accountNumber || '18888030205';
         if (amountDisplay) amountDisplay.textContent = new Intl.NumberFormat('vi-VN').format(amount) + ' đ';
         if (transferContentEl) transferContentEl.textContent = transferContent;
-        if (momoContentEl) momoContentEl.textContent = transferContent;
+
+        // Support contacts from .env
+        const teleLink = document.getElementById('topup-tele-link');
+        const zaloLink = document.getElementById('topup-zalo-link');
+        const hotLink = document.getElementById('topup-hotline-link');
+        const hotVal = document.getElementById('topup-hotline-val');
+
+        if (teleLink && cfg.telegramUrl) teleLink.href = cfg.telegramUrl;
+        if (zaloLink && cfg.zaloUrl) zaloLink.href = cfg.zaloUrl;
+        if (hotLink && cfg.supportHotline) hotLink.href = `tel:${cfg.supportHotline}`;
+        if (hotVal && cfg.supportHotline) hotVal.textContent = cfg.supportHotline;
+
+        // VietQR Dynamic Image for TPBank (fallback to /tpbank-qr.png)
+        const qrImg = document.getElementById('vietqr-image');
+        if (qrImg) {
+            const bin = cfg.bankBin || '970423';
+            const acc = cfg.accountNumber || '18888030205';
+            const accName = encodeURIComponent(cfg.accountHolder || 'PHAM XUAN PHUONG');
+            const memoEnc = encodeURIComponent(transferContent);
+            const dynamicQr = `https://img.vietqr.io/image/${bin}-${acc}-compact2.png?amount=${amount}&addInfo=${memoEnc}&accountName=${accName}`;
+            qrImg.onerror = () => {
+                qrImg.onerror = null;
+                qrImg.src = cfg.qrStaticUrl || '/tpbank-qr.png';
+            };
+            qrImg.src = dynamicQr;
+        }
     }
 
     function initWalletTopupHandlers() {
@@ -7344,7 +7413,7 @@
             });
         });
 
-        // Custom amount input
+        // Custom amount input (allows user to type any desired amount)
         const customInput = document.getElementById('custom-topup-amount');
         if (customInput) {
             let debounceTimer;
@@ -7363,26 +7432,6 @@
             });
         }
 
-        // Method tabs (VietQR vs MoMo)
-        document.querySelectorAll('.topup-method-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.topup-method-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                const method = tab.getAttribute('data-method');
-                activeTopupMethod = method;
-
-                const vietqrBox = document.getElementById('vietqr-payment-box');
-                const momoBox = document.getElementById('momo-payment-box');
-                if (method === 'momo') {
-                    if (vietqrBox) vietqrBox.hidden = true;
-                    if (momoBox) momoBox.hidden = false;
-                } else {
-                    if (vietqrBox) vietqrBox.hidden = false;
-                    if (momoBox) momoBox.hidden = true;
-                }
-            });
-        });
-
         // 1-Click Copy Buttons
         document.querySelectorAll('.btn-copy-val').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -7390,10 +7439,11 @@
                 let textToCopy = '';
                 const user = getCurrentUser();
                 const cleanUsername = (user?.username || 'USER').toUpperCase();
+                const cfg = await loadPaymentConfig();
 
-                if (targetKey === 'b-account-number') textToCopy = '0378423195';
+                if (targetKey === 'b-account-number') textToCopy = cfg.accountNumber || '18888030205';
                 else if (targetKey === 'b-amount-number') textToCopy = String(activeTopupAmount);
-                else if (targetKey === 'b-transfer-content' || targetKey === 'momo-transfer-content') textToCopy = `DF ${cleanUsername}`;
+                else if (targetKey === 'b-transfer-content') textToCopy = `DF ${cleanUsername}`;
 
                 if (textToCopy) {
                     try {
@@ -7429,7 +7479,7 @@
                         body: JSON.stringify({
                             userId: user.id,
                             amount: activeTopupAmount,
-                            paymentMethod: activeTopupMethod,
+                            paymentMethod: 'tpbank_vietqr',
                             transactionCode: `TX_${Date.now()}`
                         })
                     });
@@ -7485,20 +7535,20 @@
             });
         }
 
-        // Copy actions inside Banking modal (Phone / STK Zalo 0378423195 and Memo)
-        document.querySelectorAll('.btn-copy-chip').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const copyVal = btn.getAttribute('data-copy') || document.getElementById('banking-memo-val')?.textContent || '0378423195';
-                if (copyVal) {
-                    try {
-                        await navigator.clipboard.writeText(copyVal);
-                        showToast(`Đã sao chép: "${copyVal}"`, 'fa-circle-check');
-                    } catch (e) {
-                        showToast(`Sao chép: ${copyVal}`, 'fa-clipboard');
-                    }
+        // Copy actions inside Banking modal
+        const btnCopyBankAcc = document.getElementById('btn-copy-bank-acc');
+        if (btnCopyBankAcc) {
+            btnCopyBankAcc.addEventListener('click', async () => {
+                const cfg = await loadPaymentConfig();
+                const accVal = cfg.accountNumber || '18888030205';
+                try {
+                    await navigator.clipboard.writeText(accVal);
+                    showToast(`Đã sao chép số tài khoản: ${accVal}`, 'fa-circle-check');
+                } catch (e) {
+                    showToast(`Số tài khoản: ${accVal}`, 'fa-clipboard');
                 }
             });
-        });
+        }
 
         const btnCopyMemo = document.getElementById('btn-copy-memo');
         if (btnCopyMemo) {
@@ -7800,7 +7850,14 @@
         if (btnUserTopup) {
             btnUserTopup.addEventListener('click', () => {
                 if (userMenu) userMenu.hidden = true;
-                openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: 50000 });
+                const user = getCurrentUser();
+                if (!user) {
+                    pendingAuthAction = { type: 'topup', amount: 50000 };
+                    showToast('Vui lòng đăng nhập để tiến hành nạp tiền!', 'fa-right-to-bracket');
+                    openAuthModal('login');
+                    return;
+                }
+                openWalletTopupModal(50000);
             });
         }
 
@@ -7874,13 +7931,13 @@
                 const user = getCurrentUser();
                 if (!user) {
                     pendingAuthAction = { type: 'topup', amount: 50000 };
-                    showToast('Vui lòng đăng nhập để tiến hành thanh toán!', 'fa-right-to-bracket');
+                    showToast('Vui lòng đăng nhập để tiến hành nạp tiền!', 'fa-right-to-bracket');
                     closeVipPlansModal();
                     openAuthModal('login');
                     return;
                 }
                 closeVipPlansModal();
-                openBankingPaymentModal({ name: 'Nạp Tiền Vào Ví', price: 50000 });
+                openWalletTopupModal(50000);
             });
         }
 
