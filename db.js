@@ -615,7 +615,7 @@ function formatUser(row) {
         balance: parseFloat(row.balance) || 0,
         subscription_plan_id: row.subscription_plan_id ? String(row.subscription_plan_id) : null,
         subscription_expires_at: row.subscription_expires_at,
-        avatar_url: row.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${row.username || 'user'}`,
+        avatar_url: (row.avatar_url && !row.avatar_url.includes('dicebear')) ? row.avatar_url : '/default-avatar.svg',
         can_access_user_table: Boolean(row.can_access_user_table),
         approval_status: row.approval_status || (row.can_access_user_table ? 'approved' : 'pending'),
         approved_at: row.approved_at,
@@ -678,7 +678,7 @@ async function registerWithGmail({ email, full_name, password }) {
     }
 
     const displayName = full_name && full_name.trim() ? full_name.trim() : username;
-    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+    const avatarUrl = '/default-avatar.svg';
     const pwdHash = password && password.trim() ? hashPassword(password.trim()) : null;
 
     const insertSql = `

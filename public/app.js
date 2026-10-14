@@ -6429,13 +6429,18 @@
             navLoginBtn.title = `Tài khoản: ${user.full_name || user.username}`;
             const shortName = user.full_name ? user.full_name.split(' ').slice(-1)[0] : (user.username || 'User');
             const vipPill = user.is_vip ? `<span class="nav-user-badge">VIP</span>` : '';
+            const defaultAvatar = '/default-avatar.svg';
+            const userAvatarSrc = (user.avatar_url && !user.avatar_url.includes('dicebear')) ? user.avatar_url : defaultAvatar;
             navLoginBtn.innerHTML = `
-                <img src="${user.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username}" class="nav-user-avatar" alt="Avatar">
+                <img src="${userAvatarSrc}" class="nav-user-avatar" alt="Avatar" onerror="this.src='${defaultAvatar}'">
                 <span>${escapeHtml(shortName)}</span>
                 ${vipPill}
             `;
 
-            if (avatarImg) avatarImg.src = user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`;
+            if (avatarImg) {
+                avatarImg.src = userAvatarSrc;
+                avatarImg.onerror = () => { avatarImg.src = defaultAvatar; };
+            }
             if (nameEl) nameEl.textContent = user.full_name || user.username;
             if (emailEl) emailEl.textContent = user.email || `@${user.username}`;
 
