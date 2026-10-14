@@ -6415,7 +6415,6 @@
         const balanceVal = document.getElementById('user-balance-value');
         const expiryVal = document.getElementById('user-vip-expiry-value');
         const adminLink = document.getElementById('btn-admin-link');
-        const adminPending = document.getElementById('user-admin-pending');
 
         if (vipCountdownInterval) {
             clearInterval(vipCountdownInterval);
@@ -6520,14 +6519,8 @@
             }
 
             // Admin Dashboard access permission
-            if (adminLink && adminPending) {
-                if (user.role === 'admin' || user.can_access_user_table) {
-                    adminLink.hidden = false;
-                    adminPending.hidden = true;
-                } else {
-                    adminLink.hidden = true;
-                    adminPending.hidden = false;
-                }
+            if (adminLink) {
+                adminLink.hidden = !(user.role === 'admin' || user.can_access_user_table);
             }
         } else {
             navLoginBtn.classList.remove('logged-in');
