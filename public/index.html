@@ -1484,12 +1484,16 @@
                 </div>
 
                 <!-- Direct Contact Action Buttons -->
+                <div class="transfer-bill-notice">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Sau khi chuyển khoản, vui lòng gửi bill qua <strong>Zalo</strong> hoặc <strong>Telegram</strong> kèm <strong>Email</strong></span>
+                </div>
                 <div class="banking-actions-group">
-                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener" class="btn-banking-contact btn-telegram" id="btn-banking-telegram">
-                        <i class="fa-solid fa-comment-dots"></i> <span>Liên hệ qua Telegram</span>
-                    </a>
                     <a href="https://zalo.me/0378423195" target="_blank" rel="noopener" class="btn-banking-contact btn-zalo" id="btn-banking-zalo">
-                        <i class="fa-solid fa-comment-dots"></i> <span>Liên hệ qua Zalo</span>
+                        <i class="fa-solid fa-comment-dots"></i> <span>Gửi bill qua Zalo</span>
+                    </a>
+                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener" class="btn-banking-contact btn-telegram" id="btn-banking-telegram">
+                        <i class="fa-brands fa-telegram"></i> <span>Gửi bill qua Telegram</span>
                     </a>
                     <button type="button" class="btn-banking-back" id="btn-banking-back">
                         <span>← Quay lại</span>
@@ -1589,16 +1593,20 @@
             </div>
 
             <div class="topup-actions-footer">
-                <button type="button" class="btn-confirm-topup" id="btn-confirm-topup">
-                    <i class="fa-solid fa-circle-check"></i> <span>Tôi Đã Chuyển Khoản Thành Công</span>
-                </button>
+                <div class="transfer-bill-notice">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Sau khi chuyển khoản, vui lòng gửi bill qua <strong>Zalo</strong> hoặc <strong>Telegram</strong> kèm <strong>Email</strong></span>
+                </div>
+                <div class="topup-bill-actions">
+                    <a href="https://zalo.me/0378423195" target="_blank" rel="noopener" class="btn-banking-contact btn-zalo" id="topup-btn-zalo">
+                        <i class="fa-solid fa-comment-dots"></i> <span>Gửi bill qua Zalo</span>
+                    </a>
+                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener" class="btn-banking-contact btn-telegram" id="topup-btn-tele">
+                        <i class="fa-brands fa-telegram"></i> <span>Gửi bill qua Telegram</span>
+                    </a>
+                </div>
                 <div class="support-contact-row">
-                    <span>Hỗ trợ thanh toán 24/7:</span>
-                    <a href="https://t.me/dramaflow_support" target="_blank" rel="noopener" id="topup-tele-link"><i class="fa-brands fa-telegram"></i> Telegram CSKH</a>
-                    <span>•</span>
-                    <a href="https://zalo.me/0378423195" target="_blank" rel="noopener" id="topup-zalo-link"><i class="fa-solid fa-comment-dots"></i> Zalo CSKH</a>
-                    <span>•</span>
-                    <a href="tel:0378423195" id="topup-hotline-link"><i class="fa-solid fa-phone"></i> Hotline <span id="topup-hotline-val">0378423195</span></a>
+                    <a href="tel:0378423195" id="topup-hotline-link"><i class="fa-solid fa-phone"></i> Hotline hỗ trợ: <span id="topup-hotline-val">0378423195</span></a>
                 </div>
             </div>
             </div>
@@ -1757,7 +1765,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.9.16"></script>
+    <script src="/app.js?v=3.9.17"></script>
 </body>
 
 </html>

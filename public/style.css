@@ -11443,4 +11443,49 @@ body.theme-light .dock-item.active i,
     color: #ffffff;
 }
 
+/* =======================================================
+   TRANSFER BILL NOTICE & DUAL CONTACT BUTTONS (ZALO / TELE)
+======================================================= */
+.transfer-bill-notice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 11px;
+    padding: 11px 14px;
+    color: #fef3c7;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.transfer-bill-notice i {
+    color: #fbbf24;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.transfer-bill-notice strong {
+    color: #fbbf24;
+    font-weight: 700;
+}
+
+.topup-bill-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+@media (min-width: 480px) {
+    .topup-bill-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+}
+
 

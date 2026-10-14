@@ -7373,11 +7373,15 @@
         if (transferContentEl) transferContentEl.textContent = transferContent;
 
         // Support contacts from .env
+        const topupBtnZalo = document.getElementById('topup-btn-zalo');
+        const topupBtnTele = document.getElementById('topup-btn-tele');
         const teleLink = document.getElementById('topup-tele-link');
         const zaloLink = document.getElementById('topup-zalo-link');
         const hotLink = document.getElementById('topup-hotline-link');
         const hotVal = document.getElementById('topup-hotline-val');
 
+        if (topupBtnZalo && cfg.zaloUrl) topupBtnZalo.href = cfg.zaloUrl;
+        if (topupBtnTele && cfg.telegramUrl) topupBtnTele.href = cfg.telegramUrl;
         if (teleLink && cfg.telegramUrl) teleLink.href = cfg.telegramUrl;
         if (zaloLink && cfg.zaloUrl) zaloLink.href = cfg.zaloUrl;
         if (hotLink && cfg.supportHotline) hotLink.href = `tel:${cfg.supportHotline}`;
