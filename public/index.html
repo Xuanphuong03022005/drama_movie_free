@@ -430,7 +430,6 @@
                 <!-- Login VIP Access Button & Logged-In User Cluster -->
                 <div class="user-auth-cluster" id="user-auth-cluster">
                     <button type="button" class="nav-login-btn" id="nav-login-btn-block" title="Đăng nhập / Đăng ký thành viên VIP">
-                        <i class="fa-solid fa-user"></i>
                         <span id="nav-login-text">Login</span>
                     </button>
 
@@ -442,7 +441,7 @@
                                 <div class="user-display-name" id="user-display-name">Thành Viên</div>
                                 <div class="user-email-text" id="user-email-text">user@gmail.com</div>
                                 <div class="user-vip-status-badge" id="user-vip-status-badge">
-                                    <i class="fa-solid fa-crown"></i> <span id="user-vip-badge-text">Miễn Phí</span>
+                                    <span id="user-vip-badge-text">Miễn Phí</span>
                                 </div>
                             </div>
                         </div>
@@ -459,19 +458,19 @@
                         </div>
                         <div class="user-profile-actions">
                             <button type="button" class="user-action-item" id="btn-open-vip-plans">
-                                <i class="fa-solid fa-crown text-amber"></i> <span>Nâng cấp Gói VIP</span>
+                                <span>Nâng cấp Gói VIP</span>
                             </button>
                             <button type="button" class="user-action-item" id="btn-user-open-topup">
-                                <i class="fa-solid fa-wallet text-emerald"></i> <span>Nạp Tiền Vào Ví</span>
+                                <span>Nạp Tiền Vào Ví</span>
                             </button>
                             <a href="http://localhost:3001" target="_blank" rel="noopener" class="user-action-item admin-access-item" id="btn-admin-link" hidden>
-                                <i class="fa-solid fa-shield-halved text-rose"></i> <span>Bảng Quản Trị Admin</span>
+                                <span>Bảng Quản Trị Admin</span>
                             </a>
                             <div class="user-admin-pending" id="user-admin-pending" hidden>
-                                <i class="fa-solid fa-clock-rotate-left text-amber"></i> <span>Chờ Admin cấp quyền</span>
+                                <span>Chờ Admin cấp quyền</span>
                             </div>
                             <button type="button" class="user-action-item logout-action" id="btn-logout-user">
-                                <i class="fa-solid fa-right-from-bracket"></i> <span>Đăng xuất</span>
+                                <span>Đăng xuất</span>
                             </button>
                         </div>
                     </div>
@@ -517,9 +516,9 @@
                     <p class="hero-synopsis" id="hero-desc">Discover the most captivating short drama stories with
                         seamless HLS streaming, zero ad interruptions, and instant multi-episode navigation.</p>
                     <div class="hero-meta-row" id="hero-meta-row">
-                        <span id="hero-trend-badge" class="hero-trend-pill"><i class="fa-solid fa-fire"></i> <span id="hero-trend-text">#1 TOP THỊNH HÀNH</span></span>
-                        <span id="hero-episodes-badge" class="hero-ep-badge"><i class="fa-solid fa-film"></i> <span id="hero-ep-count-text">... tập</span></span>
-                        <span class="hero-quality-pill"><i class="fa-solid fa-bolt"></i> 1080P HD</span>
+                        <span id="hero-trend-badge" class="hero-trend-pill"><span id="hero-trend-text">#1 TOP THỊNH HÀNH</span></span>
+                        <span id="hero-episodes-badge" class="hero-ep-badge"><span id="hero-ep-count-text">... tập</span></span>
+                        <span class="hero-quality-pill">1080P HD</span>
                     </div>
                     <div class="hero-cta-group">
                         <button class="btn btn-hero-play" id="hero-play-btn">
@@ -554,7 +553,6 @@
         <section id="history-section" class="content-row-section" hidden>
             <div class="row-header">
                 <div class="row-title-group">
-                    <div class="section-icon-badge text-emerald"><i class="fa-solid fa-clock-rotate-left"></i></div>
                     <h2 id="history-title">Continue Watching</h2>
                     <span class="row-subtitle" id="history-subtitle">Resume your recent episodes</span>
                 </div>
@@ -580,7 +578,6 @@
         <section id="top10" class="content-row-section">
             <div class="row-header">
                 <div class="row-title-group">
-                    <div class="section-icon-badge text-rose"><i class="fa-solid fa-fire"></i></div>
                     <h2 id="top10-title">Top 10 Short Dramas Today</h2>
                     <span class="row-subtitle" id="top10-subtitle">Most viewed and trending releases</span>
                 </div>
@@ -602,7 +599,6 @@
         <section id="favorites-section" class="content-row-section" hidden>
             <div class="row-header">
                 <div class="row-title-group">
-                    <div class="section-icon-badge text-accent"><i class="fa-solid fa-heart"></i></div>
                     <h2 id="favorites-title">My List (<span id="favorites-count">0</span>)</h2>
                     <span class="row-subtitle" id="favorites-subtitle">Your bookmarked and saved dramas</span>
                 </div>
@@ -624,7 +620,6 @@
         <section id="providers-section" class="content-row-section">
             <div class="row-header">
                 <div class="row-title-group">
-                    <div class="section-icon-badge text-primary"><i class="fa-solid fa-clapperboard"></i></div>
                     <div>
                         <div class="catalog-heading-row">
                             <h2><span id="current-provider-title">AnyReel</span> <span
@@ -941,18 +936,18 @@
                             <div class="ctrl-dropdown-wrap" id="subtitle-dropdown-wrap">
                                 <button type="button" class="ctrl-dropdown-btn" id="subtitle-btn" title="Chọn phụ đề">
                                     <i class="fa-solid fa-closed-captioning"></i>
-                                    <span id="subtitle-label">🇻🇳 Tiếng Việt</span>
+                                    <span id="subtitle-label">Tiếng Việt</span>
                                     <i class="fa-solid fa-chevron-up" style="font-size:10px"></i>
                                 </button>
                                 <div class="ctrl-dropdown-menu" id="subtitle-menu" hidden>
                                     <div class="ctrl-dropdown-header" id="subtitle-menu-header"><i
                                             class="fa-solid fa-closed-captioning"></i> <span
-                                            id="subtitle-menu-header-text">Phụ đề AI Âm Thanh</span></div>
+                                            id="subtitle-menu-header-text">Phụ đề</span></div>
                                     <button class="ctrl-dropdown-menu-item" data-sub="off" id="sub-off-btn"><span
                                             id="sub-off-text">Tắt phụ đề</span></button>
-                                    <button class="ctrl-dropdown-menu-item active" data-sub="vi">🇻🇳 Tiếng Việt <span class="item-check"><i
+                                    <button class="ctrl-dropdown-menu-item active" data-sub="vi">Tiếng Việt <span class="item-check"><i
                                                 class="fa-solid fa-check"></i></span></button>
-                                    <button class="ctrl-dropdown-menu-item" data-sub="en">🇺🇸 English</button>
+                                    <button class="ctrl-dropdown-menu-item" data-sub="en">English</button>
 
                                     <!-- Subtitle Font Size Selection inside Subtitle Menu -->
                                     <div class="ctrl-dropdown-header sub-size-dropdown-header">
@@ -1389,7 +1384,7 @@
                 </div>
 
                 <div class="vip-modal-header">
-                    <div class="login-badge-pro"><i class="fa-solid fa-crown"></i> GÓI CƯỚC XEM PHIM VIP</div>
+                    <div class="login-badge-pro">GÓI CƯỚC XEM PHIM VIP</div>
                     <h3 id="vip-modal-title">Mở Khóa Toàn Bộ Kho Phim VIP</h3>
                     <p id="vip-modal-desc">Xem phim không giới hạn, chuẩn nét 4K Ultra HD, không quảng cáo và âm thanh vòm sống động.</p>
                 </div>
@@ -1407,7 +1402,7 @@
                     </div>
                     <div class="wallet-right">
                         <button type="button" class="btn-wallet-topup" id="btn-open-topup-modal" title="Nạp tiền vào tài khoản">
-                            <i class="fa-solid fa-wallet"></i> Nạp Tiền Vào Ví
+                            Nạp Tiền Vào Ví
                         </button>
                     </div>
                 </div>
@@ -1433,10 +1428,10 @@
                 <!-- Wallet Pay Option (If user has sufficient wallet balance) -->
                 <div class="banking-wallet-pay-box" id="banking-wallet-pay-box" hidden>
                     <div class="wallet-pay-info">
-                        <span><i class="fa-solid fa-wallet text-amber"></i> Số dư ví của bạn: <strong id="banking-wallet-bal">0 đ</strong></span>
+                        <span>Số dư ví của bạn: <strong id="banking-wallet-bal">0 đ</strong></span>
                     </div>
                     <button type="button" class="btn-pay-by-wallet" id="btn-pay-by-wallet">
-                        <i class="fa-solid fa-bolt"></i> Thanh toán bằng số dư ví
+                        Thanh toán bằng số dư ví
                     </button>
                     <div class="banking-or-divider"><span>HOẶC CHUYỂN KHOẢN QUA VIETQR / ZALOPAY</span></div>
                 </div>
@@ -1444,7 +1439,7 @@
                 <!-- Information Notice Card -->
                 <div class="banking-notice-card">
                     <div class="notice-card-title">
-                        <i class="fa-solid fa-building-columns"></i> Thanh toán qua Banking
+                        Thanh toán qua Banking
                     </div>
                     <p class="notice-card-text">
                         Vui lòng liên hệ <strong>Quản trị viên</strong> qua một trong các kênh bên dưới để nhận thông tin chuyển khoản ngân hàng.
@@ -1797,7 +1792,7 @@
         </a>
     </nav>
 
-    <script src="/app.js?v=3.9.11"></script>
+    <script src="/app.js?v=3.9.12"></script>
 </body>
 
 </html>

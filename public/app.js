@@ -1054,7 +1054,7 @@
             const accessClass = canPlay ? 'unlocked' : 'locked';
             const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
             btn.className = `reels-ep-btn ${accessClass} ${i === currentEpisodeIndex ? 'active' : ''} ${vipClass}`;
-            const vipTag = !canPlay ? ' <span style="font-size:9px;color:#fb7185;">🔒</span>' : (isEpVip ? ' <span style="font-size:9px;color:#fbbf24;">👑</span>' : '');
+            const vipTag = !canPlay ? ' <i class="fa-solid fa-lock" style="font-size:9px;color:#fb7185;"></i>' : '';
             btn.innerHTML = `<span class="ep-num">${epNum}${vipTag}</span><span class="ep-lbl">${t('ep_prefix') || 'Tập'}</span>`;
             btn.setAttribute('data-ep-index', i);
             btn.setAttribute('data-ep-num', epNum);
@@ -1148,8 +1148,8 @@
     // ==========================================
     const SUBTITLE_LABELS = {
         off: 'Tắt phụ đề',
-        vi: '🇻🇳 Tiếng Việt',
-        en: '🇺🇸 English'
+        vi: 'Tiếng Việt',
+        en: 'English'
     };
 
     function isVttContentVietnamese(vttText) {
@@ -1347,7 +1347,7 @@
 
             if (candidateUpstreamUrl && cleanSubLang === 'vi') {
                 if (subStatusToast) {
-                    if (subStatusText) subStatusText.textContent = '⚡ Đang nạp phụ đề gốc...';
+                    if (subStatusText) subStatusText.textContent = 'Đang nạp phụ đề gốc...';
                     subStatusToast.classList.remove('hidden');
                 }
                 try {
@@ -1371,7 +1371,7 @@
             // CASE 2: NO UPSTREAM SUBTITLE -> GROQ WHISPER STT FALLBACK
             // ----------------------------------------------------
             if (subStatusToast && (!currentSubtitleCues || currentSubtitleCues.length === 0)) {
-                if (subStatusText) subStatusText.textContent = cleanSubLang === 'vi' ? '🎬 Phim không có phụ đề sẵn, AI Whisper đang nghe âm thanh...' : 'Đang tải phụ đề...';
+                if (subStatusText) subStatusText.textContent = cleanSubLang === 'vi' ? 'Đang tự động tạo phụ đề tiếng Việt...' : 'Đang tải phụ đề...';
                 subStatusToast.classList.remove('hidden');
             }
 
@@ -2139,7 +2139,7 @@
                 if (loginModal) loginModal.hidden = true;
                 showToast(t('toast_welcome_vip', { user: username }), 'fa-crown');
                 if (navLoginBtn) {
-                    navLoginBtn.innerHTML = `<i class="fa-solid fa-crown text-amber"></i> <span>${escapeHtml(username)}</span>`;
+                    navLoginBtn.innerHTML = `<span>${escapeHtml(username)}</span>`;
                 }
             });
         }
@@ -3879,7 +3879,7 @@
         discoveryPill.className = 'provider-pill provider-discovery-pill';
         discoveryPill.id = 'quick-discovery-pill';
         discoveryPill.setAttribute('title', 'Lọc & Khám phá thể loại phim');
-        discoveryPill.innerHTML = '<i class="fa-solid fa-sliders"></i> <span>Khám phá</span>';
+        discoveryPill.innerHTML = '<span>Khám phá</span>';
         discoveryPill.addEventListener('click', () => {
             openDiscoveryModal();
         });
@@ -4082,7 +4082,7 @@
         }
 
         // Show subtle loading state until accurate episode count arrives
-        heroEpisodesBadge.innerHTML = `<i class="fa-solid fa-film"></i> <span>... ${t('hero_episodes_suffix')}</span>`;
+        heroEpisodesBadge.innerHTML = `<span>... ${t('hero_episodes_suffix')}</span>`;
         heroEpisodesBadge.style.opacity = '0.65';
 
         fetchHeroItemDetails(item, slideIndex);
@@ -4192,7 +4192,6 @@
             card.innerHTML = `
                 <img src="${posterSrc}" alt="${escapeHtml(item.title || '')}" loading="lazy" />
                 <div class="card-exclusive-badge">
-                    <i class="fa-solid fa-play"></i>
                     <span>${escapeHtml(providerName)} ${t('badge_exclusive')}</span>
                 </div>
             `;
@@ -5367,11 +5366,11 @@
 
             const accessClass = canPlay ? 'unlocked' : 'locked';
             const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
-            const vipTag = isEpVip ? (isVipUser ? ' (VIP Đã Mở 👑)' : ' (VIP 🔒)') : ' (Xem Miễn Phí ▶)';
+            const vipTag = isEpVip ? (isVipUser ? ' (VIP)' : ' (VIP)') : '';
 
             const btn = document.createElement('button');
             btn.className = `ep-btn ${accessClass} ${absIndex === currentEpisodeIndex ? 'active' : ''} ${isWatched ? 'watched' : ''} ${isInProgress ? 'in-progress' : ''} ${vipClass}`;
-            btn.innerHTML = `<span>${epNum}</span>${!canPlay ? '<i class="icon-lock">🔒</i>' : '<i class="icon-play">▶</i>'}`;
+            btn.innerHTML = `<span>${epNum}</span>${!canPlay ? '<i class="icon-lock fa-solid fa-lock"></i>' : ''}`;
             btn.title = (ep.title || `Tập ${epNum}`) + vipTag;
             btn.setAttribute('data-ep-index', absIndex);
             btn.addEventListener('click', (e) => {
@@ -6436,7 +6435,7 @@
             if (vipStatusBadge && vipBadgeText) {
                 if (user.is_vip) {
                     vipStatusBadge.classList.remove('free');
-                    vipBadgeText.textContent = `👑 VIP (còn ${user.vip_remaining_days || 0} ngày)`;
+                    vipBadgeText.textContent = `VIP (còn ${user.vip_remaining_days || 0} ngày)`;
                 } else {
                     vipStatusBadge.classList.add('free');
                     vipBadgeText.textContent = 'Thành viên Free';
@@ -6468,7 +6467,7 @@
         } else {
             navLoginBtn.classList.remove('logged-in');
             navLoginBtn.title = 'Đăng nhập / Đăng ký VIP';
-            navLoginBtn.innerHTML = `<i class="fa-solid fa-user"></i> <span id="nav-login-text">Login</span>`;
+            navLoginBtn.innerHTML = `<span id="nav-login-text">Login</span>`;
             if (userProfileMenu) userProfileMenu.hidden = true;
         }
     }
@@ -6877,7 +6876,7 @@
                     if (strBar2) strBar2.className = 'strength-bar strong';
                     if (strBar3) strBar3.className = 'strength-bar strong';
                     if (strText) {
-                        strText.textContent = 'Độ mạnh: Rất an toàn 🔥';
+                        strText.textContent = 'Độ mạnh: Rất an toàn';
                         strText.style.color = '#10b981';
                     }
                 }
@@ -7619,7 +7618,7 @@
             btn.className = `ep-btn ${canPlay ? 'unlocked' : 'locked'}`;
             btn.innerHTML = `
                 <span>Tập ${ep}</span>
-                ${!canPlay ? '<i class="icon-lock">🔒</i>' : '<i class="icon-play">▶</i>'}
+                ${!canPlay ? '<i class="icon-lock fa-solid fa-lock"></i>' : ''}
             `;
             btn.onclick = () => onEpisodeClick(currentDramaData?.title || 'Phim', ep, currentUser);
             container.appendChild(btn);
