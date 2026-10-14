@@ -7195,6 +7195,11 @@
         const memoText = `VIP ${cleanUsername}`;
         if (memoValEl) memoValEl.textContent = memoText;
 
+        // Show modal immediately to avoid screen flicker/delay
+        modal.hidden = false;
+        modal.style.display = 'flex';
+        modal.style.zIndex = '999999';
+
         const cfg = await loadPaymentConfig();
         if (bankNameEl) bankNameEl.textContent = cfg.bankName || 'Ngân hàng TMCP Tiên Phong (TPBank)';
         if (bankHolderEl) bankHolderEl.textContent = cfg.accountHolder || 'PHAM XUAN PHUONG';
