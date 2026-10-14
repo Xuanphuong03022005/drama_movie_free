@@ -7,6 +7,7 @@
  */
 
 const { Pool } = require('pg');
+const crypto = require('crypto');
 
 const DB_HOST = process.env.SUPABASE_DB_HOST || 'aws-0-ap-northeast-2.pooler.supabase.com';
 const DB_PORT = parseInt(process.env.SUPABASE_DB_PORT || '6543', 10);
@@ -625,6 +626,26 @@ function formatUser(row) {
     };
 }
 
+function hashPassword(password) {
+    if (!password) return null;
+    return crypto.createHash('sha256').update(String(password).trim()).digest('hex');
+}
+
+function verifyPassword(password, storedHash) {
+    if (!storedHash) return true; // Account created without password
+    if (!password) return false;
+    const cleanPass = String(password).trim();
+    // 1. Match plain text password (for legacy/imported accounts)
+    if (storedHash === cleanPass) return true;
+    // 2. Match SHA-256 hash (same as drama_admin)
+    const sha256 = crypto.createHash('sha256').update(cleanPass).digest('hex');
+    if (sha256.toLowerCase() === storedHash.toLowerCase()) return true;
+    // 3. Match MD5 hash fallback
+    const md5 = crypto.createHash('md5').update(cleanPass).digest('hex');
+    if (md5.toLowerCase() === storedHash.toLowerCase()) return true;
+    return false;
+}
+
 /**
  * Register user with Gmail
  */
@@ -658,6 +679,7 @@ async function registerWithGmail({ email, full_name, password }) {
 
     const displayName = full_name && full_name.trim() ? full_name.trim() : username;
     const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+    const pwdHash = password && password.trim() ? hashPassword(password.trim()) : null;
 
     const insertSql = `
         INSERT INTO users (
@@ -666,7 +688,7 @@ async function registerWithGmail({ email, full_name, password }) {
         ) VALUES ($1, $2, $3, $4, 'user', 'active', 0, false, 'pending', $5, NOW())
         RETURNING *
     `;
-    const res = await client.query(insertSql, [username, cleanEmail, displayName, password || null, avatarUrl]);
+    const res = await client.query(insertSql, [username, cleanEmail, displayName, pwdHash, avatarUrl]);
     const user = formatUser(res.rows[0]);
     return {
         user,
@@ -697,6 +719,17 @@ async function loginUser({ identifier, password }) {
     const row = res.rows[0];
     if (row.status !== 'active') {
         throw new Error('Tài khoản này hiện đang bị tạm khóa');
+    }
+
+    // Verify password if account has a password configured
+    if (row.password_hash) {
+        if (!password || !password.trim()) {
+            throw new Error('Vui lòng nhập mật khẩu');
+        }
+        const isMatch = verifyPassword(password.trim(), row.password_hash);
+        if (!isMatch) {
+            throw new Error('Mật khẩu không chính xác. Vui lòng kiểm tra lại!');
+        }
     }
 
     const user = formatUser(row);

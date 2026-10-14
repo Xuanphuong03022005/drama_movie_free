@@ -6709,7 +6709,7 @@
         const submitBtn = document.getElementById('login-submit-btn');
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang đăng nhập...`;
+            submitBtn.innerHTML = `<span>Đang đăng nhập...</span>`;
         }
         try {
             const res = await fetch('/api/auth/login', {
@@ -6734,7 +6734,7 @@
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> <span>Đăng Nhập Ngay</span>`;
+                submitBtn.innerHTML = `<span>Đăng Nhập</span>`;
             }
         }
     }
@@ -6785,7 +6785,7 @@
         const submitBtn = document.getElementById('register-submit-btn');
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang khởi tạo tài khoản...`;
+            submitBtn.innerHTML = `<span>Đang khởi tạo tài khoản...</span>`;
         }
         try {
             const res = await fetch('/api/auth/register-gmail', {
@@ -6809,7 +6809,7 @@
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = `<i class="fa-solid fa-user-plus"></i> <span>Tạo Tài Khoản Ngay</span>`;
+                submitBtn.innerHTML = `<span>Tạo Tài Khoản</span>`;
             }
         }
     }
