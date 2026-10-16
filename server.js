@@ -159,9 +159,79 @@ app.get('/api/drama/supabase-list', async (req, res) => {
     }
 });
 
+// Endpoint kích hoạt đồng bộ dữ liệu phim cục bộ lên Supabase
+app.post('/api/drama/sync-to-supabase', async (req, res) => {
+    try {
+        const result = await db.syncLocalDramasToSupabase();
+        res.json({ ok: true, message: 'Đồng bộ dữ liệu lên Supabase hoàn tất', ...result });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
 // ==========================================
-// USER AUTHENTICATION & GMAIL REGISTRATION
+// USER AUTHENTICATION & GOOGLE LOGIN
 // ==========================================
+app.get('/api/auth/google-config', (req, res) => {
+    res.json({
+        ok: true,
+        clientId: process.env.GOOGLE_CLIENT_ID || ''
+    });
+});
+
+app.post('/api/auth/google-config', (req, res) => {
+    const { clientId } = req.body;
+    if (clientId && typeof clientId === 'string') {
+        const cleanId = clientId.trim();
+        process.env.GOOGLE_CLIENT_ID = cleanId;
+        try {
+            const envPath = path.join(__dirname, '.env');
+            let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+            if (/GOOGLE_CLIENT_ID=/i.test(content)) {
+                content = content.replace(/GOOGLE_CLIENT_ID=.*$/m, `GOOGLE_CLIENT_ID="${cleanId}"`);
+            } else {
+                content += `\nGOOGLE_CLIENT_ID="${cleanId}"\n`;
+            }
+            fs.writeFileSync(envPath, content, 'utf8');
+            console.log('[GoogleAuth] Updated GOOGLE_CLIENT_ID in .env successfully.');
+        } catch (e) {
+            console.warn('[Env] Failed to write GOOGLE_CLIENT_ID to .env:', e.message);
+        }
+        return res.json({ ok: true, clientId: cleanId });
+    }
+    res.status(400).json({ ok: false, error: 'Client ID không hợp lệ' });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+    try {
+        let { email, full_name, avatar_url, credential, google_id } = req.body;
+        if (credential && typeof credential === 'string') {
+            try {
+                const parts = credential.split('.');
+                if (parts.length === 3) {
+                    const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
+                    const payload = JSON.parse(payloadJson);
+                    if (payload && payload.email) {
+                        email = payload.email;
+                        full_name = payload.name || full_name;
+                        avatar_url = payload.picture || avatar_url;
+                        google_id = payload.sub || google_id;
+                    }
+                }
+            } catch (e) {
+                console.warn('[GoogleAuth] Failed to decode Google credential token:', e.message);
+            }
+        }
+        if (!email) {
+            return res.status(400).json({ ok: false, error: 'Địa chỉ Gmail là bắt buộc' });
+        }
+        const result = await db.loginWithGoogle({ email, full_name, avatar_url, google_id });
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
 app.post('/api/auth/register-gmail', async (req, res) => {
     try {
         const { email, full_name, password } = req.body;

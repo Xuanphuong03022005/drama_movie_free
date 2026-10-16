@@ -6700,12 +6700,13 @@
         return;
     }
 
-    function openAuthModal(activeTab = 'login') {
+    function openAuthModal() {
         const modal = document.getElementById('login-modal');
         if (!modal) return;
         modal.hidden = false;
         modal.style.display = 'flex';
-        switchAuthTab(activeTab);
+        modal.style.zIndex = '999999';
+        modal.style.position = 'fixed';
     }
 
     function closeAuthModal() {
@@ -6714,28 +6715,44 @@
             modal.hidden = true;
             modal.style.display = 'none';
         }
+        const gmailInputWrap = document.getElementById('dramabox-gmail-input-wrap');
+        if (gmailInputWrap) gmailInputWrap.hidden = true;
     }
 
-    function switchAuthTab(tab) {
-        const loginPane = document.getElementById('pane-login');
-        const regPane = document.getElementById('pane-register');
-        const loginTabBtn = document.getElementById('tab-login-btn');
-        const regTabBtn = document.getElementById('tab-register-btn');
-
-        if (tab === 'register') {
-            if (loginPane) loginPane.hidden = true;
-            if (regPane) regPane.hidden = false;
-            if (loginTabBtn) loginTabBtn.classList.remove('active');
-            if (regTabBtn) regTabBtn.classList.add('active');
-            const regNameInput = document.getElementById('reg-name');
-            if (regNameInput) setTimeout(() => regNameInput.focus(), 80);
-        } else {
-            if (loginPane) loginPane.hidden = false;
-            if (regPane) regPane.hidden = true;
-            if (loginTabBtn) loginTabBtn.classList.add('active');
-            if (regTabBtn) regTabBtn.classList.remove('active');
-            const loginIdInput = document.getElementById('login-identifier');
-            if (loginIdInput) setTimeout(() => loginIdInput.focus(), 80);
+    async function handleGoogleAuth({ email, full_name, avatar_url, credential }) {
+        const googleBtn = document.getElementById('btn-google-login');
+        const originalBtnContent = googleBtn ? googleBtn.innerHTML : '';
+        if (googleBtn) {
+            googleBtn.disabled = true;
+            googleBtn.innerHTML = `
+                <i class="fa-solid fa-spinner fa-spin" style="color: #4285f4; font-size: 18px;"></i>
+                <span class="btn-google-text">Đang kết nối Google...</span>
+            `;
+        }
+        try {
+            const res = await fetch('/api/auth/google', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, full_name, avatar_url, credential })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                throw new Error(data.error || 'Đăng nhập Google không thành công');
+            }
+            setCurrentUser(data.user);
+            closeAuthModal();
+            showToast(data.message || `Đăng nhập Google thành công!`, 'fa-circle-check');
+            if (currentDramaData && !playerModal.hidden) {
+                renderEpisodesGrid(currentDramaData.episodes);
+            }
+            executePendingAuthAction();
+        } catch (err) {
+            showToast(err.message, 'fa-circle-xmark');
+        } finally {
+            if (googleBtn) {
+                googleBtn.disabled = false;
+                googleBtn.innerHTML = originalBtnContent;
+            }
         }
     }
 
@@ -7884,47 +7901,154 @@
             });
         }
 
-        // 4. Auth Modal Triggers & Tab Switching
+        // 4. DramaBox Google Auth Triggers & Handlers
         const loginCloseBtn = document.getElementById('login-close-btn');
         const loginBackdrop = document.getElementById('login-modal-backdrop');
         if (loginCloseBtn) loginCloseBtn.addEventListener('click', closeAuthModal);
         if (loginBackdrop) loginBackdrop.addEventListener('click', closeAuthModal);
 
-        const tabLoginBtn = document.getElementById('tab-login-btn');
-        const tabRegBtn = document.getElementById('tab-register-btn');
-        if (tabLoginBtn) tabLoginBtn.addEventListener('click', () => switchAuthTab('login'));
-        if (tabRegBtn) tabRegBtn.addEventListener('click', () => switchAuthTab('register'));
+        const linkTerms = document.getElementById('link-terms-in-auth');
+        const linkPriv = document.getElementById('link-privacy-in-auth');
+        if (linkTerms) linkTerms.addEventListener('click', () => openLegalPolicyModal('terms'));
+        if (linkPriv) linkPriv.addEventListener('click', () => openLegalPolicyModal('privacy'));
 
-        // 5. Auth Forms Submit Handlers
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const idInput = document.getElementById('login-identifier');
-                const pwdInput = document.getElementById('login-password');
-                handleLogin({
-                    identifier: idInput ? idInput.value : '',
-                    password: pwdInput ? pwdInput.value : ''
-                });
+        // Google Login Button & Gmail Input Form
+        const googleBtn = document.getElementById('btn-google-login');
+        const gmailInputWrap = document.getElementById('dramabox-gmail-input-wrap');
+        const gmailInput = document.getElementById('dramabox-input-email');
+        const gmailForm = document.getElementById('dramabox-gmail-form');
+
+        // Google OAuth Clients Setup
+        let googleClientId = '642380782625-59i3ofe8m0ehtvhppgmtffrh6lfsf0gr.apps.googleusercontent.com';
+        let googleTokenClient = null;
+
+        function setupGoogleAuthClients(clientId) {
+            if (!clientId) return;
+            googleClientId = clientId;
+            if (!window.google || !window.google.accounts) return;
+
+            // 1. Google OAuth Token Client (Opens native popup window to choose account)
+            if (window.google.accounts.oauth2) {
+                try {
+                    googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+                        client_id: googleClientId,
+                        scope: 'email profile openid',
+                        prompt: 'select_account',
+                        callback: async (tokenResponse) => {
+                            if (tokenResponse.error) {
+                                console.error('[Google OAuth] Error:', tokenResponse);
+                                if (tokenResponse.error !== 'popup_closed_by_user') {
+                                    showToast('Lỗi đăng nhập Google: ' + tokenResponse.error, 'fa-circle-xmark');
+                                }
+                                return;
+                            }
+                            if (tokenResponse && tokenResponse.access_token) {
+                                try {
+                                    showToast('Đang kết nối tài khoản Google...', 'fa-spinner fa-spin');
+                                    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                                        headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                                    });
+                                    const profile = await userInfoRes.json();
+                                    if (profile && profile.email) {
+                                        await handleGoogleAuth({
+                                            email: profile.email,
+                                            full_name: profile.name || profile.given_name || '',
+                                            avatar_url: profile.picture || '',
+                                            google_id: profile.sub || ''
+                                        });
+                                    } else {
+                                        throw new Error('Không lấy được thông tin email từ Google');
+                                    }
+                                } catch (err) {
+                                    showToast(err.message, 'fa-circle-xmark');
+                                }
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.warn('[Google OAuth] initTokenClient failed:', e);
+                }
+            }
+
+            // 2. Google Identity Services ID Token (One-Tap fallback)
+            if (window.google.accounts.id) {
+                try {
+                    window.google.accounts.id.initialize({
+                        client_id: googleClientId,
+                        callback: (response) => {
+                            if (response && response.credential) {
+                                handleGoogleAuth({ credential: response.credential });
+                            }
+                        }
+                    });
+                } catch (e) {}
+            }
+        }
+
+        // Fetch Google Client ID from backend
+        fetch('/api/auth/google-config')
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.clientId) {
+                    setupGoogleAuthClients(data.clientId);
+                }
+            })
+            .catch(() => {});
+
+        // Re-try setup if Google script loads after page initialization
+        window.addEventListener('load', () => {
+            if (googleClientId && !googleTokenClient) {
+                setupGoogleAuthClients(googleClientId);
+            }
+        });
+
+        if (googleBtn) {
+            googleBtn.addEventListener('click', () => {
+                // If Google OAuth Token Client is ready, open the native popup account chooser directly
+                if (googleTokenClient) {
+                    try {
+                        googleTokenClient.requestAccessToken({ prompt: 'select_account' });
+                        return;
+                    } catch (e) {
+                        console.warn('[Google OAuth] requestAccessToken failed:', e);
+                    }
+                }
+
+                // If Client ID exists and google object is available now, initialize and open popup
+                if (googleClientId && window.google && window.google.accounts && window.google.accounts.oauth2) {
+                    setupGoogleAuthClients(googleClientId);
+                    if (googleTokenClient) {
+                        googleTokenClient.requestAccessToken({ prompt: 'select_account' });
+                        return;
+                    }
+                }
+
+                // Fallback: If not configured, prompt user or expand Gmail quick input
+                if (gmailInputWrap) {
+                    if (gmailInputWrap.hidden) {
+                        gmailInputWrap.hidden = false;
+                        if (gmailInput) setTimeout(() => gmailInput.focus(), 80);
+                    } else {
+                        if (gmailInput && gmailInput.value.trim()) {
+                            handleGoogleAuth({ email: gmailInput.value.trim() });
+                        } else if (gmailInput) {
+                            gmailInput.focus();
+                        }
+                    }
+                }
             });
         }
 
-        const regForm = document.getElementById('register-form');
-        if (regForm) {
-            regForm.addEventListener('submit', (e) => {
+        if (gmailForm) {
+            gmailForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                const emailInput = document.getElementById('reg-email');
-                const nameInput = document.getElementById('reg-name');
-                const pwdInput = document.getElementById('reg-password');
-                const confInput = document.getElementById('reg-password-confirm');
-                const agreeInput = document.getElementById('reg-agree-terms');
-                handleRegister({
-                    email: emailInput ? emailInput.value : '',
-                    full_name: nameInput ? nameInput.value : '',
-                    password: pwdInput ? pwdInput.value : '',
-                    passwordConfirm: confInput ? confInput.value : '',
-                    agreeTerms: agreeInput ? agreeInput.checked : true
-                });
+                const emailVal = gmailInput ? gmailInput.value.trim() : '';
+                if (!emailVal) {
+                    showToast('Vui lòng nhập địa chỉ Gmail', 'fa-circle-exclamation');
+                    if (gmailInput) gmailInput.focus();
+                    return;
+                }
+                handleGoogleAuth({ email: emailVal });
             });
         }
 
