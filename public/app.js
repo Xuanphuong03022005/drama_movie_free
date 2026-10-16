@@ -988,10 +988,11 @@
     }
 
     function openReelsEpisodesSheet() {
-        if (!reelsEpisodesSheet) return;
-        reelsEpisodesSheet.removeAttribute('hidden');
-        reelsEpisodesSheet.hidden = false;
-        reelsEpisodesSheet.style.display = 'flex';
+        const sheet = document.getElementById('reels-episodes-sheet');
+        if (!sheet) return;
+        sheet.removeAttribute('hidden');
+        sheet.hidden = false;
+        sheet.style.display = 'flex';
         try {
             renderReelsEpisodesSheet();
         } catch (err) {
@@ -1000,61 +1001,221 @@
     }
 
     function closeReelsEpisodesSheet() {
-        if (reelsEpisodesSheet) {
-            reelsEpisodesSheet.setAttribute('hidden', '');
-            reelsEpisodesSheet.hidden = true;
-            reelsEpisodesSheet.style.display = 'none';
+        const sheet = document.getElementById('reels-episodes-sheet');
+        if (sheet) {
+            sheet.setAttribute('hidden', '');
+            sheet.hidden = true;
+            sheet.style.display = 'none';
         }
     }
 
     function renderReelsEpisodesSheet() {
-        if (!reelsEpisodesSheet || !currentDramaData || !currentDramaData.episodes) return;
+        const sheet = document.getElementById('reels-episodes-sheet');
+        if (!sheet || !currentDramaData || !currentDramaData.episodes) return;
         const episodes = currentDramaData.episodes;
         const total = episodes.length;
 
-        if (reelsSheetTotal) reelsSheetTotal.textContent = total;
-        if (reelsSheetCurrentTag) {
-            const currentEpNum = episodes[currentEpisodeIndex]?.number || (currentEpisodeIndex + 1);
-            reelsSheetCurrentTag.textContent = `${t('ep_prefix')} ${currentEpNum}`;
+        // 1. Header & Counter info
+        const totalEl = document.getElementById('reels-sheet-total');
+        if (totalEl) totalEl.textContent = total;
+
+        const currentEpNum = episodes[currentEpisodeIndex]?.number || (currentEpisodeIndex + 1);
+        const currNumEl = document.getElementById('reels-menu-current-ep-num');
+        if (currNumEl) currNumEl.textContent = currentEpNum;
+
+        // 2. Sync Media Controller Strip matching Image 2
+        const prevBtn = document.getElementById('reels-ctrl-prev');
+        if (prevBtn) {
+            prevBtn.disabled = (currentEpisodeIndex <= 0);
+            prevBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (currentEpisodeIndex > 0) switchEpisode(currentEpisodeIndex - 1);
+            };
         }
 
+        const nextBtn = document.getElementById('reels-ctrl-next');
+        if (nextBtn) {
+            nextBtn.disabled = (currentEpisodeIndex >= total - 1);
+            nextBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (currentEpisodeIndex < total - 1) switchEpisode(currentEpisodeIndex + 1);
+            };
+        }
+
+        const speedSel = document.getElementById('reels-menu-speed-select');
+        if (speedSel) {
+            const curRate = mainVideo ? mainVideo.playbackRate : 1.0;
+            speedSel.value = String(curRate);
+            speedSel.onchange = (e) => {
+                const sp = parseFloat(speedSel.value) || 1.0;
+                if (mainVideo) mainVideo.playbackRate = sp;
+                if (typeof speedSelect !== 'undefined' && speedSelect) speedSelect.value = String(sp);
+                const rSpeedLabel = document.getElementById('reels-speed-label');
+                if (rSpeedLabel) rSpeedLabel.textContent = `${sp}x`;
+                showPlayerHud('fa-gauge-high', `${sp}x`);
+            };
+        }
+
+        const fitBtn = document.getElementById('reels-ctrl-fit');
+        if (fitBtn) {
+            fitBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const mainFitBtn = document.getElementById('btn-fit-mode');
+                if (mainFitBtn) mainFitBtn.click();
+            };
+        }
+
+        const pipBtn = document.getElementById('reels-ctrl-pip');
+        if (pipBtn) {
+            pipBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const mainPipBtn = document.getElementById('btn-pip');
+                if (mainPipBtn) mainPipBtn.click();
+            };
+        }
+
+        const qualityLabelEl = document.getElementById('reels-quality-label');
+        if (qualityLabelEl) {
+            const qMap = { auto: 'Auto', '1080': '1080p HD', '720': '720p', '480': '480p' };
+            qualityLabelEl.textContent = qMap[selectedQuality] || (selectedQuality ? selectedQuality + 'p' : '1080p HD');
+        }
+
+        const qBtn = document.getElementById('reels-ctrl-quality');
+        if (qBtn) {
+            qBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const qualities = ['auto', '1080', '720', '480'];
+                const curQ = selectedQuality || '1080';
+                let nextIdx = (qualities.indexOf(curQ) + 1) % qualities.length;
+                if (nextIdx === -1) nextIdx = 0;
+                const nextQ = qualities[nextIdx];
+                if (typeof selectQuality === 'function') selectQuality(nextQ, true);
+                if (qualityLabelEl) {
+                    const qMap = { auto: 'Auto', '1080': '1080p HD', '720': '720p', '480': '480p' };
+                    qualityLabelEl.textContent = qMap[nextQ] || nextQ;
+                }
+                showPlayerHud('fa-sliders', qualityLabelEl.textContent);
+            };
+        }
+
+        const subLabelEl = document.getElementById('reels-sub-label');
+        if (subLabelEl) {
+            subLabelEl.textContent = (typeof currentSubtitleLang !== 'undefined' && currentSubtitleLang === 'off')
+                ? 'Tắt'
+                : ((typeof currentSubtitleLang !== 'undefined' && currentSubtitleLang === 'en') ? 'English' : 'Tiếng Việt');
+        }
+
+        const subBtn = document.getElementById('reels-ctrl-subtitle');
+        if (subBtn) {
+            subBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const subs = ['vi', 'en', 'off'];
+                const curSub = (typeof currentSubtitleLang !== 'undefined' && currentSubtitleLang) ? currentSubtitleLang : 'vi';
+                let nextIdx = (subs.indexOf(curSub) + 1) % subs.length;
+                if (nextIdx === -1) nextIdx = 0;
+                const nextSub = subs[nextIdx];
+                if (typeof selectSubtitle === 'function') selectSubtitle(nextSub);
+                if (subLabelEl) {
+                    subLabelEl.textContent = nextSub === 'off' ? 'Tắt' : (nextSub === 'en' ? 'English' : 'Tiếng Việt');
+                }
+                showPlayerHud('fa-closed-captioning', subLabelEl.textContent);
+            };
+        }
+
+        const autoToggle = document.getElementById('reels-menu-autoplay-toggle');
+        const mainAutoToggle = document.getElementById('autoplay-next-toggle');
+        if (autoToggle) {
+            autoToggle.checked = mainAutoToggle ? mainAutoToggle.checked : true;
+            autoToggle.onchange = () => {
+                if (mainAutoToggle) {
+                    mainAutoToggle.checked = autoToggle.checked;
+                    mainAutoToggle.dispatchEvent(new Event('change'));
+                }
+            };
+        }
+
+        // 3. Quick Jump Handler
+        const jumpInput = document.getElementById('reels-menu-jump-input');
+        const jumpBtn = document.getElementById('reels-menu-jump-btn');
+        const doMenuJump = () => {
+            if (!jumpInput) return;
+            const targetVal = parseInt(jumpInput.value, 10);
+            if (!targetVal || isNaN(targetVal)) return;
+            const targetIdx = episodes.findIndex(ep => (ep.number || 0) === targetVal);
+            if (targetIdx !== -1) {
+                switchEpisode(targetIdx);
+            } else if (targetVal >= 1 && targetVal <= episodes.length) {
+                switchEpisode(targetVal - 1);
+            }
+            jumpInput.value = '';
+        };
+        if (jumpBtn) jumpBtn.onclick = (e) => { e.preventDefault(); doMenuJump(); };
+        if (jumpInput) {
+            jumpInput.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    doMenuJump();
+                }
+            };
+        }
+
+        // 4. Batch Pills matching Image 2 ([1-30 30] [31-33 3])
         const SHEET_BATCH_SIZE = 30;
-        if (reelsSheetBatches) {
-            reelsSheetBatches.innerHTML = '';
+        const batchesContainer = document.getElementById('reels-sheet-batches');
+        if (batchesContainer) {
+            batchesContainer.innerHTML = '';
             if (total > SHEET_BATCH_SIZE) {
-                reelsSheetBatches.style.display = 'flex';
+                batchesContainer.style.display = 'flex';
                 const numBatches = Math.ceil(total / SHEET_BATCH_SIZE);
                 const currentBatchIdx = Math.floor(currentEpisodeIndex / SHEET_BATCH_SIZE);
 
                 for (let b = 0; b < numBatches; b++) {
                     const start = b * SHEET_BATCH_SIZE + 1;
                     const end = Math.min((b + 1) * SHEET_BATCH_SIZE, total);
-                    const tab = document.createElement('button');
-                    tab.type = 'button';
-                    tab.className = `reels-batch-tab ${b === currentBatchIdx ? 'active' : ''}`;
-                    tab.textContent = `${start}-${end}`;
-                    const selectBatch = (e) => {
-                        if (e) { e.preventDefault(); e.stopPropagation(); }
-                        reelsSheetBatches.querySelectorAll('.reels-batch-tab').forEach(t => t.classList.remove('active'));
-                        tab.classList.add('active');
-                        renderReelsSheetGrid(b * SHEET_BATCH_SIZE, Math.min((b + 1) * SHEET_BATCH_SIZE, total));
+                    const batchCount = (end - start + 1);
+
+                    const pill = document.createElement('button');
+                    pill.type = 'button';
+                    pill.className = `reels-batch-pill ${b === currentBatchIdx ? 'active' : ''}`;
+                    pill.innerHTML = `<span>${start}-${end}</span><span class="reels-batch-cnt">${batchCount}</span>`;
+
+                    pill.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        batchesContainer.querySelectorAll('.reels-batch-pill').forEach(p => p.classList.remove('active'));
+                        pill.classList.add('active');
+                        renderReelsSheetGrid(b * SHEET_BATCH_SIZE, end);
                     };
-                    tab.addEventListener('click', selectBatch);
-                    tab.addEventListener('touchend', selectBatch);
-                    reelsSheetBatches.appendChild(tab);
+                    batchesContainer.appendChild(pill);
                 }
 
                 renderReelsSheetGrid(currentBatchIdx * SHEET_BATCH_SIZE, Math.min((currentBatchIdx + 1) * SHEET_BATCH_SIZE, total));
             } else {
-                reelsSheetBatches.style.display = 'none';
+                batchesContainer.style.display = 'none';
                 renderReelsSheetGrid(0, total);
             }
+        }
+
+        // 5. Drama Synopsis & Meta Card matching Image 2
+        const titleEl = document.getElementById('reels-menu-drama-title');
+        if (titleEl) titleEl.textContent = currentDramaData.title || '';
+
+        const descEl = document.getElementById('reels-menu-drama-desc');
+        if (descEl) {
+            descEl.textContent = currentDramaData.description || currentDramaData.synopsis || 'Đang cập nhật nội dung tóm tắt...';
         }
     }
 
     function renderReelsSheetGrid(startIndex, endIndex) {
-        if (!reelsSheetGrid || !currentDramaData || !currentDramaData.episodes) return;
-        reelsSheetGrid.innerHTML = '';
+        const grid = document.getElementById('reels-sheet-grid');
+        if (!grid || !currentDramaData || !currentDramaData.episodes) return;
+        grid.innerHTML = '';
         const episodes = currentDramaData.episodes;
         const totalEpisodes = currentDramaData?.total_episodes || episodes.length || 40;
         const freePercent = (currentDramaPolicy && currentDramaPolicy.free_episode_percent !== undefined)
@@ -1084,16 +1245,17 @@
             const accessClass = canPlay ? 'unlocked' : 'locked';
             const vipClass = isEpVip ? (isVipUser ? 'vip-unlocked' : 'vip-locked') : '';
             btn.className = `reels-ep-btn ${accessClass} ${i === currentEpisodeIndex ? 'active' : ''} ${vipClass}`;
-            const vipTag = !canPlay ? ' <i class="fa-solid fa-lock" style="font-size:9px;color:#fb7185;"></i>' : '';
-            btn.innerHTML = `<span class="ep-num">${epNum}${vipTag}</span><span class="ep-lbl">${t('ep_prefix') || 'Tập'}</span>`;
+            
+            // Render square button matching Image 2: Episode Number + Lock if VIP locked
+            const lockIcon = !canPlay ? ' <i class="fa-solid fa-lock ep-lock-icon"></i>' : '';
+            btn.innerHTML = `<span>${epNum}</span>${lockIcon}`;
             btn.setAttribute('data-ep-index', i);
             btn.setAttribute('data-ep-num', epNum);
+            btn.title = `Tập ${epNum}${!canPlay ? ' (VIP)' : ''}`;
 
-            const handleEpClick = (e) => {
-                if (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 if (!canPlay || btn.classList.contains('locked') || btn.classList.contains('vip-locked')) {
                     if (mainVideo && !mainVideo.paused) {
                         try { mainVideo.pause(); } catch (err) {}
@@ -1102,13 +1264,15 @@
                     openVipPlansModalForEpisode(epNum);
                     return;
                 }
-                closeReelsEpisodesSheet();
                 switchEpisode(i);
+                // Update active state in grid and current badge
+                grid.querySelectorAll('.reels-ep-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const currNumEl = document.getElementById('reels-menu-current-ep-num');
+                if (currNumEl) currNumEl.textContent = epNum;
             };
 
-            btn.addEventListener('click', handleEpClick);
-            btn.addEventListener('touchend', handleEpClick);
-            reelsSheetGrid.appendChild(btn);
+            grid.appendChild(btn);
 
             if (i === currentEpisodeIndex) {
                 setTimeout(() => btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
@@ -2410,7 +2574,7 @@
             tooltip_reels: 'Chế độ lướt cuộn dọc Reels (TikTok/Shorts)',
             toast_reels_on: '',
             toast_reels_off: 'Đã chuyển về chế độ xem chuẩn',
-            reels_episodes_btn: 'Tập',
+            reels_episodes_btn: 'Menu',
             reels_like_btn: 'Thích',
             reels_share_btn: 'Chia sẻ',
             reels_exit_btn: 'Thoát',
@@ -2601,7 +2765,7 @@
             tooltip_reels: 'Vertical Reels Feed Mode (TikTok/Shorts)',
             toast_reels_on: 'Reels Feed Mode activated (Swipe up/down to flip episodes)',
             toast_reels_off: 'Standard player view restored',
-            reels_episodes_btn: 'Episodes',
+            reels_episodes_btn: 'Menu',
             reels_like_btn: 'Like',
             reels_share_btn: 'Share',
             reels_exit_btn: 'Exit',

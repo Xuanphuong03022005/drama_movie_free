@@ -6814,11 +6814,12 @@ video::cue {
     background: #090d16;
     border-top: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 22px 22px 0 0;
-    max-height: 72vh;
+    height: 72vh;
+    max-height: 75vh;
     display: flex;
     flex-direction: column;
-    padding: 8px 16px max(24px, env(safe-area-inset-bottom, 20px));
-    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.85);
+    padding: 8px 14px max(16px, env(safe-area-inset-bottom, 16px));
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.95);
     animation: slideUpSheet 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -6859,7 +6860,7 @@ video::cue {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 12px;
+    padding-bottom: 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -6874,13 +6875,7 @@ video::cue {
 }
 
 .reels-sheet-title h4 i {
-    color: #f43f5e;
-}
-
-.reels-sheet-current-tag {
-    font-size: 11px;
-    color: #38bdf8;
-    font-weight: 600;
+    color: #c084fc;
 }
 
 .reels-sheet-close {
@@ -6902,12 +6897,303 @@ video::cue {
     color: #f43f5e;
 }
 
+.reels-sheet-scroll-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 2px 20px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* 1. Media Controls matching Image 2 */
+.reels-menu-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(15, 20, 32, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 10px;
+}
+
+.reels-menu-ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.reels-menu-btn {
+    flex: 1;
+    min-height: 38px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.reels-menu-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+.reels-menu-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.reels-menu-speed-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    padding: 4px 12px;
+    min-height: 38px;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.reels-menu-speed-wrap select {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    outline: none;
+    cursor: pointer;
+}
+
+.reels-menu-speed-wrap select option {
+    background: #0f1420;
+    color: #ffffff;
+}
+
+.reels-menu-icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.reels-menu-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+.reels-menu-pill-btn {
+    flex: 1;
+    min-height: 38px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #e2e8f0;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.reels-menu-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+.reels-menu-pill-btn i.fa-sliders,
+.reels-menu-pill-btn i.fa-closed-captioning {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.reels-menu-subrow {
+    justify-content: space-between;
+    padding-top: 4px;
+}
+
+.reels-menu-toggle-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.reels-menu-toggle-wrap input {
+    display: none;
+}
+
+.reels-toggle-switch {
+    width: 38px;
+    height: 22px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    position: relative;
+    transition: background 0.25s ease;
+}
+
+.reels-toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.reels-menu-toggle-wrap input:checked + .reels-toggle-switch {
+    background: #6366f1;
+}
+
+.reels-menu-toggle-wrap input:checked + .reels-toggle-switch::after {
+    transform: translateX(16px);
+}
+
+.reels-toggle-text {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.reels-menu-badge-hls {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #818cf8;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+/* 2. Episode Section matching Image 2 */
+.reels-menu-episodes-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.reels-menu-ep-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.reels-menu-ep-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14.5px;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.reels-menu-ep-title i {
+    color: #c084fc;
+}
+
+.reels-ep-badge-current {
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
+
+.reels-menu-jump-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.reels-jump-icon {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #c084fc;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.reels-menu-jump-wrap input {
+    width: 44px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    outline: none;
+}
+
+.reels-jump-action-btn {
+    padding: 4px 12px;
+    height: 28px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    border: none;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+    transition: transform 0.15s ease;
+}
+
+.reels-jump-action-btn:active {
+    transform: scale(0.94);
+}
+
+/* Batch Pills with Count Bubble matching Image 2 */
 .reels-sheet-batches {
     display: flex;
     gap: 8px;
     overflow-x: auto;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 2px;
     scrollbar-width: none;
 }
 
@@ -6915,85 +7201,146 @@ video::cue {
     display: none;
 }
 
-.reels-batch-tab {
-    padding: 5px 12px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
+.reels-batch-pill {
+    padding: 6px 14px;
+    border-radius: 999px;
     background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: #94a3b8;
+    font-size: 12px;
+    font-weight: 700;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     white-space: nowrap;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
-.reels-batch-tab.active {
-    background: linear-gradient(135deg, #6366f1, #ec4899);
-    border-color: rgba(255, 255, 255, 0.3);
+.reels-batch-pill .reels-batch-cnt {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 0 4px;
+}
+
+.reels-batch-pill.active {
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    border-color: rgba(255, 255, 255, 0.35);
     color: #ffffff;
-    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.45);
 }
 
-.reels-sheet-grid {
+.reels-batch-pill.active .reels-batch-cnt {
+    background: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+}
+
+/* 7-column Episode Grid matching Image 2 */
+.reels-menu-ep-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
-    gap: 10px;
-    padding: 14px 2px;
-    overflow-y: auto;
-    max-height: 48vh;
-    -webkit-overflow-scrolling: touch;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    padding: 6px 0;
 }
 
 .reels-ep-btn {
-    padding: 12px 6px;
-    border-radius: 12px;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    color: #e2e8f0;
-    font-size: 13px;
-    font-weight: 700;
+    color: #cbd5e1;
+    font-size: 13.5px;
+    font-weight: 800;
     cursor: pointer;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.reels-ep-btn span.ep-num {
-    font-size: 14px;
-    font-weight: 800;
-}
-
-.reels-ep-btn span.ep-lbl {
-    font-size: 9px;
-    font-weight: 600;
-    color: #64748b;
-    text-transform: uppercase;
+    gap: 3px;
+    transition: all 0.18s ease;
+    user-select: none;
 }
 
 .reels-ep-btn:hover {
     background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.25);
-    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+.reels-ep-btn:active {
+    transform: scale(0.95);
 }
 
 .reels-ep-btn.active {
-    background: linear-gradient(135deg, #f43f5e, #fb7185) !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
+    background: linear-gradient(135deg, #a855f7, #ec4899) !important;
+    border-color: rgba(255, 255, 255, 0.45) !important;
     color: #ffffff !important;
-    box-shadow: 0 4px 16px rgba(244, 63, 94, 0.55);
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.65) !important;
 }
 
-.reels-ep-btn.active span.ep-lbl {
-    color: #ffe4e6 !important;
+.reels-ep-btn .ep-lock-icon {
+    font-size: 10px;
+    color: #f43f5e;
 }
 
-/* ==========================================================================
-   SMART DISCOVERY FILTER MODAL (Clean, Icon-Free Modal)
-   ========================================================================== */
+/* 3. Synopsis Card matching Image 2 */
+.reels-menu-synopsis-card {
+    background: rgba(14, 19, 31, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.reels-menu-synopsis-card h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.35;
+}
+
+.reels-menu-meta-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.reels-chip-licensed,
+.reels-chip-cdn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.reels-chip-licensed {
+    color: #10b981;
+}
+
+.reels-chip-cdn {
+    color: #f59e0b;
+}
+
+.reels-menu-synopsis-text {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #94a3b8;
+}
+
 .discovery-modal {
     position: fixed;
     inset: 0;

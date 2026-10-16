@@ -810,10 +810,10 @@
                                 <span class="reels-action-label" id="reels-like-label">Thích</span>
                             </button>
                             <button type="button" class="reels-action-btn" id="reels-episodes-btn"
-                                title="Danh sách tập">
-                                <div class="reels-icon-circle"><i class="fa-solid fa-list-ol"></i></div>
-                                <span class="reels-action-label" id="reels-ep-badge-text">Tập</span>
-                            </button>
+                            title="Menu">
+                            <div class="reels-icon-circle"><i class="fa-solid fa-bars"></i></div>
+                            <span class="reels-action-label" id="reels-ep-badge-text">Menu</span>
+                        </button>
                             <button type="button" class="reels-action-btn" id="reels-share-btn"
                                 title="Chia sẻ liên kết">
                                 <div class="reels-icon-circle"><i class="fa-solid fa-share"></i></div>
@@ -1031,15 +1031,95 @@
                 <div class="reels-sheet-handle-bar"><span class="sheet-handle"></span></div>
                 <div class="reels-sheet-header">
                     <div class="reels-sheet-title">
-                        <h4><i class="fa-solid fa-list-ol"></i> <span id="reels-sheet-heading">Danh Sách Tập</span>
-                            (<span id="reels-sheet-total">0</span>)</h4>
-                        <span class="reels-sheet-current-tag" id="reels-sheet-current-tag">Tập 1</span>
+                        <h4><i class="fa-solid fa-bars"></i> <span id="reels-sheet-heading">Menu</span></h4>
                     </div>
                     <button type="button" class="reels-sheet-close" id="reels-sheet-close" aria-label="Đóng"><i
                             class="fa-solid fa-xmark"></i></button>
                 </div>
-                <div class="reels-sheet-batches" id="reels-sheet-batches"></div>
-                <div class="reels-sheet-grid" id="reels-sheet-grid"></div>
+
+                <div class="reels-sheet-scroll-body">
+                    <!-- 1. Media Control Strip matching Image 2 -->
+                    <div class="reels-menu-controls">
+                        <div class="reels-menu-ctrl-row">
+                            <button type="button" id="reels-ctrl-prev" class="reels-menu-btn" title="Tập trước">
+                                <i class="fa-solid fa-backward-step"></i> <span>Tập trước</span>
+                            </button>
+                            <button type="button" id="reels-ctrl-next" class="reels-menu-btn" title="Tập sau">
+                                <span>Tập sau</span> <i class="fa-solid fa-forward-step"></i>
+                            </button>
+                            <div class="reels-menu-speed-wrap" title="Tốc độ phát">
+                                <label for="reels-menu-speed-select"><i class="fa-solid fa-gauge-high"></i></label>
+                                <select id="reels-menu-speed-select" class="reels-menu-speed-select">
+                                    <option value="0.75">0.75x</option>
+                                    <option value="1.0" selected>1.0x</option>
+                                    <option value="1.25">1.25x</option>
+                                    <option value="1.5">1.5x</option>
+                                    <option value="2.0">2.0x</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="reels-menu-ctrl-row">
+                            <button type="button" id="reels-ctrl-fit" class="reels-menu-icon-btn" title="Chế độ hiển thị: Phóng to / Vừa khung">
+                                <i class="fa-solid fa-expand"></i>
+                            </button>
+                            <button type="button" id="reels-ctrl-pip" class="reels-menu-icon-btn" title="Hình trong hình (Picture-in-Picture)">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </button>
+                            <button type="button" id="reels-ctrl-quality" class="reels-menu-pill-btn" title="Độ phân giải">
+                                <i class="fa-solid fa-sliders"></i> <span id="reels-quality-label">1080p HD</span> <i class="fa-solid fa-chevron-up"></i>
+                            </button>
+                            <button type="button" id="reels-ctrl-subtitle" class="reels-menu-pill-btn" title="Phụ đề">
+                                <i class="fa-solid fa-closed-captioning"></i> <span id="reels-sub-label">Tiếng Việt</span> <i class="fa-solid fa-chevron-up"></i>
+                            </button>
+                        </div>
+
+                        <div class="reels-menu-ctrl-row reels-menu-subrow">
+                            <label class="reels-menu-toggle-wrap" title="Tự động chuyển tiếp khi hết tập">
+                                <input type="checkbox" id="reels-menu-autoplay-toggle" checked>
+                                <span class="reels-toggle-switch"></span>
+                                <span class="reels-toggle-text">Tự chuyển tập</span>
+                            </label>
+                            <span class="reels-menu-badge-hls"><i class="fa-solid fa-bolt"></i> <span id="reels-menu-stream-text">HLS 1080p</span></span>
+                        </div>
+                    </div>
+
+                    <!-- 2. Episode Navigation Header & Batch tabs & Grid matching Image 2 -->
+                    <div class="reels-menu-episodes-section">
+                        <div class="reels-menu-ep-header">
+                            <div class="reels-menu-ep-title">
+                                <i class="fa-solid fa-list-ol"></i>
+                                <span>Danh sách tập (<span id="reels-sheet-total">0</span>)</span>
+                                <span class="reels-ep-badge-current" id="reels-menu-current-badge">
+                                    <i class="fa-solid fa-play"></i> <strong id="reels-menu-current-ep-num">1</strong>
+                                </span>
+                            </div>
+                            <div class="reels-menu-jump-wrap">
+                                <span class="reels-jump-icon"><i class="fa-solid fa-bolt"></i> Tập</span>
+                                <input type="number" id="reels-menu-jump-input" min="1" placeholder="">
+                                <button type="button" id="reels-menu-jump-btn" class="reels-jump-action-btn">Đến</button>
+                            </div>
+                        </div>
+
+                        <div class="reels-sheet-batches" id="reels-sheet-batches">
+                            <!-- Dynamic batch tabs: [1-30 30] [31-33 3] -->
+                        </div>
+
+                        <div class="reels-menu-ep-grid" id="reels-sheet-grid">
+                            <!-- 7 columns dynamic episode buttons matching Image 2 -->
+                        </div>
+                    </div>
+
+                    <!-- 3. Drama Overview / Synopsis Card matching Image 2 -->
+                    <div class="reels-menu-synopsis-card">
+                        <h4 id="reels-menu-drama-title">Tên phim</h4>
+                        <div class="reels-menu-meta-chips">
+                            <span class="reels-chip-licensed"><i class="fa-solid fa-circle-check"></i> Nguồn bản quyền</span>
+                            <span class="reels-chip-cdn"><i class="fa-solid fa-bolt"></i> CDN Tốc độ cao</span>
+                        </div>
+                        <p id="reels-menu-drama-desc" class="reels-menu-synopsis-text">Nội dung tóm tắt phim...</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
