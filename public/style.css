@@ -11713,3 +11713,170 @@ body.theme-light .dock-item.active i,
 }
 
 
+
+
+/* =======================================================
+   ACCOUNT BLOCKED MODAL (PREMIUM DARK THEME)
+======================================================= */
+.account-blocked-card {
+    max-width: 420px !important;
+    text-align: center;
+    padding: 32px 24px !important;
+    background: #111827 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 40px rgba(244, 63, 94, 0.12) !important;
+}
+
+.account-blocked-icon {
+    width: 68px;
+    height: 68px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: rgba(244, 63, 94, 0.15) !important;
+    border: 1px solid rgba(244, 63, 94, 0.3) !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f43f5e !important;
+    font-size: 28px;
+    box-shadow: 0 0 25px rgba(244, 63, 94, 0.25) !important;
+}
+
+.account-blocked-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff !important;
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+}
+
+.account-blocked-title span {
+    color: #f43f5e !important;
+}
+
+.account-blocked-desc {
+    font-size: 13.5px;
+    color: #94a3b8 !important;
+    line-height: 1.55;
+    margin-bottom: 20px;
+}
+
+.account-blocked-user-chip {
+    color: #38bdf8 !important;
+    font-weight: 700;
+    background: rgba(56, 189, 248, 0.12);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    display: inline-block;
+}
+
+.account-blocked-contact-box {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.account-blocked-contact-tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: #38bdf8 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.account-blocked-contact-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.account-blocked-admin-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff !important;
+}
+
+.account-blocked-phone-val {
+    font-size: 13px;
+    color: #cbd5e1 !important;
+    font-family: monospace, sans-serif;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.account-blocked-copy-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #e2e8f0 !important;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.account-blocked-copy-btn:hover {
+    background: rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.account-blocked-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-open-zalo-chat {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #0068ff 0%, #0052cc 100%) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    text-decoration: none;
+    box-shadow: 0 4px 16px rgba(0, 104, 255, 0.35);
+    transition: all 0.2s ease;
+}
+
+.btn-open-zalo-chat:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 104, 255, 0.5);
+    background: linear-gradient(135deg, #0f73ff 0%, #005be6 100%) !important;
+}
+
+.btn-dismiss-blocked {
+    padding: 11px;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px;
+    color: #94a3b8 !important;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-dismiss-blocked:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}

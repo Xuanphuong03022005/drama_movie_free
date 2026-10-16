@@ -1710,39 +1710,39 @@
 
     <script src="/app.js?v=3.9.18"></script>
 
-    <!-- Account Blocked Modal (Shown when account status is 'blocked') -->
+        <!-- Account Blocked Modal (Shown when account status is 'blocked') -->
     <div id="account-blocked-modal" class="login-modal account-blocked-modal" hidden>
         <div class="login-modal-backdrop" id="blocked-modal-backdrop"></div>
-        <div class="login-modal-card account-blocked-card" style="text-align: center; max-width: 440px; padding: 32px 24px;">
+        <div class="login-modal-card account-blocked-card">
             <button type="button" class="login-close-btn" id="blocked-close-btn" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
-            <div class="blocked-warn-icon" style="width: 68px; height: 68px; margin: 0 auto 18px; border-radius: 50%; background: rgba(239, 68, 68, 0.12); display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 32px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);">
+            <div class="account-blocked-icon">
                 <i class="fa-solid fa-user-lock"></i>
             </div>
-            <h3 style="font-size: 20px; font-weight: 800; color: #ef4444; margin-bottom: 8px;">Tài Khoản Đang Bị Khóa</h3>
-            <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 20px;">
-                Tài khoản <strong id="blocked-user-identifier" style="color: #0f172a;"></strong> của bạn hiện đang bị tạm khóa. Vui lòng liên hệ với Quản trị viên (Admin) qua Zalo để được hỗ trợ và giải quyết.
+            <h3 class="account-blocked-title"><span>Tài Khoản</span> Đang Bị Khóa</h3>
+            <p class="account-blocked-desc">
+                Tài khoản <span id="blocked-user-identifier" class="account-blocked-user-chip"></span> của bạn hiện đang bị tạm khóa. Vui lòng liên hệ với Quản trị viên (Admin) qua Zalo để được hỗ trợ và giải quyết.
             </p>
 
-            <div class="blocked-contact-box" style="background: rgba(0, 104, 255, 0.06); border: 1.5px solid rgba(0, 104, 255, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 20px; text-align: left;">
-                <div style="font-size: 12px; font-weight: 700; color: #0068ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+            <div class="account-blocked-contact-box">
+                <div class="account-blocked-contact-tag">
                     <i class="fa-solid fa-headset"></i> Kênh hỗ trợ chính thức
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="account-blocked-contact-row">
                     <div>
-                        <div style="font-size: 14px; font-weight: 700; color: #0f172a;">Zalo Admin</div>
-                        <div style="font-size: 13px; color: #64748b;" id="blocked-zalo-phone">0378423195</div>
+                        <div class="account-blocked-admin-label">Zalo Admin</div>
+                        <div class="account-blocked-phone-val" id="blocked-zalo-phone">0378423195</div>
                     </div>
-                    <button type="button" class="btn-copy-chip" onclick="navigator.clipboard.writeText('0378423195'); alert('Đã sao chép số Zalo: 0378423195');" style="padding: 4px 10px; font-size: 12px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;">
+                    <button type="button" class="account-blocked-copy-btn" onclick="navigator.clipboard.writeText('0378423195'); alert('Đã sao chép số Zalo: 0378423195');">
                         <i class="fa-regular fa-copy"></i> Copy
                     </button>
                 </div>
             </div>
 
-            <div class="blocked-modal-actions" style="display: flex; flex-direction: column; gap: 10px;">
-                <a href="https://zalo.me/0378423195" target="_blank" class="btn-zalo-action" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; background: #0068ff; color: #fff; border-radius: 10px; font-weight: 700; font-size: 14.5px; text-decoration: none; box-shadow: 0 4px 14px rgba(0, 104, 255, 0.35); transition: all 0.2s;">
+            <div class="account-blocked-actions">
+                <a href="https://zalo.me/0378423195" target="_blank" class="btn-open-zalo-chat">
                     <i class="fa-solid fa-comment-dots"></i> <span>Mở Chat Zalo Với Admin</span>
                 </a>
-                <button type="button" class="btn-close-blocked" id="btn-close-blocked-modal" style="padding: 10px; background: transparent; border: 1px solid #e2e8f0; border-radius: 8px; color: #64748b; font-size: 13px; cursor: pointer;">
+                <button type="button" class="btn-dismiss-blocked" id="btn-close-blocked-modal">
                     Đóng
                 </button>
             </div>
