@@ -1807,7 +1807,7 @@
                     e.preventDefault();
                     e.stopPropagation();
                 }
-                toggleReelsFeedMode(false);
+                minimizeToMiniplayer();
             });
         }
         if (reelsLikeBtn) reelsLikeBtn.addEventListener('click', () => { if (!currentDramaData) return; toggleFavorite(currentDramaData); syncModalFavBtn(); syncReelsUI(); });
@@ -6154,6 +6154,7 @@
     function minimizeToMiniplayer() {
         if (!currentDramaData || playerModal.hidden) return;
         isMiniplayer = true;
+        closeReelsEpisodesSheet();
         playerModal.classList.add('miniplayer-mode');
         document.body.classList.remove('player-active');
         document.body.classList.add('miniplayer-active');

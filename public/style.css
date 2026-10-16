@@ -6305,12 +6305,12 @@ video::cue {
    ACTIVE REELS FEED MODE (.reels-mode-active)
    ========================================================================== */
 
-#player-modal.reels-mode-active {
+#player-modal.reels-mode-active:not(.miniplayer-mode) {
     padding: 0 !important;
     background: #000000;
 }
 
-#player-modal.reels-mode-active .player-stage-container {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .player-stage-container {
     width: 100% !important;
     height: 100dvh !important;
     max-height: 100dvh !important;
@@ -6324,7 +6324,7 @@ video::cue {
 
 /* On Desktop: Show a sleek centered vertical smartphone stage */
 @media (min-width: 769px) {
-    #player-modal.reels-mode-active .player-stage-container {
+    #player-modal.reels-mode-active:not(.miniplayer-mode) .player-stage-container {
         width: 440px !important;
         height: 92vh !important;
         max-height: 900px !important;
@@ -6336,7 +6336,7 @@ video::cue {
 }
 
 /* Translucent floating Top Bar in Reels Mode */
-#player-modal.reels-mode-active .player-top-bar {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .player-top-bar {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
@@ -6348,39 +6348,39 @@ video::cue {
     pointer-events: none;
 }
 
-#player-modal.reels-mode-active .player-top-bar * {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .player-top-bar * {
     pointer-events: auto;
 }
 
-#player-modal.reels-mode-active .live-pill,
-#player-modal.reels-mode-active #theater-toggle-btn {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .live-pill,
+#player-modal.reels-mode-active:not(.miniplayer-mode) #theater-toggle-btn {
     display: none !important;
 }
 
 /* Hide clutter elements in Reels Mode */
-#player-modal.reels-mode-active .episodes-drawer,
-#player-modal.reels-mode-active .media-control-strip,
-#player-modal.reels-mode-active .drama-synopsis-panel,
-#player-modal.reels-mode-active .mobile-scroll-hint,
-#player-modal.reels-mode-active .miniplayer-bottom-bar,
-#player-modal.reels-mode-active .video-ambient-glow,
-#player-modal.reels-mode-active .ambient-canvas {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .episodes-drawer,
+#player-modal.reels-mode-active:not(.miniplayer-mode) .media-control-strip,
+#player-modal.reels-mode-active:not(.miniplayer-mode) .drama-synopsis-panel,
+#player-modal.reels-mode-active:not(.miniplayer-mode) .mobile-scroll-hint,
+#player-modal.reels-mode-active:not(.miniplayer-mode) .miniplayer-bottom-bar,
+#player-modal.reels-mode-active:not(.miniplayer-mode) .video-ambient-glow,
+#player-modal.reels-mode-active:not(.miniplayer-mode) .ambient-canvas {
     display: none !important;
 }
 
-#player-modal.reels-mode-active .player-main-split {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .player-main-split {
     height: 100% !important;
     overflow: hidden !important;
     background: #000000 !important;
     display: block !important;
 }
 
-#player-modal.reels-mode-active .screen-column {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .screen-column {
     height: 100% !important;
     display: block !important;
 }
 
-#player-modal.reels-mode-active .video-viewport {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .video-viewport {
     height: 100% !important;
     max-height: 100% !important;
     width: 100% !important;
@@ -6391,7 +6391,7 @@ video::cue {
     background: #000000 !important;
 }
 
-#player-modal.reels-mode-active video#main-video {
+#player-modal.reels-mode-active:not(.miniplayer-mode) video#main-video {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
@@ -6399,7 +6399,7 @@ video::cue {
 }
 
 @media (min-width: 769px) {
-    #player-modal.reels-mode-active video#main-video {
+    #player-modal.reels-mode-active:not(.miniplayer-mode) video#main-video {
         object-fit: contain !important;
     }
 }
@@ -6408,7 +6408,7 @@ video::cue {
    REELS FLOATING ACTION BAR (Right Side - TikTok/Shorts Style)
    ========================================================================== */
 
-#player-modal.reels-mode-active .reels-actions-bar {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .reels-actions-bar {
     display: flex !important;
     flex-direction: column;
     align-items: center;
@@ -6531,7 +6531,7 @@ video::cue {
    REELS BOTTOM OVERLAY INFO (Bottom Left)
    ========================================================================== */
 
-#player-modal.reels-mode-active .reels-bottom-info {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .reels-bottom-info {
     display: flex !important;
     flex-direction: column;
     gap: 6px;
@@ -6544,7 +6544,7 @@ video::cue {
     text-align: left;
 }
 
-#player-modal.reels-mode-active .reels-bottom-info * {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .reels-bottom-info * {
     pointer-events: auto;
 }
 
@@ -6609,7 +6609,7 @@ video::cue {
     display: none !important;
 }
 
-#player-modal.reels-mode-active .custom-subtitle-overlay {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .custom-subtitle-overlay {
     bottom: calc(150px + env(safe-area-inset-bottom, 0px));
     z-index: 75;
     max-width: 86%;
@@ -6617,7 +6617,7 @@ video::cue {
     transform: translateX(-50%);
 }
 
-#player-modal.reels-mode-active .sub-status-toast {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .sub-status-toast {
     bottom: calc(160px + env(safe-area-inset-bottom, 0px));
     z-index: 80;
 }
@@ -6626,7 +6626,7 @@ video::cue {
    REELS MODE: NEXT EPISODE COUNTDOWN OVERLAY PLACEMENT
    Fixes collision between Countdown card, Reels info, and Right Action Bar
    ========================================================================== */
-#player-modal.reels-mode-active .next-ep-countdown-card {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .next-ep-countdown-card {
     position: absolute !important;
     left: 14px !important;
     right: 76px !important;
@@ -6644,32 +6644,32 @@ video::cue {
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.88), 0 0 16px rgba(99, 102, 241, 0.3) !important;
 }
 
-#player-modal.reels-mode-active .next-ep-countdown-card .countdown-badge {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .next-ep-countdown-card .countdown-badge {
     font-size: 9.5px !important;
     padding: 2px 8px !important;
     margin-bottom: 5px !important;
 }
 
-#player-modal.reels-mode-active .next-ep-countdown-card .countdown-text {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .next-ep-countdown-card .countdown-text {
     font-size: 12px !important;
     margin-bottom: 8px !important;
 }
 
-#player-modal.reels-mode-active .next-ep-countdown-card .countdown-text strong {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .next-ep-countdown-card .countdown-text strong {
     font-size: 18px !important;
 }
 
-#player-modal.reels-mode-active .next-ep-countdown-card .countdown-actions {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .next-ep-countdown-card .countdown-actions {
     margin-bottom: 6px !important;
     gap: 6px !important;
 }
 
-#player-modal.reels-mode-active .next-ep-countdown-card .btn-cd-now {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .next-ep-countdown-card .btn-cd-now {
     padding: 7px 12px !important;
     font-size: 12px !important;
 }
 
-#player-modal.reels-mode-active .next-ep-countdown-card .btn-cd-cancel {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .next-ep-countdown-card .btn-cd-cancel {
     padding: 7px 10px !important;
     font-size: 12px !important;
 }
@@ -6678,7 +6678,7 @@ video::cue {
    REELS THIN BOTTOM PROGRESS LINE
    ========================================================================== */
 
-#player-modal.reels-mode-active .reels-progress-line {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .reels-progress-line {
     display: block !important;
     position: absolute;
     bottom: 0;
@@ -6741,7 +6741,7 @@ video::cue {
    FLYING HEART PARTICLES (Double Tap TikTok effect)
    ========================================================================== */
 
-#player-modal.reels-mode-active .reels-heart-effects {
+#player-modal.reels-mode-active:not(.miniplayer-mode) .reels-heart-effects {
     display: block !important;
     position: absolute;
     inset: 0;
@@ -12234,7 +12234,7 @@ body.theme-light .dock-item.active i,
 ======================================================= */
 @media (max-width: 768px) {
     /* Hide top bar elements (Image 4) on mobile ONLY in Reels mode */
-    #player-modal.reels-mode-active .player-top-bar {
+    #player-modal.reels-mode-active:not(.miniplayer-mode) .player-top-bar {
         display: none !important;
         height: 0 !important;
         padding: 0 !important;
@@ -12245,7 +12245,7 @@ body.theme-light .dock-item.active i,
     }
 
     /* Fullscreen mobile stage container for Reels */
-    #player-modal.reels-mode-active .player-stage-container {
+    #player-modal.reels-mode-active:not(.miniplayer-mode) .player-stage-container {
         height: 100vh !important;
         height: 100dvh !important;
         max-height: 100dvh !important;
@@ -12255,9 +12255,22 @@ body.theme-light .dock-item.active i,
         margin: 0 !important;
     }
 
-    #player-modal.reels-mode-active .video-viewport,
-    #player-modal.reels-mode-active .screen-column {
+    #player-modal.reels-mode-active:not(.miniplayer-mode) .video-viewport,
+    #player-modal.reels-mode-active:not(.miniplayer-mode) .screen-column {
         height: 100% !important;
         max-height: 100% !important;
     }
+}
+
+/* When in miniplayer mode, hide all Reels mode overlay controls */
+.player-modal.miniplayer-mode .reels-actions-bar,
+.player-modal.miniplayer-mode .reels-bottom-info,
+.player-modal.miniplayer-mode .reels-progress-line,
+.player-modal.miniplayer-mode .reels-heart-effects,
+.player-modal.miniplayer-mode .custom-subtitle-overlay,
+.player-modal.miniplayer-mode .sub-status-toast,
+.player-modal.miniplayer-mode .reels-episodes-sheet {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
