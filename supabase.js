@@ -605,7 +605,10 @@ async function loginWithGoogle({ email, full_name, avatar_url, google_id }) {
     if (res.rows.length > 0) {
         userRow = res.rows[0];
         if (userRow.status !== 'active') {
-            throw new Error('Tài khoản này hiện đang bị tạm khóa');
+            const err = new Error('Tài khoản của bạn hiện đang bị khóa');
+            err.code = 'ACCOUNT_BLOCKED';
+            err.isBlocked = true;
+            throw err;
         }
         if (avatar_url || full_name) {
             try {
@@ -724,7 +727,10 @@ async function loginUser({ identifier, password }) {
 
     const row = res.rows[0];
     if (row.status !== 'active') {
-        throw new Error('Tài khoản này hiện đang bị tạm khóa');
+        const err = new Error('Tài khoản của bạn hiện đang bị khóa');
+        err.code = 'ACCOUNT_BLOCKED';
+        err.isBlocked = true;
+        throw err;
     }
 
     if (row.password_hash) {

@@ -1,3 +1,33 @@
+
+    // Account Blocked Modal Handling
+    function showAccountBlockedModal(userOrIdentifier) {
+        if (typeof closeAuthModal === 'function') closeAuthModal();
+        const modal = document.getElementById('account-blocked-modal');
+        if (!modal) return;
+        const idEl = document.getElementById('blocked-user-identifier');
+        if (idEl) {
+            let label = '';
+            if (typeof userOrIdentifier === 'string') {
+                label = userOrIdentifier;
+            } else if (userOrIdentifier && typeof userOrIdentifier === 'object') {
+                label = userOrIdentifier.email || userOrIdentifier.username || userOrIdentifier.full_name || '';
+            }
+            idEl.textContent = label ? `(${label})` : '';
+        }
+        modal.hidden = false;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const blockedModal = document.getElementById('account-blocked-modal');
+        const blockedCloseBtn = document.getElementById('blocked-close-btn');
+        const blockedBackdrop = document.getElementById('blocked-modal-backdrop');
+        const btnCloseBlockedModal = document.getElementById('btn-close-blocked-modal');
+
+        if (blockedCloseBtn) blockedCloseBtn.addEventListener('click', () => { if (blockedModal) blockedModal.hidden = true; });
+        if (blockedBackdrop) blockedBackdrop.addEventListener('click', () => { if (blockedModal) blockedModal.hidden = true; });
+        if (btnCloseBlockedModal) btnCloseBlockedModal.addEventListener('click', () => { if (blockedModal) blockedModal.hidden = true; });
+    });
+    
 // DramaFlow PRO - Commercial Streaming Application v2.0
 (function () {
     // State
@@ -6394,6 +6424,11 @@
             const res = await fetch(`/api/auth/me?userId=${encodeURIComponent(u.id)}`);
             const data = await res.json();
             if (data.ok && data.user) {
+                if (data.user.status === 'blocked') {
+                    setCurrentUser(null);
+                    showAccountBlockedModal(data.user);
+                    return;
+                }
                 setCurrentUser(data.user);
             }
         } catch (e) {
@@ -6747,7 +6782,11 @@
             }
             executePendingAuthAction();
         } catch (err) {
-            showToast(err.message, 'fa-circle-xmark');
+            if (err.isBlocked || err.code === 'ACCOUNT_BLOCKED' || (err.message && err.message.toLowerCase().includes('khóa'))) {
+                showAccountBlockedModal(email);
+            } else {
+                showToast(err.message, 'fa-circle-xmark');
+            }
         } finally {
             if (googleBtn) {
                 googleBtn.disabled = false;
@@ -6806,7 +6845,11 @@
             }
             executePendingAuthAction();
         } catch (err) {
-            showToast(err.message, 'fa-circle-xmark');
+            if (err.isBlocked || err.code === 'ACCOUNT_BLOCKED' || (err.message && err.message.toLowerCase().includes('khóa'))) {
+                showAccountBlockedModal(identifier);
+            } else {
+                showToast(err.message, 'fa-circle-xmark');
+            }
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
