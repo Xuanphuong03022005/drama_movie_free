@@ -1802,13 +1802,12 @@
         // Reels Mode Action Bar & Bottom Sheet Events
         if (reelsFeedToggleBtn) reelsFeedToggleBtn.addEventListener('click', () => toggleReelsFeedMode());
         if (reelsExitBtn) {
-            reelsExitBtn.addEventListener('click', () => {
-                const isMobile = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                if (isMobile) {
-                    closeModal();
-                } else {
-                    toggleReelsFeedMode(false);
+            reelsExitBtn.addEventListener('click', (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
                 }
+                toggleReelsFeedMode(false);
             });
         }
         if (reelsLikeBtn) reelsLikeBtn.addEventListener('click', () => { if (!currentDramaData) return; toggleFavorite(currentDramaData); syncModalFavBtn(); syncReelsUI(); });
