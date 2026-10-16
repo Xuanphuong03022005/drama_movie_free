@@ -864,7 +864,7 @@
     // ==========================================
     // VERTICAL REELS FEED ENGINE (TIKTOK / SHORTS)
     // ==========================================
-    function toggleReelsFeedMode(force) {
+    function toggleReelsFeedMode(force, silent = false) {
         if (typeof force === 'boolean') {
             isReelsMode = force;
         } else {
@@ -879,10 +879,10 @@
         if (isReelsMode) {
             if (isMiniplayer) restoreFromMiniplayer();
             syncReelsUI();
-            showToast(t('toast_reels_on'), 'fa-mobile-screen');
+            if (!silent) showToast(t('toast_reels_on'), 'fa-mobile-screen');
         } else {
             closeReelsEpisodesSheet();
-            showToast(t('toast_reels_off'), 'fa-table-columns');
+            if (!silent) showToast(t('toast_reels_off'), 'fa-table-columns');
         }
 
         try {
@@ -1637,7 +1637,16 @@
 
         // Reels Mode Action Bar & Bottom Sheet Events
         if (reelsFeedToggleBtn) reelsFeedToggleBtn.addEventListener('click', () => toggleReelsFeedMode());
-        if (reelsExitBtn) reelsExitBtn.addEventListener('click', () => toggleReelsFeedMode(false));
+        if (reelsExitBtn) {
+            reelsExitBtn.addEventListener('click', () => {
+                const isMobile = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                if (isMobile) {
+                    closeModal();
+                } else {
+                    toggleReelsFeedMode(false);
+                }
+            });
+        }
         if (reelsLikeBtn) reelsLikeBtn.addEventListener('click', () => { if (!currentDramaData) return; toggleFavorite(currentDramaData); syncModalFavBtn(); syncReelsUI(); });
         if (reelsEpisodesBtn) {
             reelsEpisodesBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openReelsEpisodesSheet(); });
@@ -5186,6 +5195,10 @@
     // ==========================================
     async function openDrama(item, initialEpNum = 1) {
         if (isMiniplayer) restoreFromMiniplayer();
+        const isMobileDevice = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobileDevice) {
+            toggleReelsFeedMode(true, true);
+        }
         playerModal.removeAttribute('hidden');
         playerModal.hidden = false;
         playerModal.style.display = '';
@@ -5322,9 +5335,12 @@
             switchEpisode(targetIdx, true);
             syncReelsUI();
 
-            // Auto-restore Reels mode if user enabled it previously on mobile
-            if (localStorage.getItem('dramaflow_reels_mode') === '1' && window.innerWidth <= 768) {
-                toggleReelsFeedMode(true);
+            // Auto-switch to Reels feed mode on mobile (Image 3)
+            const isMobileDeviceEnd = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobileDeviceEnd) {
+                toggleReelsFeedMode(true, true);
+            } else if (localStorage.getItem('dramaflow_reels_mode') === '1') {
+                toggleReelsFeedMode(true, true);
             }
         } catch (e) {
             console.error('Error opening drama:', e);

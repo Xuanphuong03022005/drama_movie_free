@@ -11880,3 +11880,39 @@ body.theme-light .dock-item.active i,
     color: #ffffff !important;
     border-color: rgba(255, 255, 255, 0.2) !important;
 }
+
+
+/* =======================================================
+   MOBILE AUTO REELS MODE & HIDE TOP BAR (IMAGE 4)
+======================================================= */
+@media (max-width: 768px) {
+    /* Hide top bar elements (Image 4) on mobile - not needed in Reels mode */
+    #player-modal .player-top-bar,
+    .player-modal .player-top-bar,
+    #player-modal.reels-mode-active .player-top-bar {
+        display: none !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+    }
+
+    /* Fullscreen mobile stage container for Reels */
+    #player-modal.reels-mode-active .player-stage-container {
+        height: 100vh !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        width: 100vw !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    #player-modal.reels-mode-active .video-viewport,
+    #player-modal.reels-mode-active .screen-column {
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+}
